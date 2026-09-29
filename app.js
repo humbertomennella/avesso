@@ -31,11 +31,45 @@ function leaveApp(){state.profile=null;$('#app-view').classList.add('hidden');$(
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeHtml(p.display_name)}' data-handle='${escapeHtml(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
 
+function updateComposerTarget(){
+  const directed=$('#post-target').value==='person';
+  $('#recipient-row').classList.toggle('hidden',!directed);
+  $('#post-visibility').disabled=!directed;
+  if(!directed){
+    state.recipient=null;
+    $('#recipient-search').value='';
+    $('#recipient-results').classList.add('hidden');
+    $('#post-visibility').value='publico';
+  }
+  $('#composer-hint').textContent=directed?'Escolha a pessoa pelo @. Você decide se a mensagem será pública ou privada.':'Publicação aberta à comunidade. Não é necessário marcar ninguém.';
+  $('#post-body').placeholder=directed?'Reconheça, pergunte ou ofereça ajuda a essa pessoa.':'Pergunte, reconheça ou compartilhe algo que ajude a comunidade.';
+}
+$('#post-target').addEventListener('change',updateComposerTarget);
+updateComposerTarget();
 $('#post-body').addEventListener('input',e=>$('#char-count').textContent=420-e.target.value.length);
-$('#publish-post').onclick=async()=>{const body=$('#post-body').value.trim();if(!state.recipient)return toast('Escolha uma pessoa. Monólogo já tem rede demais.');if(body.length<12)return toast('Doze caracteres. Você consegue.');const {error}=await supabase.from('posts').insert({author_id:state.profile.id,recipient_id:state.recipient.id,body,visibility:$('#post-visibility').value});if(error)return toast('Não foi. O servidor teve um momento.');$('#post-body').value='';$('#recipient-search').value='';$('#char-count').textContent='420';state.recipient=null;toast('Entregue. Sem fogos, sem placar, sem coach.');loadFeed();loadImpact();};
+$('#publish-post').onclick=async()=>{
+  const body=$('#post-body').value.trim();
+  const directed=$('#post-target').value==='person';
+  if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
+  if(body.length<12)return toast('O mínimo são 12 caracteres. A conversa merece mais que um aceno.');
+  const {error}=await supabase.from('posts').insert({
+    author_id:state.profile.id,
+    recipient_id:directed?state.recipient.id:null,
+    body,
+    visibility:directed?$('#post-visibility').value:'publico'
+  });
+  if(error)return toast('Não foi possível publicar. Tente novamente.');
+  $('#post-body').value='';
+  $('#recipient-search').value='';
+  $('#char-count').textContent='420';
+  state.recipient=null;
+  toast(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
+  loadFeed();
+  loadImpact();
+};
 
 async function loadFeed(){const status=$('#feed-status');status.classList.remove('hidden');status.textContent='ordenando pelo que importa, ideia radical...';let query=supabase.from('feed_attention').select('*');if(state.tab==='quiet')query=query.eq('response_count',0);if(state.tab==='sent')query=query.eq('author_id',state.profile.id);const {data,error}=await query.order('attention_need',{ascending:false}).limit(40);if(error){status.textContent='O feed falhou. Até o anti-algoritmo tem segunda-feira.';return}status.classList.add('hidden');renderFeed(data||[]);}
-function renderFeed(posts){const list=$('#feed-list');if(!posts.length){list.innerHTML='<div class="feed-status">Nada aqui. Talvez as pessoas estejam vivendo. Estranho, mas permitido.</div>';return}list.innerHTML=posts.map(p=>`<article class="post-card"><div class="post-route"><span class="mini-avatar">${initials(p.author_name)}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${escapeHtml(p.recipient_name)}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div><p class="post-body">${escapeHtml(p.body)}</p><div class="post-actions"><button data-reply='${p.id}'>↩ responder</button><button data-support='${p.id}'>＋ apoiar em privado</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div></article>`).join('');list.querySelectorAll('[data-support]').forEach(b=>b.onclick=()=>supportPost(b.dataset.support));list.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>replyPost(b.dataset.reply));}
+function renderFeed(posts){const list=$('#feed-list');if(!posts.length){list.innerHTML='<div class="feed-status">Nada aqui. Talvez as pessoas estejam vivendo. Estranho, mas permitido.</div>';return}list.innerHTML=posts.map(p=>`<article class="post-card"><div class="post-route"><span class="mini-avatar">${initials(p.author_name)}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div><p class="post-body">${escapeHtml(p.body)}</p><div class="post-actions"><button data-reply='${p.id}'>↩ responder</button><button data-support='${p.id}'>＋ apoiar em privado</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div></article>`).join('');list.querySelectorAll('[data-support]').forEach(b=>b.onclick=()=>supportPost(b.dataset.support));list.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>replyPost(b.dataset.reply));}
 async function supportPost(post_id){const {error}=await supabase.from('support_signals').upsert({post_id,supporter_id:state.profile.id,kind:'estou_aqui'});toast(error?'Não foi possível apoiar agora.':'Apoio privado entregue. A plateia não ficou sabendo.');}
 async function replyPost(post_id){const body=prompt('Sua resposta (sim, este prompt é retrô de propósito):');if(!body||body.trim().length<2)return;const {error}=await supabase.from('responses').insert({post_id,author_id:state.profile.id,body:body.trim()});toast(error?'A resposta caiu no vazio. Tente novamente.':'Resposta enviada. Conversa: conceito vintage.');if(!error)loadFeed();}
 

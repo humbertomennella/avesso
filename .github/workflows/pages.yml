@@ -21,6 +21,24 @@ jobs:
         run: |
           node --check app.js
           node --check config.js
+      - name: Conferir fluxo comunitário e regras versionadas
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path("index.html").read_text(encoding="utf-8")
+          app = Path("app.js").read_text(encoding="utf-8")
+          migration = Path("supabase/migrations/20260929203030_feed_publicacoes_comunitarias.sql").read_text(encoding="utf-8").lower()
+          assert '<option value="community">Para a comunidade (sem @)</option>' in html
+          assert '<option value="person">Para uma pessoa (@)</option>' in html
+          assert 'recipient_id:directed?state.recipient.id:null' in app
+          assert "visibility:directed?$('#post-visibility').value:'publico'" in app
+          assert "p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'" in app
+          assert "recipient_id drop not null" in migration
+          assert "posts_target_visibility_check" in migration
+          assert "security_invoker = true" in migration
+          assert "left join public.profiles r on r.id=p.recipient_id" in migration
+          print("Contratos de publicações comunitárias e mensagens dirigidas conferidos.")
+          PY
       - name: Validar presença e integridade da arte original
         run: |
           python3 - <<'PY'
