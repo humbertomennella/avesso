@@ -33,7 +33,8 @@ A chave em `config.js` é publicável e foi criada para uso no navegador. Nunca 
 
 ## Antes de abrir ao público
 
-1. Configurar a URL oficial em Supabase Auth > URL Configuration.
+1. Em [Auth > URL Configuration](https://supabase.com/dashboard/project/uibhdikfgjnzljhuflxx/auth/url-configuration), definir **Site URL** como `https://humbertomennella.github.io/avesso/` e incluir este mesmo endereço em **Redirect URLs**. Isto precisa ser feito no painel do Supabase; o `emailRedirectTo` do JavaScript não substitui a lista de URLs permitidas. Links enviados antes do ajuste podem continuar apontando para `localhost:3000`.
+   - Contas que já confirmaram o e-mail devem apenas entrar com e-mail e senha. Não refazer cadastro nem usar o link de confirmação outra vez.
 2. Definir política de confirmação de e-mail e SMTP próprio.
 3. Concluir moderação e painel administrativo.
 4. Revisar Política de Privacidade e Termos de Uso para LGPD.
