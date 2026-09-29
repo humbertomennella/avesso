@@ -21,6 +21,17 @@ jobs:
         run: |
           node --check app.js
           node --check config.js
+      - name: Verificar arquivo da arte da home
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          root = ET.parse("assets/avesso-hero.svg").getroot()
+          assert root.tag == "{http://www.w3.org/2000/svg}svg"
+          assert root.attrib["viewBox"] == "0 0 1600 700"
+          assert 'src="assets/avesso-hero.svg"' in Path("index.html").read_text(encoding="utf-8")
+          print("Arte SVG válida e corretamente referenciada.")
+          PY
   deploy:
     if: github.event_name != 'pull_request'
     needs: verify
