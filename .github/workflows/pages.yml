@@ -21,16 +21,22 @@ jobs:
         run: |
           node --check app.js
           node --check config.js
-      - name: Verificar arquivo da arte da home
+      - name: Validar presença e integridade da arte original
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          from xml.etree import ElementTree as ET
-          root = ET.parse("assets/avesso-hero.svg").getroot()
-          assert root.tag == "{http://www.w3.org/2000/svg}svg"
-          assert root.attrib["viewBox"] == "0 0 1600 700"
-          assert 'src="assets/avesso-hero.svg"' in Path("index.html").read_text(encoding="utf-8")
-          print("Arte SVG válida e corretamente referenciada.")
+          import hashlib
+          art = Path("assets/avesso-hero-original.png")
+          if not art.is_file():
+              raise SystemExit("Arquivo original ainda não enviado: assets/avesso-hero-original.png")
+          digest = hashlib.sha256(art.read_bytes()).hexdigest()
+          expected = "d9454e93bda7f280322943a9d539966f73c6c424324a8a9e7d769a7c04bf6810"
+          assert digest == expected, "O PNG enviado difere da arte original íntegra."
+          html = Path("index.html").read_text(encoding="utf-8")
+          css = Path("styles.css").read_text(encoding="utf-8")
+          assert 'src="assets/avesso-hero-original.png"' in html
+          assert ".hero-art img{width:100%;height:auto;" in css
+          print("Arte original íntegra, com caminho e proporção corretos.")
           PY
   deploy:
     if: github.event_name != 'pull_request'
