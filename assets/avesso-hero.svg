@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="700" viewBox="0 0 1600 700" role="img" aria-labelledby="title description">
+<title id="title">AVESSO: menos palco, mais presença</title>
+<desc id="description">Uma ilustração retrô-futurista com um computador dos anos 90 e personagens pixelados conectados em pequenas ilhas digitais.</desc>
+<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0c1117"/><stop offset=".52" stop-color="#18272b"/><stop offset="1" stop-color="#090c11"/></linearGradient>
+<linearGradient id="crt" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#182e32"/><stop offset="1" stop-color="#071117"/></linearGradient>
+<linearGradient id="plastic" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#faf7df"/><stop offset=".56" stop-color="#cbcab0"/><stop offset="1" stop-color="#8d907f"/></linearGradient>
+<linearGradient id="connection"><stop stop-color="#22d9ee" stop-opacity="0"/><stop offset=".5" stop-color="#22d9ee"/><stop offset="1" stop-color="#d8ff3e" stop-opacity="0"/></linearGradient>
+<pattern id="scanlines" width="4" height="4" patternUnits="userSpaceOnUse"><path d="M0 3H4" stroke="#000" stroke-opacity=".22"/></pattern>
+<pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse"><path d="M80 0H0V80" stroke="#22d9ee" stroke-opacity=".22" fill="none"/></pattern>
+<filter id="bloom" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7"/></filter>
+</defs>
+<rect width="1600" height="700" fill="url(#sky)"/>
+<ellipse cx="800" cy="347" rx="650" ry="310" fill="#24575a" opacity=".12"/>
+<path d="M0 550L800 464L1600 550V700H0Z" fill="#091015"/>
+<path d="M0 550L800 464L1600 550V700H0Z" fill="url(#grid)" opacity=".7"/>
+<path d="M0 607H1600M0 664H1600M200 700L800 464M465 700L800 464M1135 700L800 464M1400 700L800 464" stroke="#22d9ee" stroke-opacity=".12" fill="none"/>
+<rect x="28" y="19" width="5" height="5" fill="#d8ff3e" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="198" y="97" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="394" y="209" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="616" y="355" width="2" height="2" fill="#e7eadc" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="864" y="70" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1138" y="284" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1438" y="67" width="2" height="2" fill="#ff695b" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="224" y="349" width="2" height="2" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="576" y="200" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="954" y="85" width="2" height="2" fill="#22d9ee" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="1358" y="469" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="248" y="422" width="5" height="5" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="704" y="409" width="3" height="3" fill="#d8ff3e" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="1186" y="430" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="154" y="20" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="688" y="109" width="2" height="2" fill="#e7eadc" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="1248" y="232" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="294" y="389" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="906" y="115" width="2" height="2" fill="#ff695b" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="1544" y="340" width="2" height="2" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="668" y="134" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1358" y="427" width="2" height="2" fill="#22d9ee" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="534" y="289" width="5" height="5" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1276" y="185" width="2" height="2" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="504" y="115" width="3" height="3" fill="#d8ff3e" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="1298" y="79" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="578" y="77" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1424" y="109" width="2" height="2" fill="#e7eadc" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="756" y="175" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="114" y="275" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1038" y="409" width="2" height="2" fill="#ff695b" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="448" y="112" width="2" height="2" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1424" y="314" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="886" y="85" width="5" height="5" fill="#22d9ee" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="374" y="355" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1428" y="194" width="2" height="2" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="968" y="67" width="3" height="3" fill="#d8ff3e" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="534" y="439" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="126" y="380" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1284" y="355" width="2" height="2" fill="#e7eadc" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="928" y="364" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="598" y="407" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="294" y="19" width="2" height="2" fill="#ff695b" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="1556" y="130" width="2" height="2" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1304" y="275" width="5" height="5" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1078" y="454" width="2" height="2" fill="#22d9ee" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="878" y="202" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="704" y="449" width="2" height="2" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="556" y="265" width="3" height="3" fill="#d8ff3e" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="434" y="115" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="338" y="464" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="268" y="382" width="2" height="2" fill="#e7eadc" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="224" y="334" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="206" y="320" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="214" y="340" width="2" height="2" fill="#ff695b" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="248" y="394" width="5" height="5" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="308" y="482" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="394" y="139" width="2" height="2" fill="#22d9ee" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="506" y="295" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="644" y="20" width="2" height="2" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="808" y="244" width="3" height="3" fill="#d8ff3e" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="998" y="37" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1214" y="329" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1456" y="190" width="2" height="2" fill="#e7eadc" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="184" y="85" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="478" y="479" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="798" y="442" width="5" height="5" fill="#ff695b" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="1144" y="439" width="2" height="2" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1516" y="470" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="374" y="70" width="2" height="2" fill="#22d9ee" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="798" y="169" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1248" y="302" width="2" height="2" fill="#e7eadc" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="184" y="469" width="3" height="3" fill="#d8ff3e" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="686" y="205" width="2" height="2" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1214" y="440" width="2" height="2" fill="#ff695b" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="228" y="244" width="2" height="2" fill="#e7eadc" opacity=".85" shape-rendering="crispEdges"/>
+<rect x="808" y="82" width="3" height="3" fill="#d8ff3e" opacity=".5" shape-rendering="crispEdges"/>
+<rect x="1414" y="419" width="5" height="5" fill="#22d9ee" opacity=".5" shape-rendering="crispEdges"/>
+<g font-family="'IBM Plex Mono',monospace" font-weight="700" letter-spacing="2">
+<rect x="46" y="45" width="316" height="58" fill="#101a20" stroke="#345158"/><rect x="46" y="45" width="8" height="58" fill="#d8ff3e"/>
+<text x="72" y="70" font-size="16" fill="#22d9ee">AVESSO://HUMANOS</text><text x="72" y="91" font-size="12" fill="#9caeab">CONEXÃO RESTABELECIDA</text>
+<rect x="1348" y="54" width="204" height="39" fill="#102025" stroke="#345158"/><rect x="1361" y="68" width="10" height="10" fill="#d8ff3e"/>
+<text x="1380" y="80" font-size="12" fill="#d8ff3e">PRESENÇA: ON</text></g>
+<path d="M348 398Q420 358 520 358M1090 358Q1180 337 1272 391" stroke="#22d9ee" stroke-width="10" stroke-opacity=".5" fill="none" filter="url(#bloom)"/>
+<path d="M348 398Q420 358 520 358M1090 358Q1180 337 1272 391" stroke="url(#connection)" stroke-width="4" stroke-dasharray="11 12" fill="none"/>
+<path d="M345 408Q445 469 537 438M1070 438Q1190 485 1275 412" stroke="#d8ff3e" stroke-width="2" stroke-dasharray="5 12" fill="none"/>
+<circle cx="414" cy="378" r="8" fill="#22d9ee"/><circle cx="1201" cy="359" r="8" fill="#d8ff3e"/>
+<g shape-rendering="crispEdges">
+<path d="M94 390L334 356L440 407L178 448Z" fill="#21383b" stroke="#22d9ee" stroke-width="3"/>
+<path d="M94 390L178 448V476L94 415ZM178 448L440 407V433L178 476Z" fill="#102026" stroke="#35535a" stroke-width="3"/>
+<path d="M116 394L333 368L409 409L182 437Z" fill="#304448" stroke="#53686a" stroke-width="2"/>
+<g transform="translate(190 307)" shape-rendering="crispEdges"><rect x="8" y="0" width="38" height="10" fill="#1c2731"/><rect x="4" y="10" width="46" height="32" fill="#e3b497"/><rect x="12" y="22" width="6" height="6" fill="#091115"/><rect x="36" y="22" width="6" height="6" fill="#091115"/><rect x="8" y="42" width="40" height="37" fill="#9b7cff"/><rect x="0" y="49" width="8" height="29" fill="#e3b497"/><rect x="48" y="49" width="8" height="29" fill="#e3b497"/><rect x="10" y="79" width="14" height="25" fill="#30394c"/><rect x="32" y="79" width="14" height="25" fill="#30394c"/><rect x="8" y="103" width="17" height="8" fill="#d8ff3e"/><rect x="31" y="103" width="17" height="8" fill="#d8ff3e"/></g>
+<g transform="translate(298 334)" shape-rendering="crispEdges"><rect x="8" y="0" width="38" height="10" fill="#d8ff3e"/><rect x="4" y="10" width="46" height="32" fill="#b98775"/><rect x="12" y="22" width="6" height="6" fill="#091115"/><rect x="36" y="22" width="6" height="6" fill="#091115"/><rect x="8" y="42" width="40" height="37" fill="#22d9ee"/><rect x="0" y="49" width="8" height="29" fill="#b98775"/><rect x="48" y="49" width="8" height="29" fill="#b98775"/><rect x="10" y="79" width="14" height="25" fill="#213b43"/><rect x="32" y="79" width="14" height="25" fill="#213b43"/><rect x="8" y="103" width="17" height="8" fill="#d8ff3e"/><rect x="31" y="103" width="17" height="8" fill="#d8ff3e"/></g>
+<path d="M1166 383L1428 350L1520 408L1255 445Z" fill="#24383c" stroke="#ff695b" stroke-width="3"/>
+<path d="M1166 383L1255 445V472L1166 410ZM1255 445L1520 408V435L1255 472Z" fill="#102026" stroke="#35535a" stroke-width="3"/>
+<path d="M1198 384L1427 364L1489 408L1261 433Z" fill="#304448" stroke="#53686a" stroke-width="2"/>
+<g transform="translate(1291 302)" shape-rendering="crispEdges"><rect x="8" y="0" width="38" height="10" fill="#ff695b"/><rect x="4" y="10" width="46" height="32" fill="#e2af90"/><rect x="12" y="22" width="6" height="6" fill="#091115"/><rect x="36" y="22" width="6" height="6" fill="#091115"/><rect x="8" y="42" width="40" height="37" fill="#d8ff3e"/><rect x="0" y="49" width="8" height="29" fill="#e2af90"/><rect x="48" y="49" width="8" height="29" fill="#e2af90"/><rect x="10" y="79" width="14" height="25" fill="#2c4150"/><rect x="32" y="79" width="14" height="25" fill="#2c4150"/><rect x="8" y="103" width="17" height="8" fill="#d8ff3e"/><rect x="31" y="103" width="17" height="8" fill="#d8ff3e"/></g>
+<g transform="translate(1410 329)" shape-rendering="crispEdges"><rect x="8" y="0" width="38" height="10" fill="#22d9ee"/><rect x="4" y="10" width="46" height="32" fill="#bd8e7a"/><rect x="12" y="22" width="6" height="6" fill="#091115"/><rect x="36" y="22" width="6" height="6" fill="#091115"/><rect x="8" y="42" width="40" height="37" fill="#9b7cff"/><rect x="0" y="49" width="8" height="29" fill="#bd8e7a"/><rect x="48" y="49" width="8" height="29" fill="#bd8e7a"/><rect x="10" y="79" width="14" height="25" fill="#2e354d"/><rect x="32" y="79" width="14" height="25" fill="#2e354d"/><rect x="8" y="103" width="17" height="8" fill="#d8ff3e"/><rect x="31" y="103" width="17" height="8" fill="#d8ff3e"/></g>
+</g>
+<ellipse cx="808" cy="592" rx="383" ry="50" fill="#000" opacity=".45"/>
+<path d="M494 152H1117L1143 178V513L1118 538H493L466 511V180Z" fill="#4f554b" stroke="#374b4e" stroke-width="5"/>
+<rect x="475" y="150" width="664" height="386" rx="27" fill="url(#plastic)" stroke="#fbf8df" stroke-width="5"/>
+<path d="M499 162H1110M489 511H1123" stroke="#fbf8df" stroke-opacity=".62" stroke-width="5"/>
+<rect x="520" y="192" width="574" height="270" rx="19" fill="#27383a" stroke="#7d897e" stroke-width="8"/>
+<rect x="538" y="209" width="538" height="235" rx="8" fill="url(#crt)" stroke="#0a1518" stroke-width="7"/>
+<rect x="546" y="217" width="522" height="219" fill="url(#scanlines)" opacity=".54"/>
+<rect x="558" y="228" width="496" height="30" fill="#173036" stroke="#345558"/>
+<g shape-rendering="crispEdges"><rect x="570" y="240" width="9" height="9" fill="#d8ff3e"/><rect x="585" y="240" width="9" height="9" fill="#22d9ee"/><rect x="600" y="240" width="9" height="9" fill="#ff695b"/></g>
+<g font-family="'IBM Plex Mono',monospace" font-weight="700"><text x="628" y="249" font-size="15" letter-spacing="2" fill="#d8ff3e">AVESSO // SEM PLACAR</text><text x="1040" y="249" text-anchor="end" font-size="12" fill="#22d9ee">● ON</text></g>
+<path d="M628 343L806 300L978 343L801 395ZM806 300L801 395" stroke="#22d9ee" stroke-width="3" stroke-dasharray="7 7" fill="none" opacity=".7"/>
+<path d="M628 343L806 300L978 343L801 395" stroke="#22d9ee" stroke-width="9" fill="none" opacity=".22" filter="url(#bloom)"/>
+<g shape-rendering="crispEdges"><rect x="600" y="313" width="63" height="63" fill="#1c2d33" stroke="#9b7cff" stroke-width="3"/><rect x="618" y="321" width="26" height="26" fill="#e0b191"/><rect x="624" y="331" width="5" height="5" fill="#0b1215"/><rect x="636" y="331" width="5" height="5" fill="#0b1215"/><rect x="611" y="349" width="41" height="18" fill="#9b7cff"/></g>
+<g shape-rendering="crispEdges"><rect x="775" y="271" width="63" height="63" fill="#1c2d33" stroke="#d8ff3e" stroke-width="3"/><rect x="793" y="279" width="26" height="26" fill="#d6a58c"/><rect x="799" y="289" width="5" height="5" fill="#0b1215"/><rect x="811" y="289" width="5" height="5" fill="#0b1215"/><rect x="786" y="307" width="41" height="18" fill="#d8ff3e"/></g>
+<g shape-rendering="crispEdges"><rect x="949" y="313" width="63" height="63" fill="#1c2d33" stroke="#ff695b" stroke-width="3"/><rect x="967" y="321" width="26" height="26" fill="#c5977c"/><rect x="973" y="331" width="5" height="5" fill="#0b1215"/><rect x="985" y="331" width="5" height="5" fill="#0b1215"/><rect x="960" y="349" width="41" height="18" fill="#22d9ee"/></g>
+<g shape-rendering="crispEdges"><rect x="788" y="384" width="25" height="25" fill="#d8ff3e" stroke="#345258" stroke-width="3"/><rect x="796" y="391" width="9" height="9" fill="#14252b"/></g>
+<g font-family="'IBM Plex Mono',monospace" font-size="13" font-weight="700" letter-spacing="1"><text x="566" y="425" fill="#8aabaa">ATENÇÃO &gt; ALCANCE</text><text x="1045" y="425" text-anchor="end" fill="#d8ff3e">HUMANIDADE.EXE</text></g>
+<circle cx="1058" cy="491" r="10" fill="#22d9ee" stroke="#637970" stroke-width="4"/>
+<rect x="528" y="482" width="190" height="10" rx="2" fill="#7c8473"/><rect x="528" y="498" width="144" height="6" rx="2" fill="#969d89"/>
+<path d="M761 535H854L880 582H736Z" fill="#a3a790" stroke="#e4e5c6" stroke-width="4"/>
+<path d="M714 582H895L929 608H679Z" fill="url(#plastic)" stroke="#f2f0d4" stroke-width="4"/>
+<path d="M681 607H928" stroke="#828b76" stroke-width="5"/>
+<path d="M431 617H1185" stroke="#22d9ee" stroke-opacity=".38" stroke-width="2" stroke-dasharray="8 12"/>
+<g font-family="'IBM Plex Mono',monospace" font-size="14" font-weight="700" letter-spacing="1.5">
+<rect x="94" y="506" width="265" height="38" fill="#101d22" stroke="#325058"/><text x="109" y="531" fill="#22d9ee">[01] GENTE &gt; MÉTRICA</text>
+<rect x="1250" y="506" width="275" height="38" fill="#101d22" stroke="#325058"/><text x="1266" y="531" fill="#d8ff3e">[02] ESCUTA &gt; EGO</text></g>
+<rect width="1600" height="700" fill="url(#scanlines)" opacity=".18"/>
+<rect x="1" y="1" width="1598" height="698" fill="none" stroke="#24434a" stroke-width="2"/>
+</svg>
