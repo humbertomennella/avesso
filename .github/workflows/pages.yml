@@ -30,8 +30,8 @@ jobs:
           if not art.is_file():
               raise SystemExit("Arquivo original ainda não enviado: assets/avesso-hero-original.png")
           digest = hashlib.sha256(art.read_bytes()).hexdigest()
-          expected = "d9454e93bda7f280322943a9d539966f73c6c424324a8a9e7d769a7c04bf6810"
-          assert digest == expected, "O PNG enviado difere da arte original íntegra."
+          expected = {"d9454e93bda7f280322943a9d539966f73c6c424324a8a9e7d769a7c04bf6810", "69e1aeac32538031257ad315196733e1f69cfc5bb9a7d405dadb91f34fe435f4"}
+          assert digest in expected, "O PNG enviado difere das duas cópias originais, idênticas em pixels."
           html = Path("index.html").read_text(encoding="utf-8")
           css = Path("styles.css").read_text(encoding="utf-8")
           assert 'src="assets/avesso-hero-original.png"' in html
