@@ -39,7 +39,7 @@ const ACID_REACTIONS=[
   ['isso_escalou','↗','isso escalou'],
   ['humano_detectado','♡','humano detectado']
 ];
-function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.svg`;}
+function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.webp`;}
 function applyAppWallpaper(){
   const slug=state.profile?.app_wallpaper||'cidade-56k';
   document.documentElement.style.setProperty('--avesso-app-wallpaper',`url("${wallpaperUrl(slug)}")`);
