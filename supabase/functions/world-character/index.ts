@@ -114,6 +114,12 @@ Deno.serve(async (req: Request) => {
   const character: any = forcedSlug ? eligible[0] : pickWeighted(eligible);
   if (!character) return json({ skipped: true, reason: "no_eligible_character" });
 
+  const { data: brain } = await admin
+    .from("character_ai_profiles")
+    .select("model,system_prompt,max_output_chars,ai_enabled")
+    .eq("character_id", character.id)
+    .maybeSingle();
+
   const publicName = String(profile?.display_name || "habitante");
   const publicHandle = String(profile?.handle || "sem_handle");
   let context = `Gatilho: ${trigger}. Superfície atual: ${surface}. Ação: ${actionType || "nenhuma ação específica"}. O usuário está dentro do Mundo do AVESSO. Nome público: ${publicName}. Handle público: @${publicHandle}. Você pode usar o nome público ocasionalmente quando soar natural, mas não force em toda fala.`;
@@ -192,9 +198,11 @@ Deno.serve(async (req: Request) => {
   let line = "";
   let source = "curated";
   const apiKey = Deno.env.get("OPENAI_API_KEY");
-  const model = Deno.env.get("OPENAI_MODEL") || "gpt-5.6-luna";
+  const model = brain?.model || Deno.env.get("OPENAI_MODEL") || "gpt-5.6-luna";
+  const instructions = brain?.system_prompt || character.system_prompt;
+  const outputCharLimit = Math.max(120, Math.min(600, Number(brain?.max_output_chars || 420)));
 
-  if (apiKey && character.ai_enabled) {
+  if (apiKey && character.ai_enabled && brain?.ai_enabled !== false) {
     try {
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
@@ -206,14 +214,14 @@ Deno.serve(async (req: Request) => {
           model,
           store: false,
           reasoning: { effort: "none" },
-          max_output_tokens: 120,
-          instructions: character.system_prompt,
+          max_output_tokens: 150,
+          instructions,
           input: context + "\nProduza UMA única fala original do personagem, específica para a ação e diferente das falas recentes. Sem aspas, sem rótulo, sem explicar o personagem. Humor ácido inteligente, sem crueldade gratuita.",
         }),
       });
       if (response.ok) {
         const data = await response.json();
-        line = extractOutputText(data).replace(/^["“]|["”]$/g, "").trim().slice(0, 600);
+        line = extractOutputText(data).replace(/^["“]|["”]$/g, "").trim().slice(0, outputCharLimit);
         if (line) source = "ai";
       } else {
         console.error("OpenAI error", response.status, await response.text());
