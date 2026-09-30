@@ -418,9 +418,9 @@ dialog{width:min(480px,calc(100% - 28px));border:1px solid var(--line);border-ra
   }
 
   .post-route{
-    display:grid!important;
-    grid-template-columns:28px minmax(0,1fr)!important;
-    gap:7px 9px!important;
+    display:flex!important;
+    flex-wrap:wrap!important;
+    gap:7px 8px!important;
     align-items:center!important;
     min-width:0!important;
   }
@@ -429,15 +429,26 @@ dialog{width:min(480px,calc(100% - 28px));border:1px solid var(--line);border-ra
     min-width:0!important;
   }
 
-  .post-route .post-meta{
-    grid-column:2!important;
-    width:auto!important;
-    margin:0!important;
-    white-space:normal!important;
+  .post-route .mini-avatar{
+    flex:0 0 28px!important;
+  }
+
+  .post-route .user-link{
+    max-width:calc(100% - 44px)!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
   }
 
   .post-route .arrow{
-    display:none!important;
+    color:var(--coral)!important;
+  }
+
+  .post-route .post-meta{
+    flex:0 0 100%!important;
+    width:100%!important;
+    margin:0 0 0 36px!important;
+    white-space:normal!important;
   }
 
   .post-body{
