@@ -2,6 +2,20 @@
 
 > Objetivo: transformar o AVESSO de rede social funcional em um mundo digital persistente sem sacrificar clareza, segurança e conversa.
 
+## Estado atual do Sprint 1
+
+- [x] Preferências de participação `observer / world / chaos`
+- [x] Tabelas de personagens e diálogos
+- [x] Tabelas de eventos e configuração global
+- [x] ALGO ativo como primeiro habitante funcional
+- [x] Falas contextuais de ALGO no feed e no Canto
+- [x] Kill switch global de interferências
+- [x] Atualizações de configuração via Realtime
+- [ ] Interface administrativa dedicada para eventos
+- [ ] Motor automático de despacho de eventos
+
+O modo `chaos` já pode ser escolhido, mas as interferências visuais permanecem globalmente desligadas até o motor de 404 existir. A ideia é simples: primeiro colocamos a porta. Depois entregamos a chave ao pior morador possível.
+
 ---
 
 ## Fase 0 — Estabilizar a base
