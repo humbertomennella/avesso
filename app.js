@@ -276,7 +276,7 @@ async function loadThreadData(posts){
   const profileIds=[...new Set([...responses.map(r=>r.author_id),...supports.map(s=>s.supporter_id)].filter(Boolean))];
   let profiles={};
   if(profileIds.length){
-    const {data}=await supabase.from('profiles').select('id,display_name,handle').in('id',profileIds);
+    const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',profileIds);
     profiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));
   }
   const byPost={};
@@ -340,13 +340,14 @@ function renderFeed(posts,threadData={responses:{},supports:{},characters:{}}){
     const responses=threadData.responses[p.id]||[];
     const supports=threadData.supports[p.id]||[];
     const characterReplies=threadData.characters[p.id]||[];
-    const responseHtml=responses.length?`<div class="thread-block"><div class="thread-title">CONVERSA // ${responses.length} ${responses.length===1?'RESPOSTA':'RESPOSTAS'}</div>${responses.map(r=>`<div class="thread-reply"><span class="mini-avatar">${initials(r.author?.display_name||'?')}</span><div><div class="thread-author">${escapeHtml(r.author?.display_name||'alguém')} <small>@${escapeHtml(r.author?.handle||'...')} · ${ago(r.created_at)}</small></div><p>${escapeHtml(r.body)}</p></div></div>`).join('')}</div>`:'';
+    const responseHtml=responses.length?`<div class="thread-block"><div class="thread-title">CONVERSA // ${responses.length} ${responses.length===1?'RESPOSTA':'RESPOSTAS'}</div>${responses.map(r=>`<div class="thread-reply"><span class="mini-avatar">${avatarMarkup(r.author?.avatar_url,r.author?.display_name||'?','mini-avatar-image')}</span><div><div class="thread-author">${escapeHtml(r.author?.display_name||'alguém')} <small>@${escapeHtml(r.author?.handle||'...')} · ${ago(r.created_at)}</small></div><p>${escapeHtml(r.body)}</p></div></div>`).join('')}</div>`:'';
     const characterHtml=characterReplies.length?`<div class="thread-block character-thread"><div class="thread-title">MUNDO // HABITANTES</div>${characterReplies.map(x=>{const c=x.character||{};return `<div class="thread-reply character-reply"><img src="${escapeHtml(characterImage(c))}" alt="${escapeHtml(c.name||'Habitante')}"><div><div class="thread-author">${escapeHtml(c.name||'Habitante')} <b>HABITANTE</b> <small>· ${ago(x.created_at)}</small></div><p>${escapeHtml(x.body)}</p></div></div>`}).join('')}</div>`:'';
     const supportHtml=supports.length?`<div class="private-support-log"><span>PRIVADO // APOIO</span>${supports.map(s=>`<p><strong>${escapeHtml(s.supporter?.display_name||'alguém')}</strong> sinalizou: “${escapeHtml(supportLabel(s.kind))}”.</p>`).join('')}</div>`:'';
     const canSupport=p.author_id!==state.profile.id;
     return `<article class="post-card" data-post-card="${p.id}">
-      <div class="post-route"><span class="mini-avatar">${initials(p.author_name)}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
-      <p class="post-body">${escapeHtml(p.body)}</p>
+      <div class="post-route"><span class="mini-avatar">${avatarMarkup(p.author_avatar,p.author_name,'mini-avatar-image')}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
+      ${p.body?`<p class="post-body">${escapeHtml(p.body)}</p>`:''}
+      ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="lazy"></figure>`:''}
       ${responseHtml}
       ${characterHtml}
       ${supportHtml}
