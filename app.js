@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, wallpaperTarget:'profile', world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -39,11 +39,89 @@ const ACID_REACTIONS=[
   ['isso_escalou','↗','isso escalou'],
   ['humano_detectado','♡','humano detectado']
 ];
-function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.svg`;}
+function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.webp`;}
 function applyAppWallpaper(){
   const slug=state.profile?.app_wallpaper||'cidade-56k';
   document.documentElement.style.setProperty('--avesso-app-wallpaper',`url("${wallpaperUrl(slug)}")`);
 }
+function audioContext(){
+  try{
+    if(!state.audioCtx)state.audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(state.audioCtx.state==='suspended')state.audioCtx.resume().catch(()=>{});
+    return state.audioCtx;
+  }catch{return null;}
+}
+function playUiSound(kind='message'){
+  const ctx=audioContext();if(!ctx)return;
+  const now=ctx.currentTime;
+  const tones=kind==='attention'?[660,880,660,1040]:kind==='friend'?[520,660]:[740,880];
+  tones.forEach((freq,i)=>{
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type=kind==='attention'?'square':'sine';o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001,now+i*.11);
+    g.gain.exponentialRampToValueAtTime(kind==='attention'?.08:.045,now+i*.11+.015);
+    g.gain.exponentialRampToValueAtTime(0.0001,now+i*.11+.09);
+    o.connect(g);g.connect(ctx.destination);o.start(now+i*.11);o.stop(now+i*.11+.1);
+  });
+}
+document.addEventListener('pointerdown',()=>audioContext(),{once:true});
+function ensureSocialNotifyHost(){
+  let host=$('#social-notifications');
+  if(!host){host=document.createElement('div');host.id='social-notifications';host.className='social-notifications';document.body.appendChild(host);}
+  return host;
+}
+function socialNotify({title='AVESSO',body='',avatar='',kind='message',action=null}={}){
+  state.socialNotificationQueue.push({title,body,avatar,kind,action});
+  if(state.socialNotificationQueue.length>6)state.socialNotificationQueue.shift();
+  runSocialNotificationQueue();
+}
+function runSocialNotificationQueue(){
+  if(state.socialNotificationBusy)return;
+  const item=state.socialNotificationQueue.shift();if(!item)return;
+  state.socialNotificationBusy=true;
+  const host=ensureSocialNotifyHost();
+  const card=document.createElement('button');
+  card.type='button';card.className='social-notification';
+  card.innerHTML=`${item.avatar?`<span class="social-notification-avatar"><img src="${escapeAttr(item.avatar)}" alt=""></span>`:''}<span><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.body)}</small></span><i>×</i>`;
+  host.appendChild(card);
+  const dismiss=()=>{card.classList.remove('show');card.classList.add('hide');setTimeout(()=>{card.remove();state.socialNotificationBusy=false;runSocialNotificationQueue();},430);};
+  card.onclick=()=>{dismiss();if(typeof item.action==='function')item.action();};
+  requestAnimationFrame(()=>requestAnimationFrame(()=>card.classList.add('show')));
+  playUiSound(item.kind==='friend'?'friend':item.kind==='attention'?'attention':'message');
+  setTimeout(dismiss,5000);
+}
+function presenceView(profile){
+  if(!profile)return{mode:'offline',label:'offline'};
+  if(profile.presence_mode==='invisible')return{mode:'offline',label:'offline'};
+  if(profile.presence_mode==='away')return{mode:'away',label:'ausente'};
+  const fresh=profile.last_seen&&Date.now()-new Date(profile.last_seen).getTime()<120000;
+  return fresh?{mode:'online',label:'online'}:{mode:'away',label:'ausente'};
+}
+async function setPresenceMode(mode){
+  if(!['online','away','invisible'].includes(mode)||!state.profile)return;
+  const {data,error}=await supabase.from('profiles').update({presence_mode:mode,last_seen:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
+  if(error)return toast('Seu estado social entrou em estado quântico.');
+  state.profile=data;startPresenceHeartbeat();
+  const sel=$('#presence-mode-select');if(sel)sel.value=mode;
+  const profileSel=$('#profile-presence');if(profileSel)profileSel.value=mode;
+  toast(mode==='invisible'?'Você ficou invisível. Parabéns por redescobrir o MSN.':mode==='away'?'Ausente. Presente o suficiente para configurar isso.':'Online. A internet foi avisada.');
+}
+function startPresenceHeartbeat(){
+  clearInterval(state.presenceTimer);
+  if(!state.profile?.id)return;
+  const beat=()=>{if(!state.profile||state.profile.presence_mode==='invisible'||document.hidden)return;supabase.from('profiles').update({last_seen:new Date().toISOString()}).eq('id',state.profile.id).then(()=>{});};
+  beat();state.presenceTimer=setInterval(beat,45000);
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state.profile)startPresenceHeartbeat();});
+const PHOTO_REACTIONS=[
+  ['nao_foi_horrivel','♥','não foi horrível'],
+  ['eu_vi','◉','eu vi'],
+  ['pixel_aprovado','▣','pixel aprovado'],
+  ['quase_arte','✦','quase arte']
+];
+function publicAlbumUrl(path){return supabase.storage.from('avesso-albums').getPublicUrl(path).data.publicUrl;}
+function safeFileName(name='arquivo'){return name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/-+/g,'-').slice(-90)||'arquivo';}
+
 function avatarHtml(url,name='?'){ return url?`<img src="${escapeAttr(url)}" alt="" loading="lazy">`:escapeHtml(initials(name)); }
 function renderNavAvatar(){ const el=$('#nav-avatar'); if(el)el.innerHTML=avatarHtml(state.profile?.avatar_url,state.profile?.display_name||'?'); }
 function characterSpriteClass(character){ return ''; }
@@ -245,8 +323,8 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);stopPlazaRealtime();stopDirectRealtime();state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();startDirectRealtime();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);stopPlazaRealtime();stopDirectRealtime();closeChatWindow(true);state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -468,7 +546,6 @@ function applyAppTabLayout(){
 document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   const previousTab=state.tab;
   if(previousTab==='plaza'&&b.dataset.appTab!=='plaza')stopPlazaRealtime();
-  if(previousTab==='messages'&&b.dataset.appTab!=='messages')stopDirectRealtime();
   state.tab=b.dataset.appTab;
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
@@ -669,23 +746,73 @@ async function acceptedFriendProfiles(){
     .or(`requester_id.eq.${state.profile.id},addressee_id.eq.${state.profile.id}`);
   const ids=[...new Set((rels||[]).map(r=>r.requester_id===state.profile.id?r.addressee_id:r.requester_id))];
   if(!ids.length)return[];
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message').in('id',ids);
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen').in('id',ids);
   return data||[];
+}
+async function profileById(id){
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen').eq('id',id).maybeSingle();
+  return data||null;
 }
 function stopDirectRealtime(){
   if(state.directChannel){supabase.removeChannel(state.directChannel);state.directChannel=null;}
 }
-function startDirectRealtime(){
-  stopDirectRealtime();
+async function notifyPendingFriendRequests(){
   if(!state.profile?.id)return;
-  state.directChannel=supabase.channel(`avesso-dm-${state.profile.id}-${Date.now()}`)
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages'},payload=>{
+  const {data,error}=await supabase.from('friendships')
+    .select('id,requester_id,created_at')
+    .eq('addressee_id',state.profile.id)
+    .eq('status','pending')
+    .order('created_at',{ascending:false})
+    .limit(5);
+  if(error||!data?.length)return;
+  const newest=data[0];
+  const who=await profileById(newest.requester_id);
+  const extra=data.length>1?` +${data.length-1} outro${data.length>2?'s':''}`:'';
+  socialNotify({
+    title:'Pedido de amizade pendente',
+    body:`${who?.display_name||'Alguém'} quer entrar na sua lista${extra}. A diplomacia digital exige um clique.`,
+    avatar:who?.avatar_url||'',
+    kind:'friend',
+    action:()=>openPublicProfile(newest.requester_id)
+  });
+}
+function startDirectRealtime(){
+  if(state.directChannel||!state.profile?.id)return;
+  const me=state.profile.id;
+  state.directChannel=supabase.channel(`avesso-social-${me}-${Date.now()}`)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages'},async payload=>{
       const m=payload.new||{};
-      if(m.sender_id!==state.profile.id&&m.recipient_id!==state.profile.id)return;
-      if(state.tab==='messages')renderMessagesPage(state.directPeerId,{preserve:true});
-      else toast('MENSAGEM // alguém resolveu falar com você diretamente.');
+      if(m.sender_id!==me&&m.recipient_id!==me)return;
+      if(m.sender_id===me){if(state.chatWindowOpen&&state.directPeerId===m.recipient_id)refreshChatWindow();return;}
+      const sender=await profileById(m.sender_id);
+      const attention=m.message_kind==='attention';
+      socialNotify({
+        title:attention?`${sender?.display_name||'Alguém'} chamou sua atenção`:`Mensagem de ${sender?.display_name||'alguém'}`,
+        body:attention?'A janela tremeu. 2006 abriu a porta.':(m.message_kind==='image'?'enviou uma imagem':m.message_kind==='file'?'enviou um arquivo':String(m.body||'').slice(0,90)),
+        avatar:sender?.avatar_url||'',kind:attention?'attention':'message',
+        action:()=>openFriendChat(m.sender_id)
+      });
+      if(attention)triggerChatNudge(m.sender_id);
+      if(state.tab==='messages')renderMessagesPage();
+      if(state.chatWindowOpen&&state.directPeerId===m.sender_id)refreshChatWindow();
     })
-    .on('postgres_changes',{event:'*',schema:'public',table:'friendships'},()=>{if(state.tab==='messages')renderMessagesPage(state.directPeerId,{preserve:true});})
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'friendships'},async payload=>{
+      const f=payload.new||{};
+      if(f.addressee_id!==me||f.status!=='pending')return;
+      const who=await profileById(f.requester_id);
+      socialNotify({title:'Pedido de amizade',body:`${who?.display_name||'Alguém'} quer entrar na sua lista. O protocolo social ressuscitou.`,avatar:who?.avatar_url||'',kind:'friend',action:()=>openPublicProfile(f.requester_id)});
+      if(state.tab==='profile')loadFriendPanel();
+    })
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'friendships'},async payload=>{
+      const f=payload.new||{};
+      if(f.status==='accepted'&&f.requester_id===me){
+        const who=await profileById(f.addressee_id);
+        socialNotify({title:'Amizade aceita',body:`${who?.display_name||'Alguém'} aceitou. Nenhum contador público foi ferido.`,avatar:who?.avatar_url||'',kind:'friend',action:()=>openFriendChat(f.addressee_id)});
+      }
+      if(state.tab==='messages')renderMessagesPage();
+      if(state.tab==='profile')loadFriendPanel();
+    })
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'profiles'},()=>{if(state.tab==='messages')renderMessagesPage();})
     .subscribe();
 }
 async function loadDirectConversation(peerId){
@@ -693,49 +820,128 @@ async function loadDirectConversation(peerId){
   const me=state.profile.id;
   const {data,error}=await supabase.from('direct_messages').select('*')
     .or(`and(sender_id.eq.${me},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${me})`)
-    .order('created_at',{ascending:true}).limit(200);
+    .order('created_at',{ascending:true}).limit(250);
   if(error)return[];
   await supabase.from('direct_messages').update({read_at:new Date().toISOString()})
     .eq('sender_id',peerId).eq('recipient_id',me).is('read_at',null);
-  return data||[];
+  return Promise.all((data||[]).map(async m=>{
+    if(!m.attachment_path)return m;
+    const {data:signed}=await supabase.storage.from('avesso-chat').createSignedUrl(m.attachment_path,3600);
+    return {...m,attachment_url:signed?.signedUrl||''};
+  }));
 }
-async function renderMessagesPage(peerId=null,{preserve=false}={}){
+function dmMessageHtml(m){
+  const mine=m.sender_id===state.profile.id;
+  if(m.message_kind==='attention')return `<article class="dm-attention-event">⚡ ${escapeHtml(m.body||'CHAMAR ATENÇÃO')} <small>${ago(m.created_at)}</small></article>`;
+  const attachment=m.attachment_url?(m.message_kind==='image'
+    ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}"></a>`
+    :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
+  return `<article class="dm-bubble ${mine?'mine':'theirs'}">${m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p>${escapeHtml(m.body)}</p>`:''}${attachment}<small>${ago(m.created_at)}${mine&&m.read_at?' · lida':''}</small></article>`;
+}
+async function renderMessagesPage(){
   if(state.tab!=='messages')return;
   const friends=await acceptedFriendProfiles();
   if(state.tab!=='messages')return;
-  if(peerId&&friends.some(f=>f.id===peerId))state.directPeerId=peerId;
-  if(!state.directPeerId||!friends.some(f=>f.id===state.directPeerId))state.directPeerId=friends[0]?.id||null;
-  const peer=friends.find(f=>f.id===state.directPeerId)||null;
-  const messages=peer?await loadDirectConversation(peer.id):[];
-  if(state.tab!=='messages')return;
   $('#feed-status').classList.add('hidden');
-  $('#feed-list').innerHTML=`<section class="dm-world">
-    <aside class="dm-friends"><header><span class="section-code">AMIGOS // ONLINE TALVEZ</span><h2>Conversas</h2></header>
-      <div class="dm-friend-list">${friends.map(f=>`<button class="dm-friend ${f.id===state.directPeerId?'active':''}" data-dm-peer="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${escapeHtml(f.display_name)}</b><small>@${escapeHtml(f.handle)}</small></span></button>`).join('')||'<p class="dm-empty">Nenhum amigo ainda. Radicalmente difícil conversar sozinho em tempo real.</p>'}</div>
-    </aside>
-    <section class="dm-room">${peer?`<header><button class="mini-avatar profile-avatar-button" data-profile-id="${peer.id}">${avatarHtml(peer.avatar_url,peer.display_name)}</button><div><button class="user-link" data-profile-id="${peer.id}">${escapeHtml(peer.display_name)}</button><small>@${escapeHtml(peer.handle)} · ${escapeHtml(peer.status_message||'sem status')}</small></div><span class="live-dot">● ao vivo</span></header>
-      <div class="dm-log" id="dm-log">${messages.map(m=>`<article class="dm-bubble ${m.sender_id===state.profile.id?'mine':'theirs'}"><p>${escapeHtml(m.body)}</p><small>${ago(m.created_at)}${m.read_at?' · lida':''}</small></article>`).join('')||'<div class="dm-empty">Comece a conversa. O pior que pode acontecer é virar conversa.</div>'}</div>
-      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="escreva sem transformar em conteúdo..."><button>enviar ↵</button></form>`:'<div class="dm-no-peer"><h2>Sem amigos aceitos</h2><p>Adicione alguém pelo perfil público. Chat com estranhos aleatórios já foi inventado e aprendemos coisas.</p></div>'}</section>
+  $('#feed-list').innerHTML=`<section class="messages-hub">
+    <header class="messages-hub-head"><div><span class="section-code">MSN.EXE // CONTATOS HUMANOS</span><h2>Mensagens</h2><p>Escolha alguém. Uma janela aparece. Tecnologia de ponta, circa 2006.</p></div>
+    <label class="presence-picker">aparecer como <select id="presence-mode-select"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label></header>
+    <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f);return `<button class="compact-friend" data-open-chat="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${escapeHtml(f.display_name)}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}</em></button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
   </section>`;
-  $$('[data-dm-peer]').forEach(b=>b.onclick=()=>renderMessagesPage(b.dataset.dmPeer));
-  if($('#dm-form'))$('#dm-form').onsubmit=sendDirectMessage;
-  const log=$('#dm-log');if(log)log.scrollTop=log.scrollHeight;
+  $('#presence-mode-select').value=state.profile.presence_mode||'online';
+  $('#presence-mode-select').onchange=e=>setPresenceMode(e.target.value);
+  $$('[data-open-chat]').forEach(b=>b.onclick=()=>openChatWindow(b.dataset.openChat));
   startDirectRealtime();
 }
+function ensureChatWindow(){
+  let win=$('#dm-floating-window');
+  if(!win){win=document.createElement('section');win.id='dm-floating-window';win.className='dm-floating-window hidden';document.body.appendChild(win);}
+  return win;
+}
+async function openChatWindow(peerId,{keepMinimized=false}={}){
+  if(!peerId)return;
+  const [peer,messages]=await Promise.all([profileById(peerId),loadDirectConversation(peerId)]);
+  if(!peer)return toast('Essa pessoa sumiu da lista. Dramático.');
+  state.directPeerId=peerId;state.chatWindowOpen=true;
+  if(!keepMinimized)state.chatWindowMinimized=false;
+  const p=presenceView(peer);
+  const win=ensureChatWindow();
+  win.className=`dm-floating-window ${state.chatWindowMinimized?'minimized':''}`;
+  win.innerHTML=`<header class="dm-floating-head" id="dm-floating-head">
+      <button class="mini-avatar profile-avatar-button" data-profile-id="${peer.id}">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
+      <div><button class="user-link" data-profile-id="${peer.id}">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}</small></div>
+      <div class="dm-window-controls"><button id="dm-minimize" title="Minimizar">_</button><button id="dm-close" title="Fechar">×</button></div>
+    </header>
+    <div class="dm-window-body">
+      <div class="dm-log" id="dm-log">${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
+      <div class="dm-tools"><button id="dm-attention" title="Chamar atenção">⚡ chamar atenção</button><button id="dm-emoticons" title="Emoticons">☺ emoticons</button><button id="dm-attach" title="Enviar arquivo ou imagem">📎 arquivo</button><input id="dm-file-input" type="file" hidden accept="image/*,.pdf,.txt,.zip,.docx"><div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${['😀','😂','😅','🙃','👀','🤨','❤️','💀','🔥','☕','⚠️','🖥️','🐈','⌛','🫠','¯\\_(ツ)_/¯'].map(e=>`<button type="button" data-emoticon="${escapeAttr(e)}">${e}</button>`).join('')}</div></div>
+      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="escreva sem transformar em conteúdo..."><button>enviar ↵</button></form>
+    </div>`;
+  $('#dm-minimize').onclick=toggleChatMinimize;
+  $('#dm-close').onclick=()=>closeChatWindow();
+  $('#dm-form').onsubmit=sendDirectMessage;
+  $('#dm-attention').onclick=sendAttention;
+  $('#dm-emoticons').onclick=()=>$('#dm-emoticon-palette').classList.toggle('hidden');
+  $$('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();});
+  $('#dm-attach').onclick=()=>$('#dm-file-input').click();
+  $('#dm-file-input').onchange=e=>{const f=e.target.files?.[0];if(f)sendDirectAttachment(f);};
+  $('#dm-floating-head').ondblclick=()=>{if(state.chatWindowMinimized)toggleChatMinimize();};
+  const log=$('#dm-log');if(log)log.scrollTop=log.scrollHeight;
+}
+async function refreshChatWindow(){
+  if(!state.chatWindowOpen||!state.directPeerId)return;
+  const minimized=state.chatWindowMinimized;
+  await openChatWindow(state.directPeerId,{keepMinimized:true});
+  state.chatWindowMinimized=minimized;
+  ensureChatWindow().classList.toggle('minimized',minimized);
+}
+function toggleChatMinimize(){
+  if(!state.chatWindowOpen)return;
+  state.chatWindowMinimized=!state.chatWindowMinimized;
+  ensureChatWindow().classList.toggle('minimized',state.chatWindowMinimized);
+}
+function closeChatWindow(silent=false){
+  state.chatWindowOpen=false;state.chatWindowMinimized=false;state.directPeerId=null;
+  const win=$('#dm-floating-window');if(win)win.classList.add('hidden');
+  if(!silent)toast('Conversa fechada. Nenhum “tchau” automático foi enviado.');
+}
+function triggerChatNudge(peerId){
+  if(!state.chatWindowOpen||state.directPeerId!==peerId)return;
+  const win=ensureChatWindow();win.classList.remove('nudge');void win.offsetWidth;win.classList.add('nudge');setTimeout(()=>win.classList.remove('nudge'),900);
+}
 async function sendDirectMessage(e){
-  e.preventDefault();
+  e?.preventDefault();
   const input=$('#dm-input');const body=input?.value.trim()||'';
   if(!body||!state.directPeerId)return;
   input.value='';
-  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:state.directPeerId,body});
+  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:state.directPeerId,body,message_kind:'text'});
   if(error){input.value=body;return toast('A mensagem não atravessou o fio. Confirme que vocês ainda são amigos.');}
-  await renderMessagesPage(state.directPeerId,{preserve:true});
+  await refreshChatWindow();
+}
+async function sendAttention(){
+  if(!state.directPeerId)return;
+  const body=`${state.profile.display_name} chamou sua atenção. A internet acaba de voltar para 2006.`;
+  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:state.directPeerId,body,message_kind:'attention'});
+  if(error)return toast('Nem chamar atenção chamou atenção.');
+  playUiSound('attention');triggerChatNudge(state.directPeerId);await refreshChatWindow();
+}
+async function sendDirectAttachment(file){
+  if(!state.directPeerId||!file)return;
+  if(file.size>10*1024*1024)return toast('Até 10 MB por arquivo. A nostalgia não inclui conexão discada real.');
+  const allowed=/^(image\/(jpeg|png|webp|gif)|application\/pdf|text\/plain|application\/(zip|x-zip-compressed)|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/i.test(file.type||'');
+  if(!allowed)return toast('Formato não aceito nessa conversa.');
+  const path=`${state.profile.id}/${state.directPeerId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
+  const {error:upErr}=await supabase.storage.from('avesso-chat').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type});
+  if(upErr)return toast('O arquivo caiu no chão antes de chegar.');
+  const kind=file.type.startsWith('image/')?'image':'file';
+  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:state.directPeerId,body:file.name,message_kind:kind,attachment_path:path,attachment_name:file.name,attachment_type:file.type,attachment_size:file.size});
+  if(error){await supabase.storage.from('avesso-chat').remove([path]);return toast('O banco recusou o pacote. Elegante.');}
+  await refreshChatWindow();
 }
 function openFriendChat(peerId){
-  stopPlazaRealtime();
-  state.tab='messages';state.directPeerId=peerId;bumpView();applyAppTabLayout();
+  state.tab='messages';bumpView();applyAppTabLayout();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x.dataset.appTab==='messages'));
-  renderMessagesPage(peerId);
+  renderMessagesPage().then(()=>openChatWindow(peerId));
 }
 function openWallpaperDialog(target){
   state.wallpaperTarget=target;
@@ -767,7 +973,7 @@ async function loadFriendPanel(){
   const ids=[...new Set(list.flatMap(r=>[r.requester_id,r.addressee_id]).filter(id=>id!==state.profile.id))];
   let profiles={};
   if(ids.length){
-    const {data:ps}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message').in('id',ids);
+    const {data:ps}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen').in('id',ids);
     profiles=Object.fromEntries((ps||[]).map(p=>[p.id,p]));
   }
   const incoming=list.filter(r=>r.status==='pending'&&r.addressee_id===state.profile.id);
@@ -828,6 +1034,49 @@ async function changePassword(){
   $('#profile-password').value='';$('#profile-password-confirm').value='';
   toast('Senha alterada. A antiga pode se aposentar em paz.');
 }
+async function loadAlbum(userId,editable=false){
+  const host=$(editable?'#profile-album':'#public-album');if(!host)return;
+  const {data:photos,error}=await supabase.from('profile_photos').select('*').eq('user_id',userId).order('created_at',{ascending:false}).limit(60);
+  if(error){host.innerHTML='<p>O álbum caiu atrás do servidor.</p>';return;}
+  const ids=(photos||[]).map(p=>p.id);
+  let reactions=[];
+  if(ids.length){const r=await supabase.from('photo_reactions').select('*').in('photo_id',ids);reactions=r.data||[];}
+  host.innerHTML=(photos||[]).map(photo=>{
+    const rs=reactions.filter(r=>r.photo_id===photo.id);
+    const buttons=PHOTO_REACTIONS.map(([id,icon,label])=>{const rows=rs.filter(r=>r.reaction===id);const active=rows.some(r=>r.user_id===state.profile.id);return `<button class="photo-reaction ${active?'active':''}" data-photo-react="${photo.id}" data-reaction="${id}">${icon} ${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`}).join('');
+    return `<article class="album-photo"><img src="${escapeAttr(publicAlbumUrl(photo.storage_path))}" alt="${escapeAttr(photo.caption||'Foto do álbum')}" loading="lazy"><div class="album-photo-meta"><p>${escapeHtml(photo.caption||'sem legenda. corajoso.')}</p><small>${ago(photo.created_at)}</small></div><div class="photo-reactions">${buttons}</div>${editable?`<button class="album-delete" data-photo-delete="${photo.id}" data-storage-path="${escapeAttr(photo.storage_path)}">apagar foto</button>`:''}</article>`;
+  }).join('')||'<p class="album-empty">Álbum vazio. Nenhuma lembrança foi monetizada.</p>';
+  $$('[data-photo-react]').forEach(b=>b.onclick=()=>togglePhotoReaction(b.dataset.photoReact,b.dataset.reaction,userId,editable));
+  $$('[data-photo-delete]').forEach(b=>b.onclick=()=>deleteAlbumPhoto(b.dataset.photoDelete,b.dataset.storagePath));
+}
+async function uploadAlbumPhoto(){
+  const file=$('#album-file')?.files?.[0];if(!file)return toast('Escolha uma foto primeiro. A telepatia continua em beta.');
+  if(file.size>8*1024*1024)return toast('A foto precisa ter até 8 MB.');
+  if(!/^image\/(jpeg|png|webp|gif)$/i.test(file.type))return toast('Use JPG, PNG, WEBP ou GIF.');
+  const caption=String($('#album-caption').value||'').slice(0,180);
+  const path=`${state.profile.id}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
+  const btn=$('#album-upload');btn.disabled=true;btn.textContent='enviando...';
+  const {error:upErr}=await supabase.storage.from('avesso-albums').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type});
+  if(upErr){btn.disabled=false;btn.textContent='adicionar foto';return toast('A foto não conseguiu entrar no álbum.');}
+  const {error}=await supabase.from('profile_photos').insert({user_id:state.profile.id,storage_path:path,caption});
+  btn.disabled=false;btn.textContent='adicionar foto';
+  if(error){await supabase.storage.from('avesso-albums').remove([path]);return toast('A foto chegou, o álbum fingiu que não conhece.');}
+  $('#album-file').value='';$('#album-caption').value='';toast('Foto adicionada. Nenhum filtro de pôr do sol obrigatório.');loadAlbum(state.profile.id,true);
+}
+async function deleteAlbumPhoto(id,path){
+  if(!confirm('Apagar esta foto do seu Canto?'))return;
+  await supabase.from('profile_photos').delete().eq('id',id).eq('user_id',state.profile.id);
+  await supabase.storage.from('avesso-albums').remove([path]);
+  loadAlbum(state.profile.id,true);
+}
+async function togglePhotoReaction(photoId,reaction,userId,editable){
+  if(!PHOTO_REACTIONS.some(x=>x[0]===reaction))return;
+  const {data:existing}=await supabase.from('photo_reactions').select('reaction').eq('photo_id',photoId).eq('user_id',state.profile.id).maybeSingle();
+  if(existing?.reaction===reaction)await supabase.from('photo_reactions').delete().eq('photo_id',photoId).eq('user_id',state.profile.id);
+  else await supabase.from('photo_reactions').upsert({photo_id:photoId,user_id:state.profile.id,reaction},{onConflict:'photo_id,user_id'});
+  loadAlbum(userId,editable);
+}
+
 async function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
@@ -838,10 +1087,11 @@ async function renderProfile(){
       <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
     <div class="profile-settings-grid">
-      <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Mensagem de status<input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
+      <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Mensagem de status<input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Aparecer como<select id="profile-presence"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
       <section class="profile-settings-card security-card"><span class="section-code">CONTA // SEGURANÇA</span><p><b>E-mail</b><br>${escapeHtml(state.session?.user?.email||'')}</p><label>Nova senha<input id="profile-password" type="password" minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password"></label><button id="change-password">alterar senha</button><small>Seu @ continua estável para links. Seu nome exibido pode trocar de personalidade quantas vezes quiser.</small></section>
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
+    <section class="profile-album-control"><span class="section-code">ÁLBUM // FOTOS QUE VOCÊ DECIDIU NÃO APAGAR</span><h2>Seu álbum</h2><p>Poste imagens no seu Canto. Reações existem, mas continuam sem virar olimpíada social.</p><div class="album-upload-row"><input id="album-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><input id="album-caption" maxlength="180" placeholder="legenda opcional. autocontrole também."><button id="album-upload">adicionar foto</button></div><div id="profile-album" class="profile-album-grid"><p>carregando memórias...</p></div></section>
     <section class="friends-control"><span class="section-code">PESSOAS // AMIGOS</span><h2>Lista de pessoas que você aceitou voluntariamente</h2><div id="friends-panel"><p>carregando relações humanas...</p></div></section>
   </section>
   <section class="world-preferences">
@@ -858,11 +1108,15 @@ async function renderProfile(){
   $('#open-avatar-picker').onclick=openAvatarDialog;
   $('#save-profile-settings').onclick=saveProfileSettings;
   $('#change-password').onclick=changePassword;
+  $('#profile-presence').value=state.profile.presence_mode||'online';
+  $('#profile-presence').onchange=e=>setPresenceMode(e.target.value);
+  $('#album-upload').onclick=uploadAlbumPhoto;
   $('#choose-profile-wallpaper').onclick=()=>openWallpaperDialog('profile');
   $('#choose-app-wallpaper').onclick=()=>openWallpaperDialog('app');
   document.querySelectorAll('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
   setWorldModeLabel();
   loadFriendPanel();
+  loadAlbum(state.profile.id,true);
   algoSay('profile');
   setTimeout(()=>askWorldCharacter('profile'),700);
 }
@@ -903,7 +1157,7 @@ async function openPublicProfile(userId){
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   applyAppTabLayout();$('#feed-status').classList.add('hidden');
   const [profileRes,postsRes,friendship]=await Promise.all([
-    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper').eq('id',userId).maybeSingle(),
+    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen').eq('id',userId).maybeSingle(),
     supabase.from('posts').select('id,body,image_url,created_at').eq('author_id',userId).eq('visibility','publico').order('created_at',{ascending:false}).limit(20),
     getFriendshipWith(userId)
   ]);
@@ -916,7 +1170,8 @@ async function openPublicProfile(userId){
   else friendControl='<span class="friend-status">pedido enviado</span>';
   $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
-    <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</p><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <section class="public-album"><h2>Álbum de ${escapeHtml(p.display_name)}</h2><div id="public-album" class="profile-album-grid"><p>abrindo gavetas...</p></div></section>
     <div class="public-posts"><h2>O que ${escapeHtml(p.display_name)} deixou por aqui</h2>${(postsRes.data||[]).map(post=>`<article class="post-card"><span class="post-meta">${ago(post.created_at)}</span><p class="post-body">${escapeHtml(post.body)}</p>${post.image_url?`<figure class="post-image"><img src="${escapeHtml(post.image_url)}" loading="lazy"></figure>`:''}</article>`).join('')||'<p class="feed-status">Nada público ainda.</p>'}</div>
   </section>`;
   $('#back-from-profile').onclick=()=>document.querySelector('[data-app-tab="feed"]')?.click();
@@ -924,6 +1179,7 @@ async function openPublicProfile(userId){
   $('[data-accept-public]')?.addEventListener('click',async e=>{await answerFriendRequest(e.currentTarget.dataset.acceptPublic,true);openPublicProfile(userId);});
   $('[data-message-friend]')?.addEventListener('click',e=>openFriendChat(e.currentTarget.dataset.messageFriend));
   $('[data-unfriend-public]')?.addEventListener('click',async e=>{if(confirm('Desfazer amizade? Sem textão de despedida.')){await supabase.from('friendships').delete().eq('id',e.currentTarget.dataset.unfriendPublic);openPublicProfile(userId);}});
+  loadAlbum(userId,false);
 }
 function bindProfileLinks(){ /* links usam delegação global */ }
 document.addEventListener('click',e=>{
