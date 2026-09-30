@@ -610,3 +610,10 @@ function showAuthLinkError(){
 const {data:{session}}=await supabase.auth.getSession();state.session=session;if(session)enterApp();else showAuthLinkError();
 
 window.addEventListener('scroll',()=>{if(!state.profile||!isFeedTab())return;const now=Date.now();if(now-state.scrollTrackedAt<45000)return;if(window.scrollY<300)return;state.scrollTrackedAt=now;trackAction('feed_scroll','feed',{depth:Math.round((window.scrollY/(Math.max(1,document.documentElement.scrollHeight-innerHeight)))*100)},true);},{passive:true});
+document.addEventListener('click',e=>{
+  if(!state.profile)return;
+  const el=e.target.closest('button,a');
+  if(!el||el.id==='publish-post'||el.id==='npc-talk'||el.id==='tower-refresh'||el.dataset.avatar||el.dataset.worldMode||el.dataset.appTab)return;
+  const control=(el.id||el.getAttribute('aria-label')||el.textContent||el.tagName).trim().slice(0,48);
+  if(control)trackAction('ui_click',state.tab||'app',{control},false);
+});
