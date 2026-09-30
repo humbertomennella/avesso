@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -123,6 +123,8 @@ const PHOTO_REACTIONS=[
   ['quase_arte','✦','quase arte']
 ];
 function publicAlbumUrl(path){return supabase.storage.from('avesso-albums').getPublicUrl(path).data.publicUrl;}
+function guestbookImageUrl(path){return supabase.storage.from('avesso-recados').getPublicUrl(path).data.publicUrl;}
+function richText(value=''){const escaped=escapeHtml(value).replace(/\n/g,'<br>');return escaped.replace(/(https?:\/\/[^\s<]+)/g,'<a class="guestbook-link" href="$1" target="_blank" rel="noopener noreferrer">$1</a>');}
 function safeFileName(name='arquivo'){return name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/-+/g,'-').slice(-90)||'arquivo';}
 
 function avatarHtml(url,name='?'){ return url?`<img src="${escapeAttr(url)}" alt="" loading="lazy">`:escapeHtml(initials(name)); }
@@ -170,10 +172,20 @@ function paintEncounter(payload,preview=false){
   $('#encounter-line').textContent=interaction.body||payload.text||'...';
   $('#encounter-source').textContent=preview?'ARQUIVO DO HABITANTE':(interaction.source==='ai'||payload.ai?'MUNDO // AO VIVO':'MUNDO // ROTEIRO');
 }
+function encounterKey(payload){
+  const c=payload?.character||{};
+  const interaction=payload?.interaction||{};
+  return `${c.slug||c.id||c.name||'habitante'}|${String(interaction.body||payload?.text||'').trim().slice(0,120)}`;
+}
 function runEncounterQueue(){
   if(state.world.notificationBusy)return;
   const next=state.world.notificationQueue.shift();
   if(!next)return;
+  const now=Date.now();
+  if(!next.preview&&(state.socialNotificationBusy||now-state.world.lastNotificationAt<90000)){
+    state.world.notificationQueue.length=0;
+    return;
+  }
   state.world.notificationBusy=true;
   const card=$('#world-encounter');
   paintEncounter(next.payload,next.preview);
@@ -192,7 +204,8 @@ function dismissEncounter(){
     card.classList.add('hidden');
     card.classList.remove('msn-out');
     state.world.notificationBusy=false;
-    runEncounterQueue();
+    state.world.lastNotificationAt=Date.now();
+    state.world.notificationQueue.length=0;
   },480);
 }
 function showEncounter(payload,preview=false){
@@ -200,9 +213,20 @@ function showEncounter(payload,preview=false){
   const interaction=payload.interaction||{};
   if(!preview&&interaction.id&&interaction.id===state.world.lastInteractionId)return;
   if(!preview&&interaction.id)state.world.lastInteractionId=interaction.id;
-  state.world.notificationQueue.push({payload,preview});
-  if(state.world.notificationQueue.length>4)state.world.notificationQueue.shift();
+  const key=encounterKey(payload);
+  if(!preview&&state.world.recentNotificationKeys.includes(key))return;
+  if(!preview&&(state.world.notificationBusy||state.socialNotificationBusy||Date.now()-state.world.lastNotificationAt<90000))return;
+  state.world.recentNotificationKeys=[key,...state.world.recentNotificationKeys.filter(x=>x!==key)].slice(0,8);
+  state.world.notificationQueue=[{payload,preview}];
   runEncounterQueue();
+}
+function maybeWorldCharacter(trigger,options={},chance=.16,cooldown=180000){
+  const now=Date.now();
+  if(!state.session||!state.profile||state.world.notificationBusy||state.socialNotificationBusy)return null;
+  if(now-state.world.lastReactiveAt<cooldown||now-state.world.lastNotificationAt<90000)return null;
+  if(Math.random()>chance)return null;
+  state.world.lastReactiveAt=now;
+  return askWorldCharacter(trigger,options);
 }
 async function askWorldCharacter(trigger,options={}){
   if(!state.session||!state.profile)return null;
@@ -558,7 +582,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
   trackAction('tab_view',state.tab,{tab:state.tab});
-  if(!['plaza','tower'].includes(state.tab))askWorldCharacter('tab_view',{action_type:'tab_view',surface:state.tab,metadata:{tab:state.tab}});
+  if(!['plaza','tower'].includes(state.tab))maybeWorldCharacter('tab_view',{action_type:'tab_view',surface:state.tab,metadata:{tab:state.tab}},.14,180000);
   if(state.tab==='profile')renderProfile();
   else if(state.tab==='residents')await renderInhabitantsPage();
   else if(state.tab==='plaza')await renderPlaza();
@@ -1123,7 +1147,7 @@ async function renderProfile(){
   loadFriendPanel();
   loadAlbum(state.profile.id,true);
   algoSay('profile');
-  setTimeout(()=>askWorldCharacter('profile'),700);
+  setTimeout(()=>maybeWorldCharacter('profile',{surface:'profile'},.12,180000),900);
 }
 async function saveAvatar(url){
   if(!AVATAR_OPTIONS.some(x=>x[1]===url))return;
@@ -1201,11 +1225,10 @@ document.addEventListener('click',e=>{
   const label=(target.dataset.appTab||target.id||target.textContent||target.tagName).trim().slice(0,60);
   if(label){
     trackAction('screen_action',state.tab,{control:label});
-    const now=Date.now();
     const worldSurface=!['tower','plaza'].includes(state.tab);
-    if(worldSurface&&now-state.world.lastReactiveAt>45000&&Math.random()<0.38){
-      state.world.lastReactiveAt=now;
-      setTimeout(()=>askWorldCharacter('screen_action',{action_type:label,surface:state.tab,metadata:{control:label}}),650);
+    const noisySurface=target.closest('.dm-floating-window,.social-notifications,dialog,form,.guestbook-composer,.plaza-chat-room');
+    if(worldSurface&&!noisySurface){
+      setTimeout(()=>maybeWorldCharacter('screen_action',{action_type:label,surface:state.tab,metadata:{control:label}},.10,180000),650);
     }
   }
 },{passive:true});
