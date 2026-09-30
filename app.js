@@ -5,12 +5,71 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', world:{preferences:null,settings:null,characters:{},dialogues:[]} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', world:{preferences:null,settings:null,characters:{},dialogues:[],lastInteraction:null,idleTimer:null} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
 function ago(date){ const s=Math.floor((Date.now()-new Date(date))/1000); if(s<60)return'agora'; if(s<3600)return`${Math.floor(s/60)}min`; if(s<86400)return`${Math.floor(s/3600)}h`; return`${Math.floor(s/86400)}d`; }
 function escapeHtml(value=''){ const d=document.createElement('div'); d.textContent=value; return d.innerHTML; }
+
+function characterById(id){return Object.values(state.world.characters).find(c=>c.id===id)||null;}
+function presenceLabel(value){return ({working:'trabalhando',wandering:'circulando',observing:'observando',missing:'ninguém sabe',event:'em evento',offline:'fora do ar',idle:'por aí'})[value]||value||'desconhecido';}
+function showCharacterInteraction(payload){
+  const character=payload?.character||characterById(payload?.interaction?.character_id);
+  const interaction=payload?.interaction||payload;
+  if(!character||!interaction?.body)return;
+  state.world.lastInteraction={character,interaction};
+  const card=$('#world-character-card');
+  const img=$('#world-character-image');
+  const name=$('#world-character-name');
+  const role=$('#world-character-role');
+  const line=$('#world-character-line');
+  const meta=$('#world-character-meta');
+  if(card)card.style.setProperty('--character-accent',character.accent_color||'#22d9ee');
+  if(img){img.src=character.image_path;img.alt=character.name;}
+  if(name)name.textContent=character.name;
+  if(role)role.textContent=character.role;
+  if(line)line.textContent=interaction.body;
+  if(meta)meta.textContent=`${character.home_location||'Mundo do AVESSO'} // ${interaction.source==='ai'?'IA':'roteiro'}`;
+  const visitor=$('#world-visitor');
+  if(visitor){
+    visitor.style.setProperty('--character-accent',character.accent_color||'#22d9ee');
+    visitor.querySelector('img').src=character.image_path;
+    visitor.querySelector('img').alt=character.name;
+    visitor.querySelector('[data-visitor-name]').textContent=character.name;
+    visitor.querySelector('[data-visitor-line]').textContent=interaction.body;
+    visitor.classList.remove('hidden');
+    visitor.classList.add('arrive');
+    clearTimeout(visitor._hideTimer);
+    visitor._hideTimer=setTimeout(()=>visitor.classList.add('hidden'),12000);
+  }
+}
+async function triggerWorldCharacter(trigger,extra={}){
+  if(!state.session||!state.profile||state.world.preferences?.participation_mode==='observer')return null;
+  try{
+    const {data,error}=await supabase.functions.invoke('world-character',{body:{trigger,...extra}});
+    if(error||!data||data.skipped)return null;
+    showCharacterInteraction(data);
+    return data;
+  }catch(err){console.warn('world-character',err);return null;}
+}
+function scheduleWorldIdle(){
+  clearTimeout(state.world.idleTimer);
+  if(state.world.preferences?.participation_mode==='observer')return;
+  const delay=90000+Math.floor(Math.random()*90000);
+  state.world.idleTimer=setTimeout(async()=>{
+    await triggerWorldCharacter('idle');
+    scheduleWorldIdle();
+  },delay);
+}
+async function renderWorld(){
+  $('#feed-status').classList.add('hidden');
+  const chars=Object.values(state.world.characters);
+  const order=['algo','404','npc','rei_engajamento','aquele_le_tudo','alem'];
+  chars.sort((a,b)=>order.indexOf(a.slug)-order.indexOf(b.slug));
+  $('#feed-list').innerHTML=`<section class="world-intro"><span class="section-code">AVESSO.SYS // HABITANTES</span><h2>Gente, erros e outras coisas que moram aqui.</h2><p>Nem todos aparecem quando você chama. Alguns consideram isso uma qualidade.</p></section><div class="inhabitants-grid">${chars.map(c=>`<article class="inhabitant-card" style="--accent:${c.accent_color||'#d8ff3e'}"><div class="inhabitant-art"><img src="${escapeHtml(c.image_path||'')}" alt="${escapeHtml(c.name)}" loading="lazy"></div><div class="inhabitant-copy"><span class="section-code">${escapeHtml(c.home_location||'MUNDO')}</span><h3>${escapeHtml(c.name)}</h3><strong>${escapeHtml(c.role)}</strong><p>${escapeHtml(c.bio||'')}</p><div class="inhabitant-personality"><b>PERSONALIDADE</b><span>${escapeHtml(c.personality||'')}</span></div><small>estado: ${escapeHtml(presenceLabel(c.presence_state))}</small></div></article>`).join('')}</div>`;
+  triggerWorldCharacter('world_event',{character:'aquele_le_tudo'});
+}
 
 function weightedPick(items=[]){
   if(!items.length)return null;
@@ -40,7 +99,7 @@ async function loadWorldState(){
   const [prefsRes,settingsRes,charsRes]=await Promise.all([
     supabase.from('user_world_preferences').select('*').eq('user_id',state.profile.id).maybeSingle(),
     supabase.from('world_settings').select('*').eq('id','global').maybeSingle(),
-    supabase.from('characters').select('id,slug,name,role,accent_color').eq('is_active',true)
+    supabase.from('characters').select('id,slug,name,role,bio,personality,accent_color,image_path,home_location,presence_state,rarity,ai_enabled').eq('is_active',true)
   ]);
   let prefs=prefsRes.data;
   if(!prefs&&!prefsRes.error){
@@ -58,6 +117,8 @@ async function loadWorldState(){
   }
   setWorldModeLabel();
   algoSay('feed_default');
+  const algo=state.world.characters.algo;
+  if(algo&&!state.world.lastInteraction)showCharacterInteraction({character:algo,interaction:{body:'Estou online. Contra recomendação médica de vários servidores.',source:'curated'}});
 }
 async function saveWorldMode(mode){
   if(!['observer','world','chaos'].includes(mode))return;
@@ -95,8 +156,8 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;$('#nav-avatar').textContent=initials(data.display_name);await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();}
-function leaveApp(){state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;$('#nav-avatar').textContent=initials(data.display_name);await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();setTimeout(()=>triggerWorldCharacter('login'),1200);scheduleWorldIdle();}
+function leaveApp(){clearTimeout(state.world.idleTimer);state.profile=null;state.world.lastInteraction=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeHtml(p.display_name)}' data-handle='${escapeHtml(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -122,12 +183,12 @@ $('#publish-post').onclick=async()=>{
   const directed=$('#post-target').value==='person';
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
   if(body.length<12)return toast('O mínimo são 12 caracteres. A conversa merece mais que um aceno.');
-  const {error}=await supabase.from('posts').insert({
+  const {data:created,error}=await supabase.from('posts').insert({
     author_id:state.profile.id,
     recipient_id:directed?state.recipient.id:null,
     body,
     visibility:directed?$('#post-visibility').value:'publico'
-  });
+  }).select('id').single();
   if(error)return toast('Não foi possível publicar. Tente novamente.');
   $('#post-body').value='';
   $('#recipient-search').value='';
@@ -136,15 +197,16 @@ $('#publish-post').onclick=async()=>{
   toast(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
   loadFeed();
   loadImpact();
+  if(created?.id)setTimeout(()=>triggerWorldCharacter('post_created',{post_id:created.id}),700);
 };
 
-async function loadFeed(){const status=$('#feed-status');status.classList.remove('hidden');status.textContent='ordenando pelo que importa, ideia radical...';algoSay('feed_loading');let query=supabase.from('feed_attention').select('*');if(state.tab==='quiet')query=query.eq('response_count',0);if(state.tab==='sent')query=query.eq('author_id',state.profile.id);const {data,error}=await query.order('attention_need',{ascending:false}).limit(40);if(error){status.textContent='O feed falhou. Até o anti-algoritmo tem segunda-feira.';algoSay('feed_error');return}status.classList.add('hidden');const posts=data||[];renderFeed(posts);if(posts.some(p=>p.response_count===0))algoSay('feed_attention');else if(posts.length)algoSay('feed_default');}
+async function loadFeed(){const status=$('#feed-status');status.classList.remove('hidden');status.textContent='ordenando pelo que importa, ideia radical...';algoSay('feed_loading');let query=supabase.from('feed_attention').select('*');if(state.tab==='quiet')query=query.eq('response_count',0);if(state.tab==='sent')query=query.eq('author_id',state.profile.id);const {data,error}=await query.order('attention_need',{ascending:false}).limit(40);if(error){status.textContent='O feed falhou. Até o anti-algoritmo tem segunda-feira.';algoSay('feed_error');return}status.classList.add('hidden');const posts=data||[];renderFeed(posts);if(posts.some(p=>p.response_count===0)){algoSay('feed_attention');setTimeout(()=>triggerWorldCharacter('feed_attention'),900);}else if(posts.length)algoSay('feed_default');}
 function renderFeed(posts){const list=$('#feed-list');if(!posts.length){list.innerHTML='<div class="feed-status">Nada aqui. Talvez as pessoas estejam vivendo. Estranho, mas permitido.</div>';algoSay('feed_empty');return}list.innerHTML=posts.map(p=>`<article class="post-card"><div class="post-route"><span class="mini-avatar">${initials(p.author_name)}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div><p class="post-body">${escapeHtml(p.body)}</p><div class="post-actions"><button data-reply='${p.id}'>↩ responder</button><button data-support='${p.id}'>＋ apoiar em privado</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div></article>`).join('');list.querySelectorAll('[data-support]').forEach(b=>b.onclick=()=>supportPost(b.dataset.support));list.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>replyPost(b.dataset.reply));}
 async function supportPost(post_id){const {error}=await supabase.from('support_signals').upsert({post_id,supporter_id:state.profile.id,kind:'estou_aqui'});toast(error?'Não foi possível apoiar agora.':'Apoio privado entregue. A plateia não ficou sabendo.');}
 async function replyPost(post_id){const body=prompt('Sua resposta (sim, este prompt é retrô de propósito):');if(!body||body.trim().length<2)return;const {error}=await supabase.from('responses').insert({post_id,author_id:state.profile.id,body:body.trim()});toast(error?'A resposta caiu no vazio. Tente novamente.':'Resposta enviada. Conversa: conceito vintage.');if(!error)loadFeed();}
 
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
-$$('[data-app-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.appTab;$$('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco'};$('#feed-heading').textContent=headings[state.tab];if(state.tab==='profile')renderProfile();else loadFeed();});
+$$('[data-app-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.appTab;$$('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',world:'Quem mora aqui?'};$('#feed-heading').textContent=headings[state.tab]||'AVESSO';$('#composer').classList.toggle('hidden',state.tab==='profile'||state.tab==='world');if(state.tab==='profile')renderProfile();else if(state.tab==='world')renderWorld();else loadFeed();});
 function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
@@ -164,6 +226,7 @@ function renderProfile(){
   $('#edit-bio').onclick=editBio;
   $('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
   algoSay('profile');
+  triggerWorldCharacter('profile');
 }
 async function editBio(){const bio=prompt('Bio curta, até 180 caracteres:',state.profile.bio||'');if(bio===null)return;const {data,error}=await supabase.from('profiles').update({bio:bio.slice(0,180)}).eq('id',state.profile.id).select().single();if(error)return toast('A bio resistiu à mudança.');state.profile=data;renderProfile();toast('Bio atualizada. Crise de identidade adiada.');}
 $('#refresh-feed').onclick=loadFeed;
@@ -178,6 +241,9 @@ function subscribeRealtime(){
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'world_events'},payload=>{
       if(payload.new?.status==='active')toast(`EVENTO DO MUNDO // ${payload.new.title}`);
+    })
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'character_interactions',filter:`user_id=eq.${state.profile.id}`},payload=>{
+      const character=characterById(payload.new.character_id);if(character)showCharacterInteraction({character,interaction:payload.new});
     })
     .subscribe();
 }
