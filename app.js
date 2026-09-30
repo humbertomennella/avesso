@@ -1087,12 +1087,19 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
   state.directPeerId=peerId;state.chatWindowOpen=true;
   if(!keepMinimized)state.chatWindowMinimized=false;
   const p=presenceView(peer);
+  const muted=isPeerMuted(peerId);
+  const theme=state.profile?.chat_theme||'aqua';
   const win=ensureChatWindow();
-  win.className=`dm-floating-window ${state.chatWindowMinimized?'minimized':''}`;
-  win.innerHTML=`<div class="dm-msn-titlebar" id="dm-floating-head"><span class="dm-msn-appmark">▾ AVESSO Messenger</span><span class="dm-msn-era">build 2006.2026</span><div class="dm-window-controls"><button id="dm-minimize" title="Minimizar">_</button><button id="dm-close" title="Fechar">×</button></div></div>
+  win.className=`dm-floating-window ${chatThemeClass(theme)} ${state.chatWindowMinimized?'minimized':''}`;
+  win.innerHTML=`<div class="dm-msn-titlebar" id="dm-floating-head">
+      <span class="dm-msn-appmark">▾ AVESSO Messenger</span>
+      <button id="dm-restore-name" class="dm-title-peer" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}</button>
+      <span class="dm-msn-era">build 2006.2026</span>
+      <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'□':'_'}</button><button id="dm-close" title="Fechar">×</button></div>
+    </div>
     <header class="dm-floating-head">
-      <button class="mini-avatar profile-avatar-button" data-profile-id="${peer.id}">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
-      <div><span class="dm-conversation-label">conversando com</span><button class="user-link" data-profile-id="${peer.id}">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}</small></div>
+      <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
+      <div><span class="dm-conversation-label">conversando com</span><button class="user-link" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
       <span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span>
     </header>
     <div class="dm-window-body">
@@ -1101,22 +1108,46 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
           <div class="dm-msn-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</div>
           <b>${escapeHtml(peer.display_name)}</b>
           <small>${escapeHtml(peer.status_message||'online o suficiente')}</small>
-          <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}</span>
+          <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span>
         </aside>
         <div class="dm-log" id="dm-log">${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
       </div>
-      <div class="dm-tools"><button id="dm-attention" title="Chamar atenção">⚡ chamar atenção</button><button id="dm-emoticons" title="Emoticons">☺ emoticons</button><button id="dm-attach" title="Enviar arquivo ou imagem">📎 arquivo</button><input id="dm-file-input" type="file" hidden accept="image/*,.pdf,.txt,.zip,.docx"><div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${['😀','😂','😅','🙃','👀','🤨','❤️','💀','🔥','☕','⚠️','🖥️','🐈','⌛','🫠','¯\\_(ツ)_/¯'].map(e=>`<button type="button" data-emoticon="${escapeAttr(e)}">${e}</button>`).join('')}</div></div>
+      <div class="dm-tools">
+        <button id="dm-attention" title="Chamar atenção">⚡ chamar atenção</button>
+        <button id="dm-emoticons" title="Emoticons">☺ emoticons</button>
+        <button id="dm-attach" title="Enviar arquivo ou imagem">📎 arquivo</button>
+        <div class="dm-options-wrap">
+          <button id="dm-options" title="Opções da conversa">⚙ opções</button>
+          <div id="dm-options-menu" class="dm-options-menu hidden">
+            <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${escapeHtml(peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
+            <button id="dm-visit-profile">↗ visitar o Canto</button>
+            <button id="dm-mute-peer">${muted?'🔊 desmutar':'🔇 mutar'} notificações</button>
+            <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
+            <div class="dm-theme-section"><span>cor da janela</span><div class="dm-theme-grid">${CHAT_THEMES.map(([id,label,color])=>`<button type="button" class="chat-theme-choice ${theme===id?'active':''}" data-chat-theme="${id}" title="${escapeAttr(label)}"><i style="--theme-color:${color}"></i><b>${escapeHtml(label)}</b></button>`).join('')}</div></div>
+          </div>
+        </div>
+        <input id="dm-file-input" type="file" hidden accept="image/*,.pdf,.txt,.zip,.docx">
+        <div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${['😀','😂','😅','🙃','👀','🤨','❤️','💀','🔥','☕','⚠️','🖥️','🐈','⌛','🫠','¯\\_(ツ)_/¯'].map(e=>`<button type="button" data-emoticon="${escapeAttr(e)}">${e}</button>`).join('')}</div>
+      </div>
       <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem... e finja que não sente falta do MSN."><button>Enviar</button></form>
     </div>`;
   $('#dm-minimize').onclick=toggleChatMinimize;
   $('#dm-close').onclick=()=>closeChatWindow();
+  $('#dm-restore-name').onclick=e=>{e.stopPropagation();if(state.chatWindowMinimized)toggleChatMinimize();else $('#dm-input')?.focus();};
+  $('#dm-peer-avatar').onclick=()=>openPublicProfile(peerId);
+  $('#dm-peer-profile-name').onclick=()=>openPublicProfile(peerId);
   $('#dm-form').onsubmit=sendDirectMessage;
   $('#dm-attention').onclick=sendAttention;
-  $('#dm-emoticons').onclick=()=>$('#dm-emoticon-palette').classList.toggle('hidden');
+  $('#dm-emoticons').onclick=()=>{$('#dm-emoticon-palette').classList.toggle('hidden');$('#dm-options-menu')?.classList.add('hidden');};
   $$('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();});
   $('#dm-attach').onclick=()=>$('#dm-file-input').click();
   $('#dm-file-input').onchange=e=>{const f=e.target.files?.[0];if(f)sendDirectAttachment(f);};
-  $('#dm-floating-head').ondblclick=()=>{if(state.chatWindowMinimized)toggleChatMinimize();};
+  $('#dm-options').onclick=e=>{e.stopPropagation();$('#dm-options-menu').classList.toggle('hidden');$('#dm-emoticon-palette')?.classList.add('hidden');};
+  $('#dm-visit-profile').onclick=()=>{openPublicProfile(peerId);$('#dm-options-menu')?.classList.add('hidden');};
+  $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
+  $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
+  $$('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
+  $('#dm-floating-head').ondblclick=e=>{if(e.target.closest('.dm-window-controls'))return;toggleChatMinimize();};
   const log=$('#dm-log');if(log)log.scrollTop=log.scrollHeight;
 }
 async function refreshChatWindow(){
@@ -1129,7 +1160,11 @@ async function refreshChatWindow(){
 function toggleChatMinimize(){
   if(!state.chatWindowOpen)return;
   state.chatWindowMinimized=!state.chatWindowMinimized;
-  ensureChatWindow().classList.toggle('minimized',state.chatWindowMinimized);
+  const win=ensureChatWindow();
+  win.classList.toggle('minimized',state.chatWindowMinimized);
+  const button=$('#dm-minimize');
+  if(button){button.textContent=state.chatWindowMinimized?'□':'_';button.title=state.chatWindowMinimized?'Restaurar':'Minimizar';}
+  if(!state.chatWindowMinimized)setTimeout(()=>$('#dm-input')?.focus(),80);
 }
 function closeChatWindow(silent=false){
   state.chatWindowOpen=false;state.chatWindowMinimized=false;state.directPeerId=null;
