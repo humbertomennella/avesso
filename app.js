@@ -399,7 +399,7 @@ function renderFeed(posts,threadData={responses:{},supports:{},characters:{}}){
   $$('[data-reply-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-box="${b.dataset.replyCancel}"]`)?.classList.add('hidden'));
   $$('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
   $$('[data-support-toggle]').forEach(b=>b.onclick=()=>document.querySelector(`[data-support-box="${b.dataset.supportToggle}"]`)?.classList.toggle('hidden'));
-  $('[data-support-kind]').forEach(b=>b.onclick=()=>supportPost(b.dataset.supportPost,b.dataset.supportKind));
+  document.querySelectorAll('[data-support-kind]').forEach(b=>b.onclick=()=>supportPost(b.dataset.supportPost,b.dataset.supportKind));
   bindProfileLinks();
 }
 async function supportPost(post_id,kind){
