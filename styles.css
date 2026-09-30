@@ -921,3 +921,155 @@ dialog{width:min(480px,calc(100% - 28px));border:1px solid var(--line);border-ra
     max-width:66px!important;
   }
 }
+
+
+/* =========================================================
+   MOBILE WALLPAPER VISIBILITY 2026-09-30
+   Os wallpapers já eram salvos e carregados corretamente.
+   O problema era visual: a camada ficava atrás do stacking
+   context e os painéis opacos escondiam praticamente tudo.
+   ========================================================= */
+@media (max-width:760px){
+  #app-view{
+    position:relative!important;
+    isolation:isolate!important;
+    background:transparent!important;
+  }
+
+  #app-view::before{
+    content:""!important;
+    position:fixed!important;
+    inset:0!important;
+    z-index:0!important;
+    background-image:
+      linear-gradient(180deg,rgba(5,7,8,.70),rgba(5,7,8,.80)),
+      var(--avesso-app-wallpaper)!important;
+    background-size:cover!important;
+    background-position:center center!important;
+    background-repeat:no-repeat!important;
+    opacity:1!important;
+    pointer-events:none!important;
+    transform:translateZ(0);
+  }
+
+  #app-view::after{
+    content:""!important;
+    position:fixed!important;
+    inset:0!important;
+    z-index:0!important;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,0) 0 3px,
+        rgba(0,0,0,.10) 4px
+      )!important;
+    pointer-events:none!important;
+  }
+
+  #app-view > .app-nav,
+  #app-view > .feed-column,
+  #app-view > .app-aside{
+    position:relative;
+    z-index:1;
+  }
+
+  .feed-column{
+    background:transparent!important;
+  }
+
+  .post-card,
+  .profile-settings-card,
+  .friends-control,
+  .profile-album-control,
+  .wallpaper-control,
+  .world-preferences,
+  .messages-hub,
+  .conversation-thread,
+  .public-album{
+    background:rgba(9,13,15,.84)!important;
+    -webkit-backdrop-filter:blur(5px);
+    backdrop-filter:blur(5px);
+  }
+
+  .post-card{
+    border-color:rgba(75,96,102,.65)!important;
+  }
+
+  .profile-control{
+    position:relative!important;
+    isolation:isolate!important;
+    overflow:hidden!important;
+    background:transparent!important;
+  }
+
+  .profile-control::before{
+    content:""!important;
+    position:absolute!important;
+    inset:0!important;
+    width:100%!important;
+    height:100%!important;
+    z-index:0!important;
+    background-image:
+      linear-gradient(180deg,rgba(6,9,10,.35),rgba(6,9,10,.70)),
+      var(--profile-wallpaper)!important;
+    background-size:cover!important;
+    background-position:center top!important;
+    background-repeat:no-repeat!important;
+    opacity:.88!important;
+    pointer-events:none!important;
+  }
+
+  .profile-control::after{
+    content:""!important;
+    position:absolute!important;
+    inset:0!important;
+    z-index:0!important;
+    background:linear-gradient(
+      90deg,
+      rgba(0,0,0,.18),
+      transparent 26%,
+      transparent 74%,
+      rgba(0,0,0,.18)
+    )!important;
+    pointer-events:none!important;
+  }
+
+  .profile-control > *{
+    position:relative!important;
+    z-index:1!important;
+  }
+
+  .profile-control-hero{
+    background:rgba(8,12,13,.64)!important;
+    -webkit-backdrop-filter:blur(4px);
+    backdrop-filter:blur(4px);
+  }
+
+  .wallpaper-control{
+    box-shadow:0 10px 28px rgba(0,0,0,.30)!important;
+  }
+
+  .wallpaper-current-grid button{
+    border-color:rgba(124,150,156,.55)!important;
+  }
+}
+
+@media (max-width:480px){
+  #app-view::before{
+    background-position:center top!important;
+  }
+
+  .profile-control::before{
+    background-position:center top!important;
+  }
+
+  .post-card,
+  .profile-settings-card,
+  .friends-control,
+  .profile-album-control,
+  .wallpaper-control,
+  .world-preferences,
+  .messages-hub{
+    background:rgba(9,13,15,.80)!important;
+  }
+}
