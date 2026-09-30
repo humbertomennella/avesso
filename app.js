@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -568,7 +568,15 @@ document.addEventListener('click',e=>{
   const target=e.target.closest('button,a,[data-app-tab]');
   if(!target||!state.profile)return;
   const label=(target.dataset.appTab||target.id||target.textContent||target.tagName).trim().slice(0,60);
-  if(label)trackAction('screen_action',state.tab,{control:label});
+  if(label){
+    trackAction('screen_action',state.tab,{control:label});
+    const now=Date.now();
+    const worldSurface=!['tower','plaza'].includes(state.tab);
+    if(worldSurface&&now-state.world.lastReactiveAt>45000&&Math.random()<0.38){
+      state.world.lastReactiveAt=now;
+      setTimeout(()=>askWorldCharacter('screen_action',{action_type:label,surface:state.tab,metadata:{control:label}}),650);
+    }
+  }
 },{passive:true});
 
 function subscribeRealtime(){
