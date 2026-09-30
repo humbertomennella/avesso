@@ -524,7 +524,10 @@ function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
   const interferenceOnline=Boolean(state.world.settings?.world_interventions_enabled);
-  $('#feed-list').innerHTML=`<article class="post-card"><div class="post-route"><span class="mini-avatar">${initials(state.profile.display_name)}</span><strong>${escapeHtml(state.profile.display_name)}</strong><span class="post-meta">@${escapeHtml(state.profile.handle)}</span></div><p class="post-body">${escapeHtml(state.profile.bio||'Sem bio. Um raro caso de contenção na internet.')}</p><div class="post-actions"><button id="edit-bio">editar bio</button></div></article>
+  const avatars=PROFILE_AVATARS.map((url,i)=>`<button class="avatar-choice ${state.profile.avatar_url===url?'active':''}" data-avatar="${url}" title="Avatar ${i+1}"><img src="${url}" alt="Avatar pixelado ${i+1}"></button>`).join('');
+  $('#feed-list').innerHTML=`
+  <article class="profile-card"><div class="profile-identity"><div class="profile-avatar-large">${avatarMarkup(state.profile.avatar_url,state.profile.display_name,'profile-avatar-image')}</div><div><span class="section-code">SEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><small>@${escapeHtml(state.profile.handle)}</small></div></div><p>${escapeHtml(state.profile.bio||'Sem bio. Um raro caso de contenção na internet.')}</p><button id="edit-bio">editar bio</button></article>
+  <section class="avatar-picker"><span class="section-code">IDENTIDADE // PIXEL</span><h2>Escolha sua foto de perfil</h2><p>Três homens, três mulheres, três robôs. A personalidade continua sendo problema seu.</p><div class="avatar-grid">${avatars}</div></section>
   <section class="world-preferences">
     <span class="section-code">MUNDO // NÍVEL DE INTERFERÊNCIA</span>
     <h2>Quanto o AVESSO pode entrar no seu Canto?</h2>
@@ -537,10 +540,19 @@ function renderProfile(){
     <div class="world-pref-foot"><span id="profile-world-status">carregando modo...</span><small>${interferenceOnline?'Interferências visuais globais estão online.':'O motor visual ainda está bloqueado globalmente.'} Personagens nunca reescrevem o que você publicou.</small></div>
   </section>`;
   $('#edit-bio').onclick=editBio;
+  $$('[data-avatar]').forEach(b=>b.onclick=()=>saveAvatar(b.dataset.avatar));
   $$('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
   setWorldModeLabel();
-  algoSay('profile');
   setTimeout(()=>askWorldCharacter('profile'),700);
+}
+async function saveAvatar(url){
+  if(!PROFILE_AVATARS.includes(url))return;
+  const {data,error}=await supabase.from('profiles').update({avatar_url:url}).eq('id',state.profile.id).select().single();
+  if(error)return toast('O avatar se recusou a existir. Tente outro.');
+  state.profile=data;renderNavAvatar();renderProfile();
+  toast('Avatar atualizado. Sua versão em pixels já está julgando a anterior.');
+  trackAction('avatar_changed','profile',{avatar:url.split('/').pop()},false);
+  setTimeout(()=>askWorldCharacter('avatar_changed',{action_type:'avatar_changed',surface:'profile',metadata:{avatar:url.split('/').pop()}}),250);
 }
 async function editBio(){const bio=prompt('Bio curta, até 180 caracteres:',state.profile.bio||'');if(bio===null)return;const {data,error}=await supabase.from('profiles').update({bio:bio.slice(0,180)}).eq('id',state.profile.id).select().single();if(error)return toast('A bio resistiu à mudança.');state.profile=data;renderProfile();toast('Bio atualizada. Crise de identidade adiada.');}
 $('#refresh-feed').onclick=()=>{ if(isFeedTab())loadFeed(); };
