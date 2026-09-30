@@ -11,29 +11,20 @@ function toast(message){ const el=$('#toast'); el.textContent=message; el.classL
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
 function ago(date){ const s=Math.floor((Date.now()-new Date(date))/1000); if(s<60)return'agora'; if(s<3600)return`${Math.floor(s/60)}min`; if(s<86400)return`${Math.floor(s/3600)}h`; return`${Math.floor(s/86400)}d`; }
 function escapeHtml(value=''){ const d=document.createElement('div'); d.textContent=value; return d.innerHTML; }
+function escapeAttr(value=''){return String(value).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll("'",'&#39;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
 function isFeedTab(tab=state.tab){ return ['feed','quiet','sent'].includes(tab); }
 function bumpView(){ state.viewVersion+=1; return state.viewVersion; }
 const AVATAR_OPTIONS=[
-  ['Humano 01','avatar:01','humano'],['Humano 02','avatar:02','humano'],['Humano 03','avatar:03','humano'],
-  ['Humana 01','avatar:04','humana'],['Humana 02','avatar:05','humana'],['Humana 03','avatar:06','humana'],
-  ['Robô 01','avatar:07','robo'],['Robô 02','avatar:08','robo'],['Robô 03','avatar:09','robo']
+  ['Humano 01','assets/avatars/humano-01.svg','humano'],['Humano 02','assets/avatars/humano-02.svg','humano'],['Humano 03','assets/avatars/humano-03.svg','humano'],
+  ['Humana 01','assets/avatars/humana-01.svg','humana'],['Humana 02','assets/avatars/humana-02.svg','humana'],['Humana 03','assets/avatars/humana-03.svg','humana'],
+  ['Robô 01','assets/avatars/robo-01.svg','robo'],['Robô 02','assets/avatars/robo-02.svg','robo'],['Robô 03','assets/avatars/robo-03.svg','robo']
 ];
-function avatarTokenClass(url=''){
-  const match=String(url).match(/^avatar:(\d{2})$/);
-  return match?`avatar-sprite avatar-${match[1]}`:'';
-}
-function avatarHtml(url,name='?'){
-  const cls=avatarTokenClass(url);
-  if(cls)return `<span class="${cls}" role="img" aria-label="Avatar de ${escapeHtml(name)}"></span>`;
-  return url?`<img src="${escapeHtml(url)}" alt="" loading="lazy">`:escapeHtml(initials(name));
-}
+function avatarHtml(url,name='?'){ return url?`<img src="${escapeAttr(url)}" alt="" loading="lazy">`:escapeHtml(initials(name)); }
 function renderNavAvatar(){ const el=$('#nav-avatar'); if(el)el.innerHTML=avatarHtml(state.profile?.avatar_url,state.profile?.display_name||'?'); }
-function characterSpriteClass(character){
-  const slug=String(character?.slug||'').replaceAll('_','-');
-  return slug?`character-sprite char-${slug}`:'character-sprite';
-}
+function characterSpriteClass(character){ return ''; }
 function characterVisual(character,extra=''){
-  return `<span class="${characterSpriteClass(character)} ${extra}" role="img" aria-label="${escapeHtml(character?.name||'Habitante')}"></span>`;
+  const src=characterImage(character);
+  return `<img class="character-hq ${extra}" src="${escapeAttr(src)}" alt="${escapeAttr(character?.name||'Habitante')}" loading="lazy">`;
 }
 async function trackAction(action_type,surface=state.tab,metadata={}){
   if(!state.profile?.id)return;
@@ -65,7 +56,8 @@ function paintEncounter(payload,preview=false){
   const c=payload.character;
   const known=state.world.characters[c.slug]||c;
   const image=$('#encounter-image');
-  image.className=`encounter-image ${characterSpriteClass(known)}`;
+  image.className='encounter-image';
+  image.innerHTML=characterVisual(known,'encounter-character-hq');
   image.setAttribute('aria-label',c.name||known.name||'Habitante');
   $('#encounter-name').textContent=c.name||known.name||'Habitante';
   $('#encounter-role').textContent=c.role||known.role||'habitante do AVESSO';
@@ -130,7 +122,9 @@ function scheduleIdleWorld(){
   if(!state.session)return;
   const delay=(6+Math.random()*6)*60*1000;
   state.world.idleTimer=setTimeout(async()=>{
-    await askWorldCharacter('idle');
+    if(state.tab==='tower') await askWorldCharacter('tower_pulse',{character:'rei_engajamento',action_type:'idle_tower',surface:'tower'});
+    else if(state.tab==='plaza') { /* a Praça fala dentro do chat, não por cima dele */ }
+    else await askWorldCharacter('idle');
     scheduleIdleWorld();
   },delay);
 }
@@ -448,7 +442,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
   trackAction('tab_view',state.tab,{tab:state.tab});
-  askWorldCharacter('tab_view',{action_type:'tab_view',surface:state.tab,metadata:{tab:state.tab}});
+  if(!['plaza','tower'].includes(state.tab))askWorldCharacter('tab_view',{action_type:'tab_view',surface:state.tab,metadata:{tab:state.tab}});
   if(state.tab==='profile')renderProfile();
   else if(state.tab==='residents')await renderInhabitantsPage();
   else if(state.tab==='plaza')await renderPlaza();
@@ -662,7 +656,7 @@ async function removeFriendship(id){
 }
 function openAvatarDialog(){
   const grid=$('#avatar-modal-grid');
-  grid.innerHTML=AVATAR_OPTIONS.map(([label,url,kind])=>`<button class="avatar-choice-modal ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${url}"><span class="${avatarTokenClass(url)}"></span><b>${label}</b><small>${kind}</small></button>`).join('');
+  grid.innerHTML=AVATAR_OPTIONS.map(([label,url,kind])=>`<button class="avatar-choice-modal ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${escapeAttr(url)}"><img src="${escapeAttr(url)}" alt="${escapeAttr(label)}"><b>${label}</b><small>${kind}</small></button>`).join('');
   $$('[data-avatar-url]').forEach(b=>b.onclick=()=>saveAvatar(b.dataset.avatarUrl));
   $('#avatar-dialog').showModal();
 }
@@ -699,7 +693,7 @@ async function renderProfile(){
       <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
     <div class="profile-settings-grid">
-      <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeHtml(state.profile.display_name)}"></label><label>Mensagem de status<input id="profile-status" maxlength="140" value="${escapeHtml(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
+      <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Mensagem de status<input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
       <section class="profile-settings-card security-card"><span class="section-code">CONTA // SEGURANÇA</span><p><b>E-mail</b><br>${escapeHtml(state.session?.user?.email||'')}</p><label>Nova senha<input id="profile-password" type="password" minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password"></label><button id="change-password">alterar senha</button><small>Seu @ continua estável para links. Seu nome exibido pode trocar de personalidade quantas vezes quiser.</small></section>
     </div>
     <section class="friends-control"><span class="section-code">PESSOAS // AMIGOS</span><h2>Lista de pessoas que você aceitou voluntariamente</h2><div id="friends-panel"><p>carregando relações humanas...</p></div></section>
@@ -813,7 +807,7 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'plaza_messages'},()=>{if(state.tab==='plaza')loadPlazaMessages();})
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'character_interactions'},payload=>{
       const row=payload.new||{};
-      if(row.trigger_type==='plaza_chat'&&state.tab==='plaza')return;
+      if(row.trigger_type==='plaza_chat')return;
       if(row.user_id&&row.user_id!==state.profile?.id&&row.visibility!=='world')return;
       const c=state.world.charactersById[row.character_id];
       if(c)showEncounter({character:c,interaction:{id:row.id,body:row.body,source:row.source}});
