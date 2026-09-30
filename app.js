@@ -313,6 +313,7 @@ async function sendReply(post_id){
   input.value='';
   toast('Resposta publicada. Agora ela aparece na conversa, como seria razoável esperar.');
   loadFeed();
+  setTimeout(()=>askWorldCharacter('reply_created',{post_id}),650);
 }
 
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
