@@ -158,3 +158,7 @@ dialog{width:min(480px,calc(100% - 28px));border:1px solid var(--line);border-ra
   .conversation-thread>header{display:block}.conversation-thread>header small{display:block;margin-top:4px}
   .acid-reactions{overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px}.acid-reaction{flex:0 0 auto}
 }
+
+.profile-control{position:relative;overflow:hidden;background:#090d0f}
+.profile-control:before{content:"";position:absolute;inset:0 0 auto 0;height:250px;background-image:linear-gradient(180deg,#070a0b55,#090d0ff0),var(--profile-wallpaper);background-size:cover;background-position:center;opacity:.9;z-index:0}
+.profile-control>*{position:relative;z-index:1}.profile-control-hero{min-height:220px;background:#080c0db8!important;backdrop-filter:blur(3px)}
