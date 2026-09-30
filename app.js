@@ -5,12 +5,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
 function ago(date){ const s=Math.floor((Date.now()-new Date(date))/1000); if(s<60)return'agora'; if(s<3600)return`${Math.floor(s/60)}min`; if(s<86400)return`${Math.floor(s/3600)}h`; return`${Math.floor(s/86400)}d`; }
 function escapeHtml(value=''){ const d=document.createElement('div'); d.textContent=value; return d.innerHTML; }
+function escapeAttr(value=''){return String(value).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll("'",'&#39;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
 function isFeedTab(tab=state.tab){ return ['feed','quiet','sent'].includes(tab); }
 function bumpView(){ state.viewVersion+=1; return state.viewVersion; }
 const AVATAR_OPTIONS=[
@@ -18,8 +19,13 @@ const AVATAR_OPTIONS=[
   ['Humana 01','assets/avatars/humana-01.svg','humana'],['Humana 02','assets/avatars/humana-02.svg','humana'],['Humana 03','assets/avatars/humana-03.svg','humana'],
   ['Robô 01','assets/avatars/robo-01.svg','robo'],['Robô 02','assets/avatars/robo-02.svg','robo'],['Robô 03','assets/avatars/robo-03.svg','robo']
 ];
-function avatarHtml(url,name='?'){ return url?`<img src="${escapeHtml(url)}" alt="" loading="lazy">`:escapeHtml(initials(name)); }
+function avatarHtml(url,name='?'){ return url?`<img src="${escapeAttr(url)}" alt="" loading="lazy">`:escapeHtml(initials(name)); }
 function renderNavAvatar(){ const el=$('#nav-avatar'); if(el)el.innerHTML=avatarHtml(state.profile?.avatar_url,state.profile?.display_name||'?'); }
+function characterSpriteClass(character){ return ''; }
+function characterVisual(character,extra=''){
+  const src=characterImage(character);
+  return `<img class="character-hq ${extra}" src="${escapeAttr(src)}" alt="${escapeAttr(character?.name||'Habitante')}" loading="lazy">`;
+}
 async function trackAction(action_type,surface=state.tab,metadata={}){
   if(!state.profile?.id)return;
   const clean={};
@@ -42,29 +48,55 @@ function algoSay(context='feed_default'){
   const line=weightedPick(contextual.length?contextual:fallback);
   el.textContent=line?.body||'Estou tentando organizar pessoas sem transformá-las em gráfico. É um ambiente de trabalho hostil.';
 }
-function characterImage(character){
-  return character?.avatar_url||character?.image_path||'';
-}
-function showEncounter(payload,preview=false){
+function characterImage(character){ return character?.avatar_url||character?.image_path||''; }
+function paintEncounter(payload,preview=false){
   const card=$('#world-encounter');
   if(!card||!payload?.character)return;
   const interaction=payload.interaction||{};
-  if(!preview&&interaction.id&&interaction.id===state.world.lastInteractionId)return;
-  if(!preview&&interaction.id)state.world.lastInteractionId=interaction.id;
   const c=payload.character;
   const known=state.world.characters[c.slug]||c;
-  const img=characterImage(known);
-  $('#encounter-image').src=img;
-  $('#encounter-image').alt=c.name||known.name||'Habitante';
+  const image=$('#encounter-image');
+  image.className='encounter-image';
+  image.innerHTML=characterVisual(known,'encounter-character-hq');
+  image.setAttribute('aria-label',c.name||known.name||'Habitante');
   $('#encounter-name').textContent=c.name||known.name||'Habitante';
   $('#encounter-role').textContent=c.role||known.role||'habitante do AVESSO';
   $('#encounter-line').textContent=interaction.body||payload.text||'...';
-  $('#encounter-source').textContent=preview?'ARQUIVO DO HABITANTE':(interaction.source==='ai'||payload.ai?'IA // AO VIVO':'MUNDO // ROTEIRO');
-  card.classList.remove('hidden');
-  card.classList.remove('pulse-in');
-  requestAnimationFrame(()=>card.classList.add('pulse-in'));
+  $('#encounter-source').textContent=preview?'ARQUIVO DO HABITANTE':(interaction.source==='ai'||payload.ai?'MUNDO // AO VIVO':'MUNDO // ROTEIRO');
+}
+function runEncounterQueue(){
+  if(state.world.notificationBusy)return;
+  const next=state.world.notificationQueue.shift();
+  if(!next)return;
+  state.world.notificationBusy=true;
+  const card=$('#world-encounter');
+  paintEncounter(next.payload,next.preview);
+  card.classList.remove('hidden','msn-out');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>card.classList.add('msn-in')));
   clearTimeout(state.world.encounterTimer);
-  state.world.encounterTimer=setTimeout(()=>card.classList.add('hidden'),18000);
+  state.world.encounterTimer=setTimeout(()=>dismissEncounter(),5000);
+}
+function dismissEncounter(){
+  const card=$('#world-encounter');
+  if(!card)return;
+  clearTimeout(state.world.encounterTimer);
+  card.classList.remove('msn-in');
+  card.classList.add('msn-out');
+  setTimeout(()=>{
+    card.classList.add('hidden');
+    card.classList.remove('msn-out');
+    state.world.notificationBusy=false;
+    runEncounterQueue();
+  },480);
+}
+function showEncounter(payload,preview=false){
+  if(!payload?.character)return;
+  const interaction=payload.interaction||{};
+  if(!preview&&interaction.id&&interaction.id===state.world.lastInteractionId)return;
+  if(!preview&&interaction.id)state.world.lastInteractionId=interaction.id;
+  state.world.notificationQueue.push({payload,preview});
+  if(state.world.notificationQueue.length>4)state.world.notificationQueue.shift();
+  runEncounterQueue();
 }
 async function askWorldCharacter(trigger,options={}){
   if(!state.session||!state.profile)return null;
@@ -90,7 +122,9 @@ function scheduleIdleWorld(){
   if(!state.session)return;
   const delay=(6+Math.random()*6)*60*1000;
   state.world.idleTimer=setTimeout(async()=>{
-    await askWorldCharacter('idle');
+    if(state.tab==='tower') await askWorldCharacter('tower_pulse',{character:'rei_engajamento',action_type:'idle_tower',surface:'tower'});
+    else if(state.tab==='plaza') { /* a Praça fala dentro do chat, não por cima dele */ }
+    else await askWorldCharacter('idle');
     scheduleIdleWorld();
   },delay);
 }
@@ -171,12 +205,13 @@ async function saveWorldMode(mode){
 }
 
 document.querySelectorAll('[data-open-auth]').forEach(b=>b.addEventListener('click',()=>$('#auth-dialog').showModal()));
-$('#encounter-close').onclick=()=>{$('#world-encounter').classList.add('hidden');clearTimeout(state.world.encounterTimer);};
+$('#encounter-close').onclick=()=>dismissEncounter();
 $('.dialog-close').onclick=()=>$('#auth-dialog').close();
+$('.avatar-dialog-close').onclick=()=>$('#avatar-dialog').close();
 $$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
 function setAuthMode(mode){ state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
 
-$('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);const email=f.get('email');const password=f.get('password');$('#auth-submit').disabled=true;$('#auth-message').textContent='conversando com os computadores...';let result;if(state.mode==='signup'){const handle=String(f.get('handle')||'').toLowerCase();const display_name=String(f.get('display_name')||'');if(!/^[a-z0-9_]{3,24}$/.test(handle)){result={error:{message:'Seu @ precisa ter 3–24 letras minúsculas, números ou _.'}}}else{result=await supabase.auth.signUp({email,password,options:{data:{handle,display_name},emailRedirectTo:SITE_URL}});}}else result=await supabase.auth.signInWithPassword({email,password});$('#auth-submit').disabled=false;if(result.error){$('#auth-message').textContent=humanError(result.error.message);return}if(state.mode==='signup'&&!result.data.session){$('#auth-message').textContent='Confira seu e-mail e use o link mais recente. Se já confirmou a conta, abra a aba de entrar e use sua senha.';$('#resend-confirmation').classList.remove('hidden');return}$('#auth-dialog').close();toast('Você entrou. Tente não estragar tudo.');});
+$('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);const email=f.get('email');const password=f.get('password');$('#auth-submit').disabled=true;$('#auth-message').textContent='conversando com os computadores...';let result;if(state.mode==='signup'){const handle=String(f.get('handle')||'').toLowerCase();const display_name=String(f.get('display_name')||'').trim().slice(0,80);if(!display_name){result={error:{message:'Escolha um nome exibido. Vale símbolo, emoji, drama e decisões questionáveis.'}}}else if(!/^[a-z0-9_]{3,24}$/.test(handle)){result={error:{message:'Seu @ precisa ter 3–24 letras minúsculas, números ou _.'}}}else{result=await supabase.auth.signUp({email,password,options:{data:{handle,display_name},emailRedirectTo:SITE_URL}});}}else result=await supabase.auth.signInWithPassword({email,password});$('#auth-submit').disabled=false;if(result.error){$('#auth-message').textContent=humanError(result.error.message);return}if(state.mode==='signup'&&!result.data.session){$('#auth-message').textContent='Confira seu e-mail e use o link mais recente. Se já confirmou a conta, abra a aba de entrar e use sua senha.';$('#resend-confirmation').classList.remove('hidden');return}$('#auth-dialog').close();toast('Você entrou. Tente não estragar tudo.');});
 
 $('#resend-confirmation').onclick=async()=>{const email=new FormData($('#auth-form')).get('email');if(!email)return toast('Digite seu e-mail primeiro. Adivinhação ainda está em beta.');const button=$('#resend-confirmation');button.disabled=true;button.textContent='reenviando...';const {error}=await supabase.auth.resend({type:'signup',email,options:{emailRedirectTo:SITE_URL}});button.disabled=false;button.textContent='reenviar confirmação de e-mail';if(error){$('#auth-message').textContent=humanError(error.message);return}$('#auth-message').textContent='Se a conta ainda estiver pendente, você receberá um novo link. Se já confirmou, entre com sua senha.';toast('Solicitação recebida. Confira seu e-mail ou tente entrar.');};
 
@@ -188,7 +223,7 @@ async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site
 function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
-async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeHtml(p.display_name)}' data-handle='${escapeHtml(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
+async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
 
 function updateComposerTarget(){
   const directed=$('#post-target').value==='person';
@@ -340,12 +375,12 @@ function renderFeed(posts,threadData={responses:{},supports:{},characters:{}}){
     const responses=threadData.responses[p.id]||[];
     const supports=threadData.supports[p.id]||[];
     const characterReplies=threadData.characters[p.id]||[];
-    const responseHtml=responses.length?`<div class="thread-block"><div class="thread-title">CONVERSA // ${responses.length} ${responses.length===1?'RESPOSTA':'RESPOSTAS'}</div>${responses.map(r=>`<div class="thread-reply"><span class="mini-avatar">${avatarHtml(r.author?.avatar_url,r.author?.display_name||'?')}</span><div><div class="thread-author">${escapeHtml(r.author?.display_name||'alguém')} <small>@${escapeHtml(r.author?.handle||'...')} · ${ago(r.created_at)}</small></div><p>${escapeHtml(r.body)}</p></div></div>`).join('')}</div>`:'';
-    const characterHtml=characterReplies.length?`<div class="thread-block character-thread"><div class="thread-title">MUNDO // HABITANTES</div>${characterReplies.map(x=>{const c=x.character||{};return `<div class="thread-reply character-reply"><img src="${escapeHtml(characterImage(c))}" alt="${escapeHtml(c.name||'Habitante')}"><div><div class="thread-author">${escapeHtml(c.name||'Habitante')} <b>HABITANTE</b> <small>· ${ago(x.created_at)}</small></div><p>${escapeHtml(x.body)}</p></div></div>`}).join('')}</div>`:'';
+    const responseHtml=responses.length?`<div class="thread-block"><div class="thread-title">CONVERSA // ${responses.length} ${responses.length===1?'RESPOSTA':'RESPOSTAS'}</div>${responses.map(r=>`<div class="thread-reply"><span class="mini-avatar">${avatarHtml(r.author?.avatar_url,r.author?.display_name||'?')}</span><div><div class="thread-author"><button class="user-link" data-profile-id="${r.author_id}">${escapeHtml(r.author?.display_name||'alguém')}</button> <small>@${escapeHtml(r.author?.handle||'...')} · ${ago(r.created_at)}</small></div><p>${escapeHtml(r.body)}</p></div></div>`).join('')}</div>`:'';
+    const characterHtml=characterReplies.length?`<div class="thread-block character-thread"><div class="thread-title">MUNDO // HABITANTES</div>${characterReplies.map(x=>{const c=x.character||{};return `<div class="thread-reply character-reply">${characterVisual(c,'thread-character-avatar')}<div><div class="thread-author">${escapeHtml(c.name||'Habitante')} <b>HABITANTE</b> <small>· ${ago(x.created_at)}</small></div><p>${escapeHtml(x.body)}</p></div></div>`}).join('')}</div>`:'';
     const supportHtml=supports.length?`<div class="private-support-log"><span>PRIVADO // APOIO</span>${supports.map(s=>`<p><strong>${escapeHtml(s.supporter?.display_name||'alguém')}</strong> sinalizou: “${escapeHtml(supportLabel(s.kind))}”.</p>`).join('')}</div>`:'';
     const canSupport=p.author_id!==state.profile.id;
     return `<article class="post-card" data-post-card="${p.id}">
-      <div class="post-route"><span class="mini-avatar">${avatarHtml(p.author_avatar_url,p.author_name)}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
+      <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       <p class="post-body">${escapeHtml(p.body)}</p>
       ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="lazy"></figure>`:''}
       ${responseHtml}
@@ -364,7 +399,8 @@ function renderFeed(posts,threadData={responses:{},supports:{},characters:{}}){
   $$('[data-reply-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-box="${b.dataset.replyCancel}"]`)?.classList.add('hidden'));
   $$('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
   $$('[data-support-toggle]').forEach(b=>b.onclick=()=>document.querySelector(`[data-support-box="${b.dataset.supportToggle}"]`)?.classList.toggle('hidden'));
-  $$('[data-support-kind]').forEach(b=>b.onclick=()=>supportPost(b.dataset.supportPost,b.dataset.supportKind));
+  $('[data-support-kind]').forEach(b=>b.onclick=()=>supportPost(b.dataset.supportPost,b.dataset.supportKind));
+  bindProfileLinks();
 }
 async function supportPost(post_id,kind){
   const allowed=['escutei','estou_aqui','posso_ajudar'];
@@ -392,7 +428,7 @@ async function sendReply(post_id){
 
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
 function applyAppTabLayout(){
-  const worldOpen=['residents','plaza','tower'].includes(state.tab);
+  const worldOpen=['residents','plaza','tower','profile','public_profile'].includes(state.tab);
   $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
   $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
   $('.feed-header')?.classList.toggle('hidden',worldOpen);
@@ -406,7 +442,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
   trackAction('tab_view',state.tab,{tab:state.tab});
-  askWorldCharacter('tab_view',{action_type:'tab_view',surface:state.tab,metadata:{tab:state.tab}});
+  if(!['plaza','tower'].includes(state.tab))askWorldCharacter('tab_view',{action_type:'tab_view',surface:state.tab,metadata:{tab:state.tab}});
   if(state.tab==='profile')renderProfile();
   else if(state.tab==='residents')await renderInhabitantsPage();
   else if(state.tab==='plaza')await renderPlaza();
@@ -444,7 +480,7 @@ async function renderInhabitantsPage(){
     const rare=slug==='alem'?' inhabitant-card-rare':'';
     return `<article class="inhabitant-card${rare}" style="--accent:${escapeHtml(c.accent_color||'#d8ff3e')}">
       <div class="inhabitant-index">0${i+1}</div>
-      <div class="inhabitant-portrait"><img src="${escapeHtml(characterImage(c))}" alt="${escapeHtml(c.name)}"></div>
+      <div class="inhabitant-portrait">${characterVisual(c,'character-portrait-sprite')}</div>
       <div class="inhabitant-copy">
         <span class="inhabitant-role">${escapeHtml(c.role)}</span>
         <h3>${escapeHtml(c.name)}</h3>
@@ -471,26 +507,75 @@ async function renderInhabitantsPage(){
       <footer class="world-footer"><span>AVESSO.SYS // HABITANTES V1.0</span><b>ESTE É SÓ O COMEÇO.</b><span>O MUNDO DO AVESSO CONTINUA...</span></footer>
     </section>`;
 }
+async function loadPlazaMessages(){
+  if(state.tab!=='plaza')return;
+  const {data,error}=await supabase.from('plaza_messages')
+    .select('id,user_id,character_id,body,reply_to,created_at')
+    .order('created_at',{ascending:false}).limit(60);
+  if(error)return;
+  const messages=[...(data||[])].reverse();
+  const userIds=[...new Set(messages.map(m=>m.user_id).filter(Boolean))];
+  let profiles={};
+  if(userIds.length){
+    const {data:ps}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',userIds);
+    profiles=Object.fromEntries((ps||[]).map(p=>[p.id,p]));
+  }
+  const log=$('#plaza-chat-log'); if(!log)return;
+  log.innerHTML=messages.map(m=>{
+    if(m.character_id){
+      const c=state.world.charactersById[m.character_id]||state.world.characters.npc;
+      return `<article class="plaza-message npc-message">${characterVisual(c,'plaza-msg-avatar')}<div><header><strong>${escapeHtml(c?.name||'NPC')}</strong><span>HABITANTE · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
+    }
+    const p=profiles[m.user_id]||{};
+    return `<article class="plaza-message"><button class="plaza-avatar" data-profile-id="${m.user_id}">${avatarHtml(p.avatar_url,p.display_name||'?')}</button><div><header><button class="user-link" data-profile-id="${m.user_id}">${escapeHtml(p.display_name||'alguém')}</button><span>@${escapeHtml(p.handle||'...')} · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
+  }).join('')||'<div class="plaza-empty">A praça está vazia. O NPC está fingindo que isso era parte do planejamento urbano.</div>';
+  bindProfileLinks();
+  log.scrollTop=log.scrollHeight;
+}
+async function sendPlazaMessage(body,forceNpc=false){
+  const text=String(body||'').trim().slice(0,280);
+  if(!text)return;
+  const {data,error}=await supabase.from('plaza_messages').insert({user_id:state.profile.id,body:text}).select('id').single();
+  if(error)return toast('A mensagem caiu entre os bancos da praça.');
+  trackAction('plaza_chat','plaza',{message:text.slice(0,90)});
+  const mentionNpc=/@?npc\b/i.test(text);
+  if(forceNpc||mentionNpc||Math.random()<0.28){
+    askWorldCharacter('plaza_chat',{character:'npc',silent:true,action_type:'plaza_chat',surface:'plaza',metadata:{message:text,message_id:data.id}});
+  }
+}
 async function renderPlaza(){
   if(state.tab!=='plaza')return;
   const npc=state.world.characters.npc;
   $('#feed-status').classList.add('hidden');
-  $('#feed-list').innerHTML=`<section class="plaza-world">
-    <div class="plaza-sky"></div><div class="plaza-sign">PRAÇA CENTRAL <small>ponto de encontro dos desencontrados</small></div>
+  $('#feed-list').innerHTML=`<section class="plaza-world plaza-live">
+    <div class="plaza-sky"></div>
+    <div class="plaza-sign">PRAÇA CENTRAL <small>bate-papo público dos desencontrados</small></div>
     <div class="plaza-buildings"><i></i><i></i><i></i><i></i><i></i></div>
-    <div class="plaza-npc"><img src="${escapeHtml(characterImage(npc))}" alt="NPC"><div><span>NPC // FIGURANTE EM PROMOÇÃO</span><h2>“A praça fica aberta. O roteiro, nem sempre.”</h2></div></div>
-    <div class="plaza-actions"><button data-plaza-action="conversar">conversar com o NPC</button><button data-plaza-action="missao">pedir uma missão</button><button data-plaza-action="rumor">perguntar um rumor</button><button data-plaza-action="ficar">só ficar por aqui</button></div>
-    <div id="plaza-dialogue" class="world-dialogue">A Praça Central range em neon. O NPC percebe você antes de decidir fingir que não.</div>
-    <div class="plaza-panels"><article><b>QUADRO DE IDEIAS</b><p>Coisas que alguém escreveu antes de perceber que precisava executar.</p></article><article><b>MISSÕES</b><p>Converse. Responda alguém esquecido. Descubra um post que ninguém viu.</p></article><article><b>MURO DO CAOS</b><p>404 deixou um aviso. O aviso diz que ele não deixou aviso nenhum.</p></article></div>
+    <div class="plaza-live-grid">
+      <aside class="plaza-npc-live">
+        ${characterVisual(npc,'plaza-npc-hq')}
+        <span>NPC // FIGURANTE EM PROMOÇÃO</span>
+        <h2>A praça fica aberta. O roteiro, nem sempre.</h2>
+        <p>Fale <b>@npc</b> no chat ou use um dos atalhos. Ele responde quando lembra que ganhou falas.</p>
+        <div class="plaza-actions"><button data-npc-prompt="Me dê uma missão secundária.">pedir missão</button><button data-npc-prompt="Qual é o rumor de hoje na Praça?">perguntar rumor</button><button data-npc-prompt="NPC, conversa comigo um pouco.">conversar</button></div>
+      </aside>
+      <section class="plaza-chat-room">
+        <header><div><span class="section-code">PRAÇA // AO VIVO</span><h3>Gente normal em um mundo bugado</h3></div><span class="live-dot">● realtime</span></header>
+        <div id="plaza-chat-log" class="plaza-chat-log"></div>
+        <form id="plaza-chat-form" class="plaza-chat-form"><input id="plaza-chat-input" maxlength="280" autocomplete="off" placeholder="Fale na Praça Central... @npc também lê isto"><button>enviar</button></form>
+      </section>
+    </div>
   </section>`;
+  await loadPlazaMessages();
   trackAction('plaza_opened','plaza');
-  const first=await askWorldCharacter('plaza_opened',{character:'npc',silent:true,action_type:'plaza_opened',surface:'plaza'});
-  if(state.tab==='plaza'&&first?.interaction?.body)$('#plaza-dialogue').textContent=first.interaction.body;
-  $$('[data-plaza-action]').forEach(b=>b.onclick=async()=>{
-    const action=b.dataset.plazaAction;trackAction('plaza_action','plaza',{action});
-    $('#plaza-dialogue').textContent='NPC está pensando. Isso normalmente não estava no orçamento.';
-    const result=await askWorldCharacter('plaza_action',{character:'npc',silent:true,action_type:action,surface:'plaza',metadata:{action}});
-    if(state.tab==='plaza'&&result?.interaction?.body)$('#plaza-dialogue').textContent=result.interaction.body;
+  $('#plaza-chat-form').onsubmit=async e=>{
+    e.preventDefault();
+    const input=$('#plaza-chat-input'); const text=input.value.trim(); if(!text)return;
+    input.value=''; await sendPlazaMessage(text,false);
+  };
+  $$('[data-npc-prompt]').forEach(b=>b.onclick=async()=>{
+    const prompt=b.dataset.npcPrompt;
+    await sendPlazaMessage(prompt,true);
   });
 }
 function towerFallback(){
@@ -519,7 +604,7 @@ async function renderTowerPage(){
   $('#feed-status').classList.add('hidden');
   $('#feed-list').innerHTML=`<section class="tower-world">
     <div class="tower-header"><span>♛ TORRE DO ENGAJAMENTO</span><h2>PROPAGANDA, CAOS E OPORTUNIDADES™</h2><p>Um monumento vertical à ideia de que tudo fica melhor quando alguém coloca um KPI em cima.</p></div>
-    <div class="tower-king"><img src="${escapeHtml(characterImage(king))}" alt="Rei do Engajamento"><div id="tower-page-message">O Rei está preparando um PowerPoint que ninguém solicitou.</div></div>
+    <div class="tower-king">${characterVisual(king,'tower-king-hq')}<div id="tower-page-message">O Rei está preparando um PowerPoint que ninguém solicitou.</div></div>
     <div class="tower-grid"><article><b>CAMPANHA OFICIAL</b><h3>VIDA REAL É BETA</h3><p>Aproveite enquanto ainda não tem assinatura mensal.</p></article><article><b>EM ALTA</b><ol><li>Humanos falando com humanos</li><li>Não monetizar tudo</li><li>Silêncio sem anúncios</li></ol></article><article><b>OPORTUNIDADE DO REI</b><p>Teste um recurso inexistente. Ganhe um badge invisível e absolutamente nenhum benefício.</p></article></div>
     <button id="tower-refresh" class="tower-refresh">pedir outra ideia péssima ao Rei</button>
   </section>`;
@@ -529,12 +614,90 @@ async function renderTowerPage(){
   $('#tower-refresh').onclick=async()=>{trackAction('tower_pulse','tower');const r=await askWorldCharacter('tower_pulse',{character:'rei_engajamento',silent:true,action_type:'manual_campaign',surface:'tower'});if(r?.interaction?.body)$('#tower-page-message').textContent=r.interaction.body;};
 }
 
-function renderProfile(){
+async function loadFriendPanel(){
+  const host=$('#friends-panel'); if(!host||!state.profile)return;
+  const {data:rels}=await supabase.from('friendships').select('*')
+    .or(`requester_id.eq.${state.profile.id},addressee_id.eq.${state.profile.id}`)
+    .order('created_at',{ascending:false});
+  const list=rels||[];
+  const ids=[...new Set(list.flatMap(r=>[r.requester_id,r.addressee_id]).filter(id=>id!==state.profile.id))];
+  let profiles={};
+  if(ids.length){
+    const {data:ps}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message').in('id',ids);
+    profiles=Object.fromEntries((ps||[]).map(p=>[p.id,p]));
+  }
+  const incoming=list.filter(r=>r.status==='pending'&&r.addressee_id===state.profile.id);
+  const outgoing=list.filter(r=>r.status==='pending'&&r.requester_id===state.profile.id);
+  const accepted=list.filter(r=>r.status==='accepted');
+  const card=(p,extra='')=>`<div class="friend-row"><button class="friend-avatar" data-profile-id="${p.id}">${avatarHtml(p.avatar_url,p.display_name)}</button><div><button class="user-link" data-profile-id="${p.id}">${escapeHtml(p.display_name)}</button><small>@${escapeHtml(p.handle)} ${p.status_message?'· '+escapeHtml(p.status_message):''}</small></div>${extra}</div>`;
+  host.innerHTML=`
+    <div class="friend-section"><h3>Pedidos recebidos <b>${incoming.length}</b></h3>${incoming.map(r=>{const p=profiles[r.requester_id];return p?card(p,`<div class="friend-actions"><button data-friend-accept="${r.id}">aceitar</button><button data-friend-decline="${r.id}">recusar</button></div>`):''}).join('')||'<p>Ninguém batendo na porta. Paz temporária.</p>'}</div>
+    <div class="friend-section"><h3>Amigos <b>${accepted.length}</b></h3>${accepted.map(r=>{const id=r.requester_id===state.profile.id?r.addressee_id:r.requester_id;const p=profiles[id];return p?card(p,`<button data-friend-remove="${r.id}">remover</button>`):''}).join('')||'<p>Lista vazia. O MSN também começou assim.</p>'}</div>
+    ${outgoing.length?`<div class="friend-section"><h3>Convites enviados <b>${outgoing.length}</b></h3>${outgoing.map(r=>{const p=profiles[r.addressee_id];return p?card(p,'<span class="pending-chip">pendente</span>'):''}).join('')}</div>`:''}`;
+  $$('[data-friend-accept]').forEach(b=>b.onclick=()=>answerFriendRequest(b.dataset.friendAccept,true));
+  $$('[data-friend-decline]').forEach(b=>b.onclick=()=>answerFriendRequest(b.dataset.friendDecline,false));
+  $$('[data-friend-remove]').forEach(b=>b.onclick=()=>removeFriendship(b.dataset.friendRemove));
+  bindProfileLinks();
+}
+async function answerFriendRequest(id,accept){
+  const {error}=accept
+    ?await supabase.from('friendships').update({status:'accepted',updated_at:new Date().toISOString()}).eq('id',id)
+    :await supabase.from('friendships').delete().eq('id',id);
+  if(error)return toast('A amizade tropeçou na burocracia.');
+  toast(accept?'Amizade aceita. Nenhum algoritmo comemorou.':'Pedido recusado. A civilização continua.');
+  loadFriendPanel();
+}
+async function removeFriendship(id){
+  if(!confirm('Remover esta amizade? Sem discurso de despedida obrigatório.'))return;
+  const {error}=await supabase.from('friendships').delete().eq('id',id);
+  if(error)return toast('Não foi possível remover agora.');
+  toast('Amizade removida.');
+  loadFriendPanel();
+}
+function openAvatarDialog(){
+  const grid=$('#avatar-modal-grid');
+  grid.innerHTML=AVATAR_OPTIONS.map(([label,url,kind])=>`<button class="avatar-choice-modal ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${escapeAttr(url)}"><img src="${escapeAttr(url)}" alt="${escapeAttr(label)}"><b>${label}</b><small>${kind}</small></button>`).join('');
+  $$('[data-avatar-url]').forEach(b=>b.onclick=()=>saveAvatar(b.dataset.avatarUrl));
+  $('#avatar-dialog').showModal();
+}
+async function saveProfileSettings(){
+  const display_name=String($('#profile-display-name').value||'').replace(/[\u0000-\u001F\u007F]/g,'').trim().slice(0,80);
+  const bio=String($('#profile-bio').value||'').slice(0,300);
+  const status_message=String($('#profile-status').value||'').slice(0,140);
+  if(!display_name)return toast('Seu nome pode ser estranho. Só não pode ser vazio.');
+  const {data,error}=await supabase.from('profiles').update({display_name,bio,status_message,updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
+  if(error)return toast('O perfil resistiu à mudança. Tente novamente.');
+  state.profile=data;
+  await supabase.auth.updateUser({data:{display_name}}).catch(()=>{});
+  $('#nav-name').textContent=data.display_name; renderNavAvatar();
+  toast('Seu Canto foi atualizado. Identidade salva sem pedir aprovação do algoritmo.');
+  renderProfile();
+}
+async function changePassword(){
+  const password=$('#profile-password').value;
+  const confirmPassword=$('#profile-password-confirm').value;
+  if(password.length<8)return toast('Use pelo menos 8 caracteres. O 404 não precisa de ajuda.');
+  if(password!==confirmPassword)return toast('As duas senhas discordaram publicamente.');
+  const {error}=await supabase.auth.updateUser({password});
+  if(error)return toast(humanError(error.message));
+  $('#profile-password').value='';$('#profile-password-confirm').value='';
+  toast('Senha alterada. A antiga pode se aposentar em paz.');
+}
+async function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
   const interferenceOnline=Boolean(state.world.settings?.world_interventions_enabled);
-  $('#feed-list').innerHTML=`<article class="post-card"><div class="post-route"><span class="mini-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</span><strong>${escapeHtml(state.profile.display_name)}</strong><span class="post-meta">@${escapeHtml(state.profile.handle)}</span></div><p class="post-body">${escapeHtml(state.profile.bio||'Sem bio. Um raro caso de contenção na internet.')}</p><div class="post-actions"><button id="edit-bio">editar bio</button></div></article>
-  <section class="avatar-picker-panel"><span class="section-code">IDENTIDADE // PIXEL</span><h2>Escolha seu rosto no AVESSO</h2><p>Nove opções. Nenhuma pede ring light.</p><div class="avatar-picker-grid">${AVATAR_OPTIONS.map(([label,url,kind])=>`<button class="avatar-choice ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${url}"><img src="${url}" alt="${label}"><span>${label}</span><small>${kind}</small></button>`).join('')}</div></section>
+  $('#feed-list').innerHTML=`<section class="profile-control">
+    <header class="profile-control-hero">
+      <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
+      <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><button id="open-avatar-picker">mudar foto de perfil</button></div>
+    </header>
+    <div class="profile-settings-grid">
+      <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Mensagem de status<input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
+      <section class="profile-settings-card security-card"><span class="section-code">CONTA // SEGURANÇA</span><p><b>E-mail</b><br>${escapeHtml(state.session?.user?.email||'')}</p><label>Nova senha<input id="profile-password" type="password" minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password"></label><button id="change-password">alterar senha</button><small>Seu @ continua estável para links. Seu nome exibido pode trocar de personalidade quantas vezes quiser.</small></section>
+    </div>
+    <section class="friends-control"><span class="section-code">PESSOAS // AMIGOS</span><h2>Lista de pessoas que você aceitou voluntariamente</h2><div id="friends-panel"><p>carregando relações humanas...</p></div></section>
+  </section>
   <section class="world-preferences">
     <span class="section-code">MUNDO // NÍVEL DE INTERFERÊNCIA</span>
     <h2>Quanto o AVESSO pode entrar no seu Canto?</h2>
@@ -546,10 +709,12 @@ function renderProfile(){
     </div>
     <div class="world-pref-foot"><span id="profile-world-status">carregando modo...</span><small>${interferenceOnline?'Interferências visuais globais estão online.':'O motor visual ainda está bloqueado globalmente.'} Personagens nunca reescrevem o que você publicou.</small></div>
   </section>`;
-  $('#edit-bio').onclick=editBio;
-  document.querySelectorAll('[data-avatar-url]').forEach(b=>b.onclick=()=>saveAvatar(b.dataset.avatarUrl));
+  $('#open-avatar-picker').onclick=openAvatarDialog;
+  $('#save-profile-settings').onclick=saveProfileSettings;
+  $('#change-password').onclick=changePassword;
   document.querySelectorAll('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
   setWorldModeLabel();
+  loadFriendPanel();
   algoSay('profile');
   setTimeout(()=>askWorldCharacter('profile'),700);
 }
@@ -557,12 +722,63 @@ async function saveAvatar(url){
   if(!AVATAR_OPTIONS.some(x=>x[1]===url))return;
   const {data,error}=await supabase.from('profiles').update({avatar_url:url}).eq('id',state.profile.id).select().single();
   if(error)return toast('O avatar se recusou a cooperar. Dramático.');
-  state.profile=data;renderNavAvatar();renderProfile();
-  trackAction('avatar_changed','profile',{avatar:url.split('/').pop()});
-  askWorldCharacter('avatar_changed',{action_type:'avatar_changed',surface:'profile',metadata:{avatar:url.split('/').pop()}});
+  state.profile=data;renderNavAvatar();
+  if($('#avatar-dialog').open)$('#avatar-dialog').close();
+  renderProfile();
+  trackAction('avatar_changed','profile',{avatar:url});
+  askWorldCharacter('avatar_changed',{action_type:'avatar_changed',surface:'profile',metadata:{avatar:url}});
   toast('Avatar atualizado. A crise de identidade agora está em 16 bits.');
 }
-async function editBio(){const bio=prompt('Bio curta, até 180 caracteres:',state.profile.bio||'');if(bio===null)return;const {data,error}=await supabase.from('profiles').update({bio:bio.slice(0,180)}).eq('id',state.profile.id).select().single();if(error)return toast('A bio resistiu à mudança.');state.profile=data;renderProfile();toast('Bio atualizada. Crise de identidade adiada.');}
+async function requestFriend(userId){
+  if(!userId||userId===state.profile.id)return;
+  const {error}=await supabase.from('friendships').insert({requester_id:state.profile.id,addressee_id:userId,status:'pending'});
+  if(error){
+    if(String(error.code)==='23505')return toast('Essa relação já existe em algum estado burocrático.');
+    return toast('Não foi possível enviar o pedido.');
+  }
+  toast('Pedido de amizade enviado. Sem poke. Ainda.');
+  openPublicProfile(userId);
+}
+async function getFriendshipWith(userId){
+  const {data}=await supabase.from('friendships').select('*')
+    .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
+    .limit(20);
+  return (data||[]).find(r=>
+    (r.requester_id===state.profile.id&&r.addressee_id===userId)||
+    (r.addressee_id===state.profile.id&&r.requester_id===userId)
+  )||null;
+}
+async function openPublicProfile(userId){
+  if(!userId)return;
+  if(userId===state.profile.id){document.querySelector('[data-app-tab="profile"]')?.click();return;}
+  state.tab='public_profile';state.publicProfileId=userId;bumpView();
+  document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
+  applyAppTabLayout();$('#feed-status').classList.add('hidden');
+  const [profileRes,postsRes,friendship]=await Promise.all([
+    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at').eq('id',userId).maybeSingle(),
+    supabase.from('posts').select('id,body,image_url,created_at').eq('author_id',userId).eq('visibility','publico').order('created_at',{ascending:false}).limit(20),
+    getFriendshipWith(userId)
+  ]);
+  if(state.tab!=='public_profile'||state.publicProfileId!==userId)return;
+  const p=profileRes.data;if(!p){$('#feed-list').innerHTML='<div class="feed-status">Este Canto não foi encontrado. Talvez tenha virado lenda urbana.</div>';return;}
+  let friendControl='';
+  if(!friendship)friendControl=`<button data-add-friend="${p.id}">＋ adicionar amigo</button>`;
+  else if(friendship.status==='accepted')friendControl='<span class="friend-status accepted">✓ amigos</span>';
+  else if(friendship.status==='pending'&&friendship.addressee_id===state.profile.id)friendControl=`<button data-accept-public="${friendship.id}">aceitar amizade</button>`;
+  else friendControl='<span class="friend-status">pedido enviado</span>';
+  $('#feed-list').innerHTML=`<section class="public-profile">
+    <button id="back-from-profile" class="back-button">← voltar</button>
+    <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <div class="public-posts"><h2>O que ${escapeHtml(p.display_name)} deixou por aqui</h2>${(postsRes.data||[]).map(post=>`<article class="post-card"><span class="post-meta">${ago(post.created_at)}</span><p class="post-body">${escapeHtml(post.body)}</p>${post.image_url?`<figure class="post-image"><img src="${escapeHtml(post.image_url)}" loading="lazy"></figure>`:''}</article>`).join('')||'<p class="feed-status">Nada público ainda.</p>'}</div>
+  </section>`;
+  $('#back-from-profile').onclick=()=>document.querySelector('[data-app-tab="feed"]')?.click();
+  $('[data-add-friend]')?.addEventListener('click',e=>requestFriend(e.currentTarget.dataset.addFriend));
+  $('[data-accept-public]')?.addEventListener('click',async e=>{await answerFriendRequest(e.currentTarget.dataset.acceptPublic,true);openPublicProfile(userId);});
+}
+function bindProfileLinks(){
+  $$('[data-profile-id]').forEach(el=>el.onclick=e=>{e.preventDefault();e.stopPropagation();openPublicProfile(el.dataset.profileId);});
+}
+
 $('#refresh-feed').onclick=()=>{ if(isFeedTab())loadFeed(); };
 document.addEventListener('click',e=>{
   const target=e.target.closest('button,a,[data-app-tab]');
@@ -591,10 +807,14 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'world_events'},payload=>{
       if(payload.new?.status==='active')toast(`EVENTO DO MUNDO // ${payload.new.title}`);
     })
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'plaza_messages'},()=>{if(state.tab==='plaza')loadPlazaMessages();})
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'character_interactions'},payload=>{
       const row=payload.new||{};
+      if(row.trigger_type==='plaza_chat')return;
       if(row.user_id&&row.user_id!==state.profile?.id&&row.visibility!=='world')return;
       const c=state.world.charactersById[row.character_id];
+      if(state.tab==='plaza'&&c?.slug!=='npc')return;
+      if(state.tab==='tower'&&c?.slug!=='rei_engajamento')return;
       if(c)showEncounter({character:c,interaction:{id:row.id,body:row.body,source:row.source}});
     })
     .subscribe();
