@@ -921,3 +921,102 @@ dialog{width:min(480px,calc(100% - 28px));border:1px solid var(--line);border-ra
     max-width:66px!important;
   }
 }
+
+
+/* =========================================================
+   WALLPAPERS VISÍVEIS NO MOBILE
+   O fundo agora é uma camada real da viewport, não um fantasma
+   enterrado atrás do stacking context.
+   ========================================================= */
+#app-view{
+  background:transparent!important;
+}
+
+#app-view:before{
+  z-index:0!important;
+  opacity:1!important;
+  background-image:
+    linear-gradient(180deg,rgba(5,7,8,.52),rgba(5,7,8,.72)),
+    var(--avesso-app-wallpaper)!important;
+  background-size:cover!important;
+  background-position:center center!important;
+  background-repeat:no-repeat!important;
+}
+
+#app-view:after{
+  z-index:0!important;
+}
+
+#app-view>.app-nav,
+#app-view>.app-aside{
+  z-index:2!important;
+}
+
+#app-view>.feed-column{
+  position:relative;
+  z-index:1;
+}
+
+/* No Meu Canto o wallpaper escolhido passa a ocupar a tela inteira.
+   A camada local antiga só cobria o topo e escondia o resto. */
+.profile-control{
+  background:transparent!important;
+}
+
+.profile-control:before{
+  display:none!important;
+}
+
+.profile-settings-card,
+.friends-control,
+.profile-album-control,
+.wallpaper-control,
+.world-preferences{
+  background:rgba(17,21,23,.90)!important;
+  backdrop-filter:blur(2px);
+  -webkit-backdrop-filter:blur(2px);
+}
+
+@media(max-width:760px){
+  #app-view:before{
+    background-image:
+      linear-gradient(180deg,rgba(5,7,8,.34),rgba(5,7,8,.60)),
+      var(--avesso-app-wallpaper)!important;
+    background-size:cover!important;
+    background-position:center top!important;
+  }
+
+  .feed-column{
+    background:transparent!important;
+  }
+
+  .post-card,
+  .composer,
+  .profile-settings-card,
+  .friends-control,
+  .profile-album-control,
+  .wallpaper-control,
+  .world-preferences,
+  .messages-hub,
+  .conversation-thread{
+    backdrop-filter:blur(2px);
+    -webkit-backdrop-filter:blur(2px);
+  }
+
+  .post-card{
+    background:rgba(17,21,23,.91)!important;
+  }
+
+  .profile-settings-card,
+  .friends-control,
+  .profile-album-control,
+  .wallpaper-control,
+  .world-preferences,
+  .messages-hub{
+    background:rgba(11,16,18,.88)!important;
+  }
+
+  .composer{
+    background:rgba(216,255,62,.94)!important;
+  }
+}
