@@ -43,7 +43,8 @@ drop policy if exists post_images_delete_own on storage.objects;
 create policy post_images_delete_own on storage.objects for delete to authenticated
 using (bucket_id='post-images' and owner_id=(select auth.uid())::text);
 
-create or replace view public.feed_attention
+drop view if exists public.feed_attention;
+create view public.feed_attention
 with (security_invoker=true)
 as
 select
