@@ -45,6 +45,7 @@ function applyAppWallpaper(){
   const slug=(useProfileWallpaper?state.profile?.profile_wallpaper:state.profile?.app_wallpaper)||'cidade-56k';
   document.documentElement.style.setProperty('--avesso-app-wallpaper',`url("${wallpaperUrl(slug)}")`);
   document.documentElement.dataset.wallpaperSurface=useProfileWallpaper?'profile':'app';
+  document.body.classList.add('avesso-app-active');
 }
 function audioContext(){
   try{
