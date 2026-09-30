@@ -732,6 +732,7 @@ async function sendDirectMessage(e){
   await renderMessagesPage(state.directPeerId,{preserve:true});
 }
 function openFriendChat(peerId){
+  stopPlazaRealtime();
   state.tab='messages';state.directPeerId=peerId;bumpView();applyAppTabLayout();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x.dataset.appTab==='messages'));
   renderMessagesPage(peerId);
@@ -831,7 +832,7 @@ async function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
   const interferenceOnline=Boolean(state.world.settings?.world_interventions_enabled);
-  $('#feed-list').innerHTML=`<section class="profile-control">
+  $('#feed-list').innerHTML=`<section class="profile-control" style="--profile-wallpaper:url('${wallpaperUrl(state.profile.profile_wallpaper)}')">
     <header class="profile-control-hero">
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
       <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><button id="open-avatar-picker">mudar foto de perfil</button></div>
