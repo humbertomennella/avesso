@@ -121,7 +121,7 @@ async function saveWorldMode(mode){
     allow_profile_interference:mode==='chaos',
     allow_character_visits:mode!=='observer'
   };
-  $$('[data-world-mode]').forEach(b=>b.disabled=true);
+  $$('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
   let {data,error}=await supabase.from('user_world_preferences')
     .update(patch)
     .eq('user_id',state.profile.id)
@@ -135,7 +135,7 @@ async function saveWorldMode(mode){
     data=created.data; error=created.error;
   }
   if(error||!data){
-    $$('[data-world-mode]').forEach(b=>b.disabled=false);
+  $$('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
     console.error('world mode update failed',error);
     return toast('O modo não foi salvo. O sistema tropeçou na própria configuração.');
   }
@@ -404,7 +404,7 @@ function renderProfile(){
     <div class="world-pref-foot"><span id="profile-world-status">carregando modo...</span><small>${interferenceOnline?'Interferências visuais globais estão online.':'O motor visual ainda está bloqueado globalmente.'} Personagens nunca reescrevem o que você publicou.</small></div>
   </section>`;
   $('#edit-bio').onclick=editBio;
-  $('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
+  $$('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
   setWorldModeLabel();
   algoSay('profile');
   setTimeout(()=>askWorldCharacter('profile'),700);
