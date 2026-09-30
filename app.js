@@ -566,8 +566,8 @@ async function editBio(){const bio=prompt('Bio curta, até 180 caracteres:',stat
 $('#refresh-feed').onclick=()=>{ if(isFeedTab()){trackAction('feed_refresh','feed',{},true);loadFeed();} };
 function subscribeRealtime(){
   supabase.channel('avesso-feed')
-    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>{if(isFeedTab())loadFeed();})
-    .on('postgres_changes',{event:'*',schema:'public',table:'responses'},()=>{if(isFeedTab())loadFeed();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>{if(isFeedTab())loadFeed();else if(state.tab==='plaza')renderPlaza();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'responses'},()=>{if(isFeedTab())loadFeed();else if(state.tab==='plaza')renderPlaza();})
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'world_settings'},payload=>{
       state.world.settings=payload.new||state.world.settings;
       setWorldModeLabel();
@@ -580,7 +580,16 @@ function subscribeRealtime(){
       const row=payload.new||{};
       if(row.user_id&&row.user_id!==state.profile?.id&&row.visibility!=='world')return;
       const c=state.world.charactersById[row.character_id];
-      if(c)showEncounter({character:c,interaction:{id:row.id,body:row.body,source:row.source}});
+      if(!c)return;
+      if(String(row.trigger_type||'').startsWith('tower_')||c.slug==='rei_engajamento'){
+        loadTower();
+        return;
+      }
+      if((String(row.trigger_type||'').startsWith('plaza_')||c.slug==='npc')&&state.tab==='plaza'){
+        const line=$('#npc-plaza-line');if(line)line.textContent=row.body;
+        return;
+      }
+      showEncounter({character:c,interaction:{id:row.id,body:row.body,source:row.source}});
     })
     .subscribe();
 }
