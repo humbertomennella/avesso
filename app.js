@@ -231,8 +231,8 @@ $('#refresh-feed').onclick=loadFeed;
 const visitorClose=$('.world-visitor-close');if(visitorClose)visitorClose.onclick=()=>$('#world-visitor').classList.add('hidden');
 function subscribeRealtime(){
   supabase.channel('avesso-feed')
-    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>loadFeed())
-    .on('postgres_changes',{event:'*',schema:'public',table:'responses'},()=>loadFeed())
+    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>{if(['feed','quiet','sent'].includes(state.tab))loadFeed();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'responses'},()=>{if(['feed','quiet','sent'].includes(state.tab))loadFeed();})
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'world_settings'},payload=>{
       state.world.settings=payload.new||state.world.settings;
       setWorldModeLabel();
