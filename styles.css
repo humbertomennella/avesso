@@ -1389,3 +1389,408 @@ body.avesso-app-active .public-profile-avatar{
     max-height:62vh;
   }
 }
+
+
+/* =========================================================
+   MSN.EXE // chamar atenção, janela clássica e notificações
+   ========================================================= */
+
+html.msn-screen-nudge body{
+  animation:msn-screen-nudge .065s linear 16;
+  transform-origin:center center;
+}
+@keyframes msn-screen-nudge{
+  0%{transform:translate(0,0)}
+  12.5%{transform:translate(-12px,5px)}
+  25%{transform:translate(11px,-4px)}
+  37.5%{transform:translate(-9px,-6px)}
+  50%{transform:translate(12px,4px)}
+  62.5%{transform:translate(-10px,2px)}
+  75%{transform:translate(8px,-5px)}
+  87.5%{transform:translate(-5px,4px)}
+  100%{transform:translate(0,0)}
+}
+
+.messages-head-controls{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:8px;
+}
+
+.notification-permission-button{
+  border:1px solid #344247;
+  background:#091014;
+  color:#9facaa;
+  padding:7px 10px;
+  font:700 .52rem var(--mono);
+  cursor:pointer;
+}
+.notification-permission-button:hover{
+  color:var(--acid);
+  border-color:var(--acid);
+}
+
+/* A janela assume a nostalgia, mas o AVESSO não vira skin de Windows XP */
+.dm-floating-window{
+  width:min(560px,calc(100vw - 28px));
+  height:min(680px,calc(100vh - 52px));
+  border:1px solid #7ad4e5;
+  border-radius:7px 7px 3px 3px;
+  overflow:hidden;
+  background:#dcecf0;
+  box-shadow:0 18px 55px #000b,0 0 0 1px #081215,0 0 0 3px #2c6975;
+}
+
+.dm-floating-window.nudge{
+  animation:msn-nudge .065s linear 16;
+}
+
+.dm-msn-titlebar{
+  min-height:34px;
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  gap:8px;
+  align-items:center;
+  padding:4px 6px 4px 10px;
+  background:linear-gradient(180deg,#6bbacb 0%,#3a8ea0 52%,#276f80 53%,#1f5f70 100%);
+  color:#fff;
+  border-bottom:1px solid #174d59;
+  text-shadow:0 1px #173e48;
+  cursor:default;
+  user-select:none;
+}
+
+.dm-msn-appmark{
+  font:800 .64rem var(--mono);
+  letter-spacing:.04em;
+}
+
+.dm-msn-era{
+  justify-self:end;
+  margin-right:6px;
+  color:#d7f7ff;
+  font:600 .46rem var(--mono);
+  opacity:.84;
+}
+
+.dm-window-controls{
+  display:flex;
+  gap:3px;
+}
+.dm-window-controls button{
+  width:28px;
+  height:24px;
+  border:1px solid #dbeff4;
+  border-radius:3px;
+  background:linear-gradient(#f8ffff,#bfdce4);
+  color:#15404a;
+  font:900 .75rem Arial,sans-serif;
+  box-shadow:inset 0 0 0 1px #6ca2af;
+}
+.dm-window-controls button:hover{
+  border-color:#fff;
+  color:#071113;
+  background:#e9fbff;
+}
+.dm-window-controls #dm-close:hover{
+  background:linear-gradient(#ffb7ad,#e05245);
+  color:#fff;
+  border-color:#ffd3cc;
+}
+
+.dm-floating-head{
+  height:72px;
+  flex:0 0 72px;
+  grid-template-columns:48px minmax(0,1fr) 16px;
+  padding:8px 11px;
+  background:linear-gradient(180deg,#eaf7fa,#c9e5ea);
+  border-bottom:1px solid #8fb6c0;
+}
+
+.dm-floating-head .mini-avatar{
+  width:48px;
+  height:48px;
+  border:2px solid #fff;
+  border-radius:4px;
+  box-shadow:0 0 0 1px #77a7b3;
+  overflow:hidden;
+  background:#0a1113;
+}
+.dm-floating-head .mini-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.dm-floating-head .user-link{
+  display:block;
+  padding:0;
+  margin:1px 0 2px;
+  color:#12343c;
+  font:800 .9rem Arial,sans-serif;
+  text-align:left;
+}
+.dm-floating-head small{
+  margin-top:2px;
+  color:#53737a;
+  font:500 .55rem var(--mono);
+}
+.dm-conversation-label{
+  display:block;
+  color:#6a878e;
+  font:600 .48rem var(--mono);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.dm-msn-status-orb{
+  width:11px;
+  height:11px;
+  border-radius:50%;
+  background:#7f8e91;
+  box-shadow:0 0 0 1px #fff,0 0 0 2px #8ca9af;
+}
+.dm-msn-status-orb.online{background:#73d83c}
+.dm-msn-status-orb.away{background:#f0c947}
+.dm-msn-status-orb.offline{background:#929ea0}
+
+.dm-window-body{
+  background:#eef6f7;
+}
+
+.dm-msn-conversation{
+  flex:1;
+  min-height:0;
+  display:grid;
+  grid-template-columns:110px minmax(0,1fr);
+  gap:0;
+  background:#f4fafb;
+  border-bottom:1px solid #9cbec6;
+}
+
+.dm-msn-peer{
+  padding:14px 9px;
+  border-right:1px solid #a7c3c9;
+  background:linear-gradient(180deg,#dff0f3,#c9e1e6);
+  color:#1c3c43;
+  text-align:center;
+}
+.dm-msn-peer-avatar{
+  width:76px;
+  height:76px;
+  margin:0 auto 8px;
+  border:4px solid #fff;
+  border-radius:5px;
+  box-shadow:0 0 0 1px #789ea6,0 3px 8px #58757a55;
+  overflow:hidden;
+  background:#071013;
+}
+.dm-msn-peer-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.dm-msn-peer b{
+  display:block;
+  font:800 .72rem Arial,sans-serif;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.dm-msn-peer small{
+  display:block;
+  margin-top:5px;
+  color:#617a80;
+  font:500 .46rem/1.4 var(--mono);
+  overflow-wrap:anywhere;
+}
+.dm-msn-presence{
+  display:inline-flex;
+  gap:5px;
+  align-items:center;
+  margin-top:9px;
+  color:#526f75;
+  font:600 .48rem var(--mono);
+}
+
+.dm-floating-window .dm-log{
+  background:#fff;
+  color:#17262a;
+  padding:14px 16px;
+  scrollbar-color:#8fb8c1 #edf6f8;
+}
+
+.dm-bubble{
+  max-width:82%;
+  padding:7px 9px;
+  margin:5px 0;
+  border-radius:2px;
+  border:1px solid #c6d8dc;
+  background:#f7fbfc;
+  color:#21373c;
+  box-shadow:0 1px 0 #fff inset;
+}
+.dm-bubble.mine{
+  margin-left:auto;
+  background:#e6f4ff;
+  border-color:#a7c9dc;
+}
+.dm-bubble.theirs{
+  margin-right:auto;
+  background:#f4f8e9;
+  border-color:#cad9ad;
+}
+.dm-bubble p{
+  margin:0;
+  color:#1b3035;
+}
+.dm-bubble small{
+  display:block;
+  margin-top:4px;
+  color:#7a8b8e;
+  font:500 .45rem var(--mono);
+}
+
+.dm-attention-event{
+  border:1px dashed #cf942e;
+  background:#fff4d7;
+  color:#8a5a0a;
+  border-radius:3px;
+  box-shadow:none;
+}
+
+.dm-tools{
+  flex:0 0 auto;
+  padding:7px 9px;
+  border-top:0;
+  border-bottom:1px solid #abc4c9;
+  background:linear-gradient(#e8f4f6,#d4e8ec);
+}
+.dm-tools>button{
+  border:1px solid #9bb7bd;
+  border-radius:3px;
+  background:linear-gradient(#fff,#d9eaed);
+  color:#34555c;
+  padding:6px 9px;
+}
+.dm-tools>button:hover{
+  color:#15393f;
+  border-color:#4c8d9a;
+  background:#f7ffff;
+}
+.dm-tools #dm-attention{
+  color:#9a6500;
+  border-color:#d1a849;
+  background:linear-gradient(#fff8d5,#eadb99);
+}
+.dm-tools #dm-attention:hover{
+  color:#6f4200;
+  border-color:#b87800;
+}
+
+.dm-floating-window #dm-form{
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:7px;
+  padding:9px;
+  background:#dcecef;
+  border-top:1px solid #fff;
+}
+.dm-floating-window #dm-form input{
+  border:1px solid #89aeb7;
+  border-radius:3px;
+  background:#fff;
+  color:#172a2e;
+  padding:10px;
+  font-family:Arial,sans-serif;
+}
+.dm-floating-window #dm-form button{
+  min-width:78px;
+  border:1px solid #739ca6;
+  border-radius:3px;
+  background:linear-gradient(#fdfefe,#cbdfe4);
+  color:#173941;
+  font:700 .68rem Arial,sans-serif;
+}
+
+.dm-emoticon-palette{
+  background:#edf7f9;
+  border:1px solid #75a6b1;
+  box-shadow:5px 5px 0 #31545b55;
+}
+.dm-emoticon-palette button{
+  background:#fff;
+  border-color:#c1d5d9;
+  color:#1d3237;
+}
+
+@media(max-width:760px){
+  .messages-head-controls{
+    width:100%;
+    align-items:stretch;
+  }
+
+  .notification-permission-button{
+    width:100%;
+  }
+
+  .dm-floating-window{
+    left:6px!important;
+    right:6px!important;
+    bottom:calc(74px + env(safe-area-inset-bottom))!important;
+    width:auto!important;
+    height:min(76dvh,650px)!important;
+    border-radius:5px;
+  }
+
+  .dm-msn-era{
+    display:none;
+  }
+
+  .dm-msn-titlebar{
+    grid-template-columns:1fr auto;
+  }
+
+  .dm-msn-conversation{
+    grid-template-columns:72px minmax(0,1fr);
+  }
+
+  .dm-msn-peer{
+    padding:9px 5px;
+  }
+
+  .dm-msn-peer-avatar{
+    width:54px;
+    height:54px;
+    border-width:3px;
+  }
+
+  .dm-msn-peer b{
+    font-size:.58rem;
+  }
+
+  .dm-msn-peer small{
+    display:none;
+  }
+
+  .dm-msn-presence{
+    font-size:.42rem;
+  }
+
+  .dm-floating-head{
+    height:62px;
+    flex-basis:62px;
+    grid-template-columns:42px minmax(0,1fr) 12px;
+    padding:7px 8px;
+  }
+
+  .dm-floating-head .mini-avatar{
+    width:42px;
+    height:42px;
+  }
+
+  .dm-floating-window .dm-log{
+    padding:10px;
+  }
+
+  .dm-bubble{
+    max-width:90%;
+  }
+}
