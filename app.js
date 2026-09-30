@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, wallpaperTarget:'profile', world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -19,6 +19,31 @@ const AVATAR_OPTIONS=[
   ['Humana 01','assets/avatars/humana-01.svg','humana'],['Humana 02','assets/avatars/humana-02.svg','humana'],['Humana 03','assets/avatars/humana-03.svg','humana'],
   ['Robô 01','assets/avatars/robo-01.svg','robo'],['Robô 02','assets/avatars/robo-02.svg','robo'],['Robô 03','assets/avatars/robo-03.svg','robo']
 ];
+const WALLPAPER_OPTIONS=[
+  ['cidade-56k','Cidade 56K','conectando desde 1998'],
+  ['praça-3am','Praça 03:00','ninguém disse que ia embora'],
+  ['torre-kpi','Torre KPI','+999% de nada'],
+  ['arquivo-morto','Arquivo Morto','você não apagou. só esqueceu'],
+  ['jardim-glitch','Jardim Glitch','natureza.exe respondendo'],
+  ['servidor-submerso','Servidor Submerso','ping: 20000 anos'],
+  ['terapia-do-algoritmo','Terapia do Algoritmo','e como isso fez você clicar?'],
+  ['erro-bonito','Erro Bonito','falha crítica, esteticamente agradável'],
+  ['lua-de-cache','Lua de Cache','última atualização: talvez'],
+  ['humano-nao-encontrado','Humano Não Encontrado','http 418 // continue tentando']
+];
+const ACID_REACTIONS=[
+  ['suspeito','◉','isso tá suspeito'],
+  ['merece_cafe','☕','merece café'],
+  ['caos_aprovado','⚠','caos aprovado'],
+  ['li_me_arrependi','↩','li e me arrependi'],
+  ['isso_escalou','↗','isso escalou'],
+  ['humano_detectado','♡','humano detectado']
+];
+function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.svg`;}
+function applyAppWallpaper(){
+  const slug=state.profile?.app_wallpaper||'cidade-56k';
+  document.documentElement.style.setProperty('--avesso-app-wallpaper',`url("${wallpaperUrl(slug)}")`);
+}
 function avatarHtml(url,name='?'){ return url?`<img src="${escapeAttr(url)}" alt="" loading="lazy">`:escapeHtml(initials(name)); }
 function renderNavAvatar(){ const el=$('#nav-avatar'); if(el)el.innerHTML=avatarHtml(state.profile?.avatar_url,state.profile?.display_name||'?'); }
 function characterSpriteClass(character){ return ''; }
@@ -208,6 +233,7 @@ document.querySelectorAll('[data-open-auth]').forEach(b=>b.addEventListener('cli
 $('#encounter-close').onclick=()=>dismissEncounter();
 $('.dialog-close').onclick=()=>$('#auth-dialog').close();
 $('.avatar-dialog-close').onclick=()=>$('#avatar-dialog').close();
+$('.wallpaper-dialog-close').onclick=()=>$('#wallpaper-dialog').close();
 $$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
 function setAuthMode(mode){ state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
 
@@ -219,8 +245,8 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);stopPlazaRealtime();stopDirectRealtime();state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -291,31 +317,26 @@ $('#publish-post').onclick=async()=>{
 
 async function loadThreadData(posts){
   const ids=posts.map(p=>p.id);
-  if(!ids.length)return{responses:{},supports:{}};
-  const [responsesRes,supportRes,characterRes]=await Promise.all([
+  if(!ids.length)return{responses:{},characters:{},reactions:{}};
+  const [responsesRes,reactionsRes,characterRes]=await Promise.all([
     supabase.from('responses').select('id,post_id,author_id,body,created_at').in('post_id',ids).order('created_at',{ascending:true}),
-    supabase.from('support_signals').select('post_id,supporter_id,kind,created_at').in('post_id',ids).order('created_at',{ascending:true}),
+    supabase.from('post_reactions').select('post_id,user_id,reaction,created_at').in('post_id',ids),
     supabase.from('character_interactions').select('id,post_id,character_id,body,created_at,source,visibility').in('post_id',ids).order('created_at',{ascending:true})
   ]);
   const responses=responsesRes.data||[];
-  const supports=supportRes.data||[];
+  const reactions=reactionsRes.data||[];
   const characterReplies=(characterRes.data||[]).filter(x=>x.post_id);
-  const profileIds=[...new Set([...responses.map(r=>r.author_id),...supports.map(s=>s.supporter_id)].filter(Boolean))];
+  const profileIds=[...new Set(responses.map(r=>r.author_id).filter(Boolean))];
   let profiles={};
   if(profileIds.length){
     const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',profileIds);
     profiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));
   }
-  const byPost={};
-  const supportByPost={};
-  const charactersByPost={};
+  const byPost={},charactersByPost={},reactionsByPost={};
   for(const r of responses)(byPost[r.post_id]??=[]).push({...r,author:profiles[r.author_id]});
-  for(const s of supports)(supportByPost[s.post_id]??=[]).push({...s,supporter:profiles[s.supporter_id]});
   for(const x of characterReplies)(charactersByPost[x.post_id]??=[]).push({...x,character:state.world.charactersById[x.character_id]});
-  return{responses:byPost,supports:supportByPost,characters:charactersByPost};
-}
-function supportLabel(kind){
-  return({escutei:'escutei você',posso_ajudar:'posso ajudar',estou_aqui:'estou aqui'})[kind]||kind;
+  for(const x of reactions)(reactionsByPost[x.post_id]??=[]).push(x);
+  return{responses:byPost,characters:charactersByPost,reactions:reactionsByPost};
 }
 async function loadFeed(){
   if(!isFeedTab())return;
@@ -363,53 +384,63 @@ async function loadFeed(){
     if(state.tab==='feed')setTimeout(()=>{ if(state.tab==='feed'&&viewVersion===state.viewVersion) askWorldCharacter('feed_attention'); },2200);
   }else if(posts.length)algoSay('feed_default');
 }
-function renderFeed(posts,threadData={responses:{},supports:{},characters:{}}){
+function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
   if(!isFeedTab())return;
   const list=$('#feed-list');
   if(!posts.length){
     list.innerHTML='<div class="feed-status">Nada aqui. Talvez as pessoas estejam vivendo. Estranho, mas permitido.</div>';
-    algoSay('feed_empty');
-    return;
+    algoSay('feed_empty');return;
   }
   list.innerHTML=posts.map(p=>{
     const responses=threadData.responses[p.id]||[];
-    const supports=threadData.supports[p.id]||[];
     const characterReplies=threadData.characters[p.id]||[];
-    const responseHtml=responses.length?`<div class="thread-block"><div class="thread-title">CONVERSA // ${responses.length} ${responses.length===1?'RESPOSTA':'RESPOSTAS'}</div>${responses.map(r=>`<div class="thread-reply"><span class="mini-avatar">${avatarHtml(r.author?.avatar_url,r.author?.display_name||'?')}</span><div><div class="thread-author"><button class="user-link" data-profile-id="${r.author_id}">${escapeHtml(r.author?.display_name||'alguém')}</button> <small>@${escapeHtml(r.author?.handle||'...')} · ${ago(r.created_at)}</small></div><p>${escapeHtml(r.body)}</p></div></div>`).join('')}</div>`:'';
-    const characterHtml=characterReplies.length?`<div class="thread-block character-thread"><div class="thread-title">MUNDO // HABITANTES</div>${characterReplies.map(x=>{const c=x.character||{};return `<div class="thread-reply character-reply">${characterVisual(c,'thread-character-avatar')}<div><div class="thread-author">${escapeHtml(c.name||'Habitante')} <b>HABITANTE</b> <small>· ${ago(x.created_at)}</small></div><p>${escapeHtml(x.body)}</p></div></div>`}).join('')}</div>`:'';
-    const supportHtml=supports.length?`<div class="private-support-log"><span>PRIVADO // APOIO</span>${supports.map(s=>`<p><strong>${escapeHtml(s.supporter?.display_name||'alguém')}</strong> sinalizou: “${escapeHtml(supportLabel(s.kind))}”.</p>`).join('')}</div>`:'';
-    const canSupport=p.author_id!==state.profile.id;
+    const reactionRows=threadData.reactions[p.id]||[];
+    const conversation=[
+      ...responses.map(x=>({...x,type:'human'})),
+      ...characterReplies.map(x=>({...x,type:'character'}))
+    ].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    const conversationHtml=conversation.length?`<section class="conversation-thread">
+      <header><span>CONVERSA // ${conversation.length} ${conversation.length===1?'RESPOSTA':'RESPOSTAS'}</span><small>sem hierarquia. conceito quase ofensivo.</small></header>
+      <div class="conversation-list">${conversation.map(item=>{
+        if(item.type==='character'){
+          const c=item.character||{};
+          return `<article class="conversation-item character-conversation">${characterVisual(c,'conversation-character')}<div><div class="conversation-author"><b>${escapeHtml(c.name||'Habitante')}</b><span>HABITANTE · ${ago(item.created_at)}</span></div><p>${escapeHtml(item.body)}</p></div></article>`;
+        }
+        return `<article class="conversation-item"><button class="mini-avatar profile-avatar-button" data-profile-id="${item.author_id}">${avatarHtml(item.author?.avatar_url,item.author?.display_name||'?')}</button><div><div class="conversation-author"><button class="user-link" data-profile-id="${item.author_id}">${escapeHtml(item.author?.display_name||'alguém')}</button><span>@${escapeHtml(item.author?.handle||'...')} · ${ago(item.created_at)}</span></div><p>${escapeHtml(item.body)}</p></div></article>`;
+      }).join('')}</div></section>`:'';
+    const reactionHtml=ACID_REACTIONS.map(([id,icon,label])=>{
+      const rows=reactionRows.filter(x=>x.reaction===id);
+      const active=rows.some(x=>x.user_id===state.profile.id);
+      return `<button class="acid-reaction ${active?'active':''}" data-react-post="${p.id}" data-reaction="${id}" aria-pressed="${active}"><span>${icon}</span>${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`;
+    }).join('');
     return `<article class="post-card" data-post-card="${p.id}">
       <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       <p class="post-body">${escapeHtml(p.body)}</p>
       ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="lazy"></figure>`:''}
-      ${responseHtml}
-      ${characterHtml}
-      ${supportHtml}
-      <div class="post-actions"><button data-reply-toggle="${p.id}">↩ responder</button>${canSupport?`<button data-support-toggle="${p.id}">＋ apoiar em privado</button>`:''}${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
-      <div class="inline-reply hidden" data-reply-box="${p.id}"><textarea maxlength="420" placeholder="Responda à pessoa, não ao algoritmo."></textarea><div><button data-reply-send="${p.id}">enviar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
-      ${canSupport?`<div class="support-picker hidden" data-support-box="${p.id}"><span>APOIO PRIVADO // só você e as pessoas envolvidas nesta publicação conseguem ver.</span><div><button data-support-kind="escutei" data-support-post="${p.id}">escutei você</button><button data-support-kind="estou_aqui" data-support-post="${p.id}">estou aqui</button><button data-support-kind="posso_ajudar" data-support-post="${p.id}">posso ajudar</button></div></div>`:''}
+      <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
+      ${conversationHtml}
+      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
+      <div class="inline-reply hidden" data-reply-box="${p.id}"><label>RESPOSTA // fale com a pessoa, não com a métrica</label><textarea maxlength="420" placeholder="Escreva algo que valha o espaço que ocupa."></textarea><div><button data-reply-send="${p.id}">publicar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
     </article>`;
   }).join('');
   $$('[data-reply-toggle]').forEach(b=>b.onclick=()=>{
     const box=document.querySelector(`[data-reply-box="${b.dataset.replyToggle}"]`);
-    box?.classList.toggle('hidden');
-    box?.querySelector('textarea')?.focus();
+    box?.classList.toggle('hidden');box?.querySelector('textarea')?.focus();
   });
   $$('[data-reply-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-box="${b.dataset.replyCancel}"]`)?.classList.add('hidden'));
   $$('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
-  $$('[data-support-toggle]').forEach(b=>b.onclick=()=>document.querySelector(`[data-support-box="${b.dataset.supportToggle}"]`)?.classList.toggle('hidden'));
-  document.querySelectorAll('[data-support-kind]').forEach(b=>b.onclick=()=>supportPost(b.dataset.supportPost,b.dataset.supportKind));
-  bindProfileLinks();
+  $$('[data-react-post]').forEach(b=>b.onclick=()=>toggleReaction(b.dataset.reactPost,b.dataset.reaction,b.classList.contains('active')));
 }
-async function supportPost(post_id,kind){
-  const allowed=['escutei','estou_aqui','posso_ajudar'];
-  if(!allowed.includes(kind))return;
-  const {error}=await supabase.from('support_signals').upsert({post_id,supporter_id:state.profile.id,kind});
-  if(error)return toast('Não foi possível enviar o apoio privado agora.');
-  toast('Apoio privado entregue. Só as pessoas envolvidas conseguem ver.');
-  trackAction('support_sent','feed',{kind,post_id});
-  askWorldCharacter('support_sent',{post_id,action_type:'support_sent',surface:'feed',metadata:{kind}});
+async function toggleReaction(postId,reaction,active){
+  if(!ACID_REACTIONS.some(x=>x[0]===reaction))return;
+  let error;
+  if(active){
+    ({error}=await supabase.from('post_reactions').delete().eq('post_id',postId).eq('user_id',state.profile.id));
+  }else{
+    ({error}=await supabase.from('post_reactions').upsert({post_id:postId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'post_id,user_id'}));
+  }
+  if(error)return toast('A reação teve uma reação adversa.');
+  trackAction('acid_reaction','feed',{post_id:postId,reaction:active?'remove':reaction});
   if(isFeedTab())loadFeed();
 }
 async function sendReply(post_id){
@@ -428,17 +459,20 @@ async function sendReply(post_id){
 
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
 function applyAppTabLayout(){
-  const worldOpen=['residents','plaza','tower','profile','public_profile'].includes(state.tab);
+  const worldOpen=['residents','plaza','tower','profile','public_profile','messages'].includes(state.tab);
   $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
   $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
   $('.feed-header')?.classList.toggle('hidden',worldOpen);
   $('#refresh-feed')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
 }
 document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
+  const previousTab=state.tab;
+  if(previousTab==='plaza'&&b.dataset.appTab!=='plaza')stopPlazaRealtime();
+  if(previousTab==='messages'&&b.dataset.appTab!=='messages')stopDirectRealtime();
   state.tab=b.dataset.appTab;
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
-  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento'};
+  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Mensagens entre humanos'};
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
   trackAction('tab_view',state.tab,{tab:state.tab});
@@ -447,6 +481,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   else if(state.tab==='residents')await renderInhabitantsPage();
   else if(state.tab==='plaza')await renderPlaza();
   else if(state.tab==='tower')await renderTowerPage();
+  else if(state.tab==='messages')await renderMessagesPage();
   else loadFeed();
 });
 async function renderInhabitantsPage(){
@@ -507,6 +542,19 @@ async function renderInhabitantsPage(){
       <footer class="world-footer"><span>AVESSO.SYS // HABITANTES V1.0</span><b>ESTE É SÓ O COMEÇO.</b><span>O MUNDO DO AVESSO CONTINUA...</span></footer>
     </section>`;
 }
+function stopPlazaRealtime(){
+  if(state.plazaChannel){supabase.removeChannel(state.plazaChannel);state.plazaChannel=null;}
+}
+function startPlazaRealtime(){
+  stopPlazaRealtime();
+  if(!state.profile?.id)return;
+  state.plazaChannel=supabase.channel(`avesso-plaza-${state.profile.id}-${Date.now()}`)
+    .on('postgres_changes',{event:'*',schema:'public',table:'plaza_messages'},()=>{if(state.tab==='plaza')loadPlazaMessages();})
+    .subscribe(status=>{
+      const dot=$('#plaza-realtime-status');
+      if(dot)dot.textContent=status==='SUBSCRIBED'?'● realtime':'○ conectando';
+    });
+}
 async function loadPlazaMessages(){
   if(state.tab!=='plaza')return;
   const {data,error}=await supabase.from('plaza_messages')
@@ -538,9 +586,10 @@ async function sendPlazaMessage(body,forceNpc=false){
   const {data,error}=await supabase.from('plaza_messages').insert({user_id:state.profile.id,body:text}).select('id').single();
   if(error)return toast('A mensagem caiu entre os bancos da praça.');
   trackAction('plaza_chat','plaza',{message:text.slice(0,90)});
+  await loadPlazaMessages();
   const mentionNpc=/@?npc\b/i.test(text);
   if(forceNpc||mentionNpc||Math.random()<0.28){
-    askWorldCharacter('plaza_chat',{character:'npc',silent:true,action_type:'plaza_chat',surface:'plaza',metadata:{message:text,message_id:data.id}});
+    askWorldCharacter('plaza_chat',{character:'npc',silent:true,action_type:'plaza_chat',surface:'plaza',metadata:{message:text,message_id:data.id}}).then(()=>setTimeout(loadPlazaMessages,180));
   }
 }
 async function renderPlaza(){
@@ -560,13 +609,14 @@ async function renderPlaza(){
         <div class="plaza-actions"><button data-npc-prompt="Me dê uma missão secundária.">pedir missão</button><button data-npc-prompt="Qual é o rumor de hoje na Praça?">perguntar rumor</button><button data-npc-prompt="NPC, conversa comigo um pouco.">conversar</button></div>
       </aside>
       <section class="plaza-chat-room">
-        <header><div><span class="section-code">PRAÇA // AO VIVO</span><h3>Gente normal em um mundo bugado</h3></div><span class="live-dot">● realtime</span></header>
+        <header><div><span class="section-code">PRAÇA // AO VIVO</span><h3>Gente normal em um mundo bugado</h3></div><span class="live-dot" id="plaza-realtime-status">○ conectando</span></header>
         <div id="plaza-chat-log" class="plaza-chat-log"></div>
         <form id="plaza-chat-form" class="plaza-chat-form"><input id="plaza-chat-input" maxlength="280" autocomplete="off" placeholder="Fale na Praça Central... @npc também lê isto"><button>enviar</button></form>
       </section>
     </div>
   </section>`;
   await loadPlazaMessages();
+  startPlazaRealtime();
   trackAction('plaza_opened','plaza');
   $('#plaza-chat-form').onsubmit=async e=>{
     e.preventDefault();
@@ -614,6 +664,100 @@ async function renderTowerPage(){
   $('#tower-refresh').onclick=async()=>{trackAction('tower_pulse','tower');const r=await askWorldCharacter('tower_pulse',{character:'rei_engajamento',silent:true,action_type:'manual_campaign',surface:'tower'});if(r?.interaction?.body)$('#tower-page-message').textContent=r.interaction.body;};
 }
 
+async function acceptedFriendProfiles(){
+  const {data:rels}=await supabase.from('friendships').select('*').eq('status','accepted')
+    .or(`requester_id.eq.${state.profile.id},addressee_id.eq.${state.profile.id}`);
+  const ids=[...new Set((rels||[]).map(r=>r.requester_id===state.profile.id?r.addressee_id:r.requester_id))];
+  if(!ids.length)return[];
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message').in('id',ids);
+  return data||[];
+}
+function stopDirectRealtime(){
+  if(state.directChannel){supabase.removeChannel(state.directChannel);state.directChannel=null;}
+}
+function startDirectRealtime(){
+  stopDirectRealtime();
+  if(!state.profile?.id)return;
+  state.directChannel=supabase.channel(`avesso-dm-${state.profile.id}-${Date.now()}`)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages'},payload=>{
+      const m=payload.new||{};
+      if(m.sender_id!==state.profile.id&&m.recipient_id!==state.profile.id)return;
+      if(state.tab==='messages')renderMessagesPage(state.directPeerId,{preserve:true});
+      else toast('MENSAGEM // alguém resolveu falar com você diretamente.');
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'friendships'},()=>{if(state.tab==='messages')renderMessagesPage(state.directPeerId,{preserve:true});})
+    .subscribe();
+}
+async function loadDirectConversation(peerId){
+  if(!peerId)return[];
+  const me=state.profile.id;
+  const {data,error}=await supabase.from('direct_messages').select('*')
+    .or(`and(sender_id.eq.${me},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${me})`)
+    .order('created_at',{ascending:true}).limit(200);
+  if(error)return[];
+  await supabase.from('direct_messages').update({read_at:new Date().toISOString()})
+    .eq('sender_id',peerId).eq('recipient_id',me).is('read_at',null);
+  return data||[];
+}
+async function renderMessagesPage(peerId=null,{preserve=false}={}){
+  if(state.tab!=='messages')return;
+  const friends=await acceptedFriendProfiles();
+  if(state.tab!=='messages')return;
+  if(peerId&&friends.some(f=>f.id===peerId))state.directPeerId=peerId;
+  if(!state.directPeerId||!friends.some(f=>f.id===state.directPeerId))state.directPeerId=friends[0]?.id||null;
+  const peer=friends.find(f=>f.id===state.directPeerId)||null;
+  const messages=peer?await loadDirectConversation(peer.id):[];
+  if(state.tab!=='messages')return;
+  $('#feed-status').classList.add('hidden');
+  $('#feed-list').innerHTML=`<section class="dm-world">
+    <aside class="dm-friends"><header><span class="section-code">AMIGOS // ONLINE TALVEZ</span><h2>Conversas</h2></header>
+      <div class="dm-friend-list">${friends.map(f=>`<button class="dm-friend ${f.id===state.directPeerId?'active':''}" data-dm-peer="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${escapeHtml(f.display_name)}</b><small>@${escapeHtml(f.handle)}</small></span></button>`).join('')||'<p class="dm-empty">Nenhum amigo ainda. Radicalmente difícil conversar sozinho em tempo real.</p>'}</div>
+    </aside>
+    <section class="dm-room">${peer?`<header><button class="mini-avatar profile-avatar-button" data-profile-id="${peer.id}">${avatarHtml(peer.avatar_url,peer.display_name)}</button><div><button class="user-link" data-profile-id="${peer.id}">${escapeHtml(peer.display_name)}</button><small>@${escapeHtml(peer.handle)} · ${escapeHtml(peer.status_message||'sem status')}</small></div><span class="live-dot">● ao vivo</span></header>
+      <div class="dm-log" id="dm-log">${messages.map(m=>`<article class="dm-bubble ${m.sender_id===state.profile.id?'mine':'theirs'}"><p>${escapeHtml(m.body)}</p><small>${ago(m.created_at)}${m.read_at?' · lida':''}</small></article>`).join('')||'<div class="dm-empty">Comece a conversa. O pior que pode acontecer é virar conversa.</div>'}</div>
+      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="escreva sem transformar em conteúdo..."><button>enviar ↵</button></form>`:'<div class="dm-no-peer"><h2>Sem amigos aceitos</h2><p>Adicione alguém pelo perfil público. Chat com estranhos aleatórios já foi inventado e aprendemos coisas.</p></div>'}</section>
+  </section>`;
+  $$('[data-dm-peer]').forEach(b=>b.onclick=()=>renderMessagesPage(b.dataset.dmPeer));
+  if($('#dm-form'))$('#dm-form').onsubmit=sendDirectMessage;
+  const log=$('#dm-log');if(log)log.scrollTop=log.scrollHeight;
+  startDirectRealtime();
+}
+async function sendDirectMessage(e){
+  e.preventDefault();
+  const input=$('#dm-input');const body=input?.value.trim()||'';
+  if(!body||!state.directPeerId)return;
+  input.value='';
+  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:state.directPeerId,body});
+  if(error){input.value=body;return toast('A mensagem não atravessou o fio. Confirme que vocês ainda são amigos.');}
+  await renderMessagesPage(state.directPeerId,{preserve:true});
+}
+function openFriendChat(peerId){
+  stopPlazaRealtime();
+  state.tab='messages';state.directPeerId=peerId;bumpView();applyAppTabLayout();
+  document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x.dataset.appTab==='messages'));
+  renderMessagesPage(peerId);
+}
+function openWallpaperDialog(target){
+  state.wallpaperTarget=target;
+  const grid=$('#wallpaper-modal-grid');
+  const current=target==='profile'?state.profile.profile_wallpaper:state.profile.app_wallpaper;
+  $('#wallpaper-dialog-title').textContent=target==='profile'?'Fundo do Meu Canto':'Fundo geral do AVESSO';
+  grid.innerHTML=WALLPAPER_OPTIONS.map(([slug,name,tag])=>`<button class="wallpaper-choice ${slug===current?'active':''}" data-wallpaper="${slug}"><img src="${wallpaperUrl(slug)}" alt=""><b>${escapeHtml(name)}</b><small>${escapeHtml(tag)}</small></button>`).join('');
+  $$('[data-wallpaper]').forEach(b=>b.onclick=()=>saveWallpaper(target,b.dataset.wallpaper));
+  $('#wallpaper-dialog').showModal();
+}
+async function saveWallpaper(target,slug){
+  if(!WALLPAPER_OPTIONS.some(x=>x[0]===slug))return;
+  const column=target==='profile'?'profile_wallpaper':'app_wallpaper';
+  const {data,error}=await supabase.from('profiles').update({[column]:slug,updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
+  if(error)return toast('O papel de parede se recusou a colar na parede.');
+  state.profile=data;
+  if(target==='app')applyAppWallpaper();
+  $('#wallpaper-dialog').close();
+  renderProfile();
+  toast(target==='profile'?'Seu Canto ganhou cenário novo.':'O AVESSO trocou de cenário. A realidade continua em beta.');
+}
+
 async function loadFriendPanel(){
   const host=$('#friends-panel'); if(!host||!state.profile)return;
   const {data:rels}=await supabase.from('friendships').select('*')
@@ -632,11 +776,12 @@ async function loadFriendPanel(){
   const card=(p,extra='')=>`<div class="friend-row"><button class="friend-avatar" data-profile-id="${p.id}">${avatarHtml(p.avatar_url,p.display_name)}</button><div><button class="user-link" data-profile-id="${p.id}">${escapeHtml(p.display_name)}</button><small>@${escapeHtml(p.handle)} ${p.status_message?'· '+escapeHtml(p.status_message):''}</small></div>${extra}</div>`;
   host.innerHTML=`
     <div class="friend-section"><h3>Pedidos recebidos <b>${incoming.length}</b></h3>${incoming.map(r=>{const p=profiles[r.requester_id];return p?card(p,`<div class="friend-actions"><button data-friend-accept="${r.id}">aceitar</button><button data-friend-decline="${r.id}">recusar</button></div>`):''}).join('')||'<p>Ninguém batendo na porta. Paz temporária.</p>'}</div>
-    <div class="friend-section"><h3>Amigos <b>${accepted.length}</b></h3>${accepted.map(r=>{const id=r.requester_id===state.profile.id?r.addressee_id:r.requester_id;const p=profiles[id];return p?card(p,`<button data-friend-remove="${r.id}">remover</button>`):''}).join('')||'<p>Lista vazia. O MSN também começou assim.</p>'}</div>
+    <div class="friend-section"><h3>Amigos <b>${accepted.length}</b></h3>${accepted.map(r=>{const id=r.requester_id===state.profile.id?r.addressee_id:r.requester_id;const p=profiles[id];return p?card(p,`<div class="friend-actions"><button data-friend-chat="${id}">mensagem</button><button data-friend-remove="${r.id}">remover</button></div>`):''}).join('')||'<p>Lista vazia. O MSN também começou assim.</p>'}</div>
     ${outgoing.length?`<div class="friend-section"><h3>Convites enviados <b>${outgoing.length}</b></h3>${outgoing.map(r=>{const p=profiles[r.addressee_id];return p?card(p,'<span class="pending-chip">pendente</span>'):''}).join('')}</div>`:''}`;
   $$('[data-friend-accept]').forEach(b=>b.onclick=()=>answerFriendRequest(b.dataset.friendAccept,true));
   $$('[data-friend-decline]').forEach(b=>b.onclick=()=>answerFriendRequest(b.dataset.friendDecline,false));
-  $$('[data-friend-remove]').forEach(b=>b.onclick=()=>removeFriendship(b.dataset.friendRemove));
+  document.querySelectorAll('[data-friend-remove]').forEach(b=>b.onclick=()=>removeFriendship(b.dataset.friendRemove));
+  document.querySelectorAll('[data-friend-chat]').forEach(b=>b.onclick=()=>openFriendChat(b.dataset.friendChat));
   bindProfileLinks();
 }
 async function answerFriendRequest(id,accept){
@@ -687,7 +832,7 @@ async function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
   const interferenceOnline=Boolean(state.world.settings?.world_interventions_enabled);
-  $('#feed-list').innerHTML=`<section class="profile-control">
+  $('#feed-list').innerHTML=`<section class="profile-control" style="--profile-wallpaper:url('${wallpaperUrl(state.profile.profile_wallpaper)}')">
     <header class="profile-control-hero">
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
       <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><button id="open-avatar-picker">mudar foto de perfil</button></div>
@@ -696,6 +841,7 @@ async function renderProfile(){
       <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Mensagem de status<input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
       <section class="profile-settings-card security-card"><span class="section-code">CONTA // SEGURANÇA</span><p><b>E-mail</b><br>${escapeHtml(state.session?.user?.email||'')}</p><label>Nova senha<input id="profile-password" type="password" minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password"></label><button id="change-password">alterar senha</button><small>Seu @ continua estável para links. Seu nome exibido pode trocar de personalidade quantas vezes quiser.</small></section>
     </div>
+    <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
     <section class="friends-control"><span class="section-code">PESSOAS // AMIGOS</span><h2>Lista de pessoas que você aceitou voluntariamente</h2><div id="friends-panel"><p>carregando relações humanas...</p></div></section>
   </section>
   <section class="world-preferences">
@@ -712,6 +858,8 @@ async function renderProfile(){
   $('#open-avatar-picker').onclick=openAvatarDialog;
   $('#save-profile-settings').onclick=saveProfileSettings;
   $('#change-password').onclick=changePassword;
+  $('#choose-profile-wallpaper').onclick=()=>openWallpaperDialog('profile');
+  $('#choose-app-wallpaper').onclick=()=>openWallpaperDialog('app');
   document.querySelectorAll('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
   setWorldModeLabel();
   loadFriendPanel();
@@ -755,7 +903,7 @@ async function openPublicProfile(userId){
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   applyAppTabLayout();$('#feed-status').classList.add('hidden');
   const [profileRes,postsRes,friendship]=await Promise.all([
-    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at').eq('id',userId).maybeSingle(),
+    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper').eq('id',userId).maybeSingle(),
     supabase.from('posts').select('id,body,image_url,created_at').eq('author_id',userId).eq('visibility','publico').order('created_at',{ascending:false}).limit(20),
     getFriendshipWith(userId)
   ]);
@@ -763,10 +911,10 @@ async function openPublicProfile(userId){
   const p=profileRes.data;if(!p){$('#feed-list').innerHTML='<div class="feed-status">Este Canto não foi encontrado. Talvez tenha virado lenda urbana.</div>';return;}
   let friendControl='';
   if(!friendship)friendControl=`<button data-add-friend="${p.id}">＋ adicionar amigo</button>`;
-  else if(friendship.status==='accepted')friendControl='<span class="friend-status accepted">✓ amigos</span>';
+  else if(friendship.status==='accepted')friendControl=`<button data-message-friend="${p.id}">↔ mensagem</button><button data-unfriend-public="${friendship.id}">− desfazer amizade</button>`;
   else if(friendship.status==='pending'&&friendship.addressee_id===state.profile.id)friendControl=`<button data-accept-public="${friendship.id}">aceitar amizade</button>`;
   else friendControl='<span class="friend-status">pedido enviado</span>';
-  $('#feed-list').innerHTML=`<section class="public-profile">
+  $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
     <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
     <div class="public-posts"><h2>O que ${escapeHtml(p.display_name)} deixou por aqui</h2>${(postsRes.data||[]).map(post=>`<article class="post-card"><span class="post-meta">${ago(post.created_at)}</span><p class="post-body">${escapeHtml(post.body)}</p>${post.image_url?`<figure class="post-image"><img src="${escapeHtml(post.image_url)}" loading="lazy"></figure>`:''}</article>`).join('')||'<p class="feed-status">Nada público ainda.</p>'}</div>
@@ -774,10 +922,16 @@ async function openPublicProfile(userId){
   $('#back-from-profile').onclick=()=>document.querySelector('[data-app-tab="feed"]')?.click();
   $('[data-add-friend]')?.addEventListener('click',e=>requestFriend(e.currentTarget.dataset.addFriend));
   $('[data-accept-public]')?.addEventListener('click',async e=>{await answerFriendRequest(e.currentTarget.dataset.acceptPublic,true);openPublicProfile(userId);});
+  $('[data-message-friend]')?.addEventListener('click',e=>openFriendChat(e.currentTarget.dataset.messageFriend));
+  $('[data-unfriend-public]')?.addEventListener('click',async e=>{if(confirm('Desfazer amizade? Sem textão de despedida.')){await supabase.from('friendships').delete().eq('id',e.currentTarget.dataset.unfriendPublic);openPublicProfile(userId);}});
 }
-function bindProfileLinks(){
-  $$('[data-profile-id]').forEach(el=>el.onclick=e=>{e.preventDefault();e.stopPropagation();openPublicProfile(el.dataset.profileId);});
-}
+function bindProfileLinks(){ /* links usam delegação global */ }
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-profile-id]');
+  if(!el||!state.profile)return;
+  e.preventDefault();e.stopPropagation();
+  openPublicProfile(el.dataset.profileId);
+});
 
 $('#refresh-feed').onclick=()=>{ if(isFeedTab())loadFeed(); };
 document.addEventListener('click',e=>{
@@ -807,7 +961,7 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'world_events'},payload=>{
       if(payload.new?.status==='active')toast(`EVENTO DO MUNDO // ${payload.new.title}`);
     })
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'plaza_messages'},()=>{if(state.tab==='plaza')loadPlazaMessages();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'post_reactions'},()=>{if(isFeedTab())loadFeed();})
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'character_interactions'},payload=>{
       const row=payload.new||{};
       if(row.trigger_type==='plaza_chat')return;
