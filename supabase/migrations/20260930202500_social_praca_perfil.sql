@@ -1,4 +1,3 @@
-
 -- AVESSO social + praça viva + nicknames livres
 alter table public.profiles drop constraint if exists profiles_display_name_check;
 alter table public.profiles drop constraint if exists profiles_display_name_len;
@@ -18,18 +17,18 @@ create index if not exists friendships_requester_idx on public.friendships(reque
 create index if not exists friendships_addressee_idx on public.friendships(addressee_id,status);
 alter table public.friendships enable row level security;
 drop policy if exists friendships_read_parties on public.friendships;
-create policy friendships_read_parties on public.friendships
-for select to authenticated using ((select auth.uid()) in (requester_id,addressee_id));
+create policy friendships_read_parties on public.friendships for select to authenticated
+using ((select auth.uid()) in (requester_id,addressee_id));
 drop policy if exists friendships_insert_self on public.friendships;
-create policy friendships_insert_self on public.friendships
-for insert to authenticated with check ((select auth.uid())=requester_id and requester_id<>addressee_id);
+create policy friendships_insert_self on public.friendships for insert to authenticated
+with check ((select auth.uid())=requester_id and requester_id<>addressee_id);
 drop policy if exists friendships_update_parties on public.friendships;
-create policy friendships_update_parties on public.friendships
-for update to authenticated using ((select auth.uid()) in (requester_id,addressee_id))
+create policy friendships_update_parties on public.friendships for update to authenticated
+using ((select auth.uid()) in (requester_id,addressee_id))
 with check ((select auth.uid()) in (requester_id,addressee_id));
 drop policy if exists friendships_delete_parties on public.friendships;
-create policy friendships_delete_parties on public.friendships
-for delete to authenticated using ((select auth.uid()) in (requester_id,addressee_id));
+create policy friendships_delete_parties on public.friendships for delete to authenticated
+using ((select auth.uid()) in (requester_id,addressee_id));
 grant select,insert,update,delete on public.friendships to authenticated;
 
 create table if not exists public.plaza_messages (
@@ -38,10 +37,11 @@ create table if not exists public.plaza_messages (
   character_id uuid references public.characters(id) on delete set null,
   body text not null check (char_length(body) between 1 and 500),
   reply_to uuid references public.plaza_messages(id) on delete set null,
-  message_kind text not null default 'chat' check (message_kind in ('chat','npc','system')),
-  created_at timestamptz not null default now(),
-  check (user_id is not null or character_id is not null)
+  created_at timestamptz not null default now()
 );
+alter table public.plaza_messages add column if not exists message_kind text not null default 'chat';
+alter table public.plaza_messages drop constraint if exists plaza_messages_message_kind_check;
+alter table public.plaza_messages add constraint plaza_messages_message_kind_check check (message_kind in ('chat','npc','system'));
 create index if not exists plaza_messages_created_idx on public.plaza_messages(created_at desc);
 alter table public.plaza_messages enable row level security;
 drop policy if exists plaza_read_authenticated on public.plaza_messages;
@@ -53,10 +53,7 @@ grant select,insert on public.plaza_messages to authenticated;
 
 do $$
 begin
-  if not exists (
-    select 1 from pg_publication_tables where pubname='supabase_realtime'
-      and schemaname='public' and tablename='plaza_messages'
-  ) then
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='plaza_messages') then
     alter publication supabase_realtime add table public.plaza_messages;
   end if;
 end $$;
