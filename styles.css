@@ -88,3 +88,19 @@ dialog{width:min(480px,calc(100% - 28px));border:1px solid var(--line);border-ra
 .inhabitant-portrait .character-hq{width:100%;height:100%;object-fit:contain;padding:4px}
 .tower-king .character-hq{image-rendering:pixelated}
 .plaza-npc-live .character-hq{image-rendering:pixelated}
+
+/* Escala consciente: pixel art nítida em vez de thumbnail esticada */
+.inhabitant-card{grid-template-columns:170px minmax(0,1fr)!important}
+.inhabitant-portrait{display:flex!important;align-items:flex-end!important;justify-content:center!important;min-height:280px!important}
+.inhabitant-portrait .character-hq{width:150px!important;height:auto!important;max-height:245px!important;padding:0!important;margin:auto auto 8px!important}
+.tower-king{grid-template-columns:230px 1fr!important}
+.tower-king .character-hq{width:200px!important;height:auto!important;max-height:300px!important}
+.plaza-npc-live .character-hq{width:170px!important;height:auto!important;max-height:250px!important}
+.character-reply .character-hq{width:36px!important;height:48px!important;object-fit:contain!important}
+@media(max-width:760px){
+  .inhabitant-card{grid-template-columns:1fr!important}
+  .inhabitant-portrait{min-height:230px!important}
+  .inhabitant-portrait .character-hq{width:140px!important;max-height:210px!important}
+  .tower-king{grid-template-columns:1fr!important}
+  .tower-king .character-hq{width:170px!important}
+}
