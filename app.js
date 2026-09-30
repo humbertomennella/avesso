@@ -432,6 +432,36 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   else if(state.tab==='plaza')await renderPlaza();
   else {loadFeed();loadTower();if(state.tab==='feed')pulseTower(false);}
 });
+async function renderPlaza(){
+  if(state.tab!=='plaza')return;
+  const version=state.viewVersion;
+  $('#feed-status').classList.add('hidden');
+  const npc=state.world.characters.npc;
+  const [postsRes,greeting]=await Promise.all([
+    supabase.from('feed_attention').select('id,author_name,body,image_url,response_count,created_at').order('created_at',{ascending:false}).limit(4),
+    askWorldCharacter('plaza_opened',{character:'npc',silent:true,surface:'plaza',action_type:'plaza_opened'})
+  ]);
+  if(state.tab!=='plaza'||version!==state.viewVersion)return;
+  const posts=postsRes.data||[];
+  const line=greeting?.interaction?.body||'Tem alguma missão para mim? Pode ser pequena. Eu não fui escrito para salvar o mundo.';
+  $('#feed-list').innerHTML=`<section class="plaza-world">
+    <div class="plaza-sky"><span>AVESSO.EXE // PRAÇA CENTRAL</span><h2>PRAÇA<br>CENTRAL</h2><p>O lugar onde o Mundo do AVESSO finge que tem urbanismo.</p></div>
+    <div class="plaza-stage">
+      <div class="plaza-npc"><img src="${escapeHtml(characterImage(npc))}" alt="NPC"><div class="npc-bubble"><b>NPC</b><p id="npc-plaza-line">${escapeHtml(line)}</p><button id="npc-talk">falar com o NPC</button></div></div>
+      <div class="plaza-board"><div class="plaza-board-title">QUADRO DA PRAÇA // O QUE ESTÁ ACONTECENDO</div>
+      ${posts.map(p=>`<article><span>${escapeHtml(p.author_name)} · ${ago(p.created_at)}</span><p>${escapeHtml((p.body||'imagem sem legenda').slice(0,130))}</p>${p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="">`:''}<small>${p.response_count} resposta${p.response_count===1?'':'s'}</small></article>`).join('')||'<p class="plaza-empty">A praça está quieta. Em jogos isso geralmente é péssimo sinal.</p>'}</div>
+    </div>
+    <footer class="plaza-footer">NPC.DAT // MISSÕES SECUNDÁRIAS &gt; OBJETIVOS PRINCIPAIS</footer>
+  </section>`;
+  $('#npc-talk').onclick=async()=>{
+    trackAction('talk_to_npc','plaza',{},false);
+    const b=$('#npc-talk');b.disabled=true;b.textContent='consultando o roteiro...';
+    const data=await askWorldCharacter('plaza_action',{character:'npc',silent:true,surface:'plaza',action_type:'talk_to_npc'});
+    b.disabled=false;b.textContent='falar com o NPC';
+    if(data?.interaction?.body)$('#npc-plaza-line').textContent=data.interaction.body;
+  };
+}
+
 async function renderInhabitantsPage(){
   if(state.tab!=='residents')return;
   const viewVersion=state.viewVersion;
