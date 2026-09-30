@@ -196,7 +196,7 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();await loadWorldState();await Promise.all([loadFeed(),loadImpact(),loadTower()]);subscribeRealtime();scheduleIdleWorld();scheduleTower();trackAction('login','app',{},false);setTimeout(()=>askWorldCharacter('login'),1400);}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();await loadWorldState();await Promise.all([loadFeed(),loadImpact(),loadTower()]);subscribeRealtime();scheduleIdleWorld();scheduleTower();trackAction('login','app',{},false);setTimeout(()=>askWorldCharacter('login'),900);setTimeout(()=>pulseTower(true),1600);}
 function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
@@ -216,6 +216,8 @@ function updateComposerTarget(){
   $('#post-body').placeholder=directed?'Reconheça, pergunte ou ofereça ajuda a essa pessoa.':'Pergunte, reconheça ou compartilhe algo que ajude a comunidade.';
 }
 $('#post-target').addEventListener('change',updateComposerTarget);
+$('#post-target').addEventListener('change',e=>trackAction('post_target_changed','composer',{target:e.target.value},false));
+$('#post-visibility').addEventListener('change',e=>trackAction('post_visibility_changed','composer',{visibility:e.target.value},false));
 updateComposerTarget();
 $('#post-body').addEventListener('input',e=>$('#char-count').textContent=420-e.target.value.length);
 $('#choose-post-image').onclick=()=>$('#post-image').click();
@@ -246,6 +248,7 @@ $('#publish-post').onclick=async()=>{
   const directed=$('#post-target').value==='person';
   const imageFile=state.postImageFile;
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
+  if(imageFile&&directed&&$('#post-visibility').value==='privado')return toast('Imagem em mensagem privada ainda não foi liberada. Pixel público ou texto privado, por enquanto.');
   if(!imageFile&&body.length<12)return toast('O mínimo são 12 caracteres. Ou mande uma imagem e poupe a literatura.');
   $('#publish-post').disabled=true;
   let image_url=null;
@@ -402,7 +405,7 @@ async function loadTower(){
   box.innerHTML=rows.length?rows.map(x=>'<article><span>REI // '+ago(x.created_at)+'</span><p>'+escapeHtml(x.body)+'</p></article>').join(''):'<div class="tower-loading">O Rei está preparando uma apresentação com 73 slides. Ninguém pediu.</div>';
 }
 async function pulseTower(opening=false){
-  if(!isFeedTab()||state.world.preferences?.participation_mode==='observer')return;
+  if(!isFeedTab())return;
   const data=await askWorldCharacter(opening?'tower_opened':'tower_pulse',{character:'rei_engajamento',silent:true,surface:'tower',action_type:opening?'tower_opened':'tower_pulse'});
   if(data)await loadTower();
 }
