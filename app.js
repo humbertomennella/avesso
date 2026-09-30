@@ -211,12 +211,14 @@ $('#publish-post').onclick=async()=>{
 async function loadThreadData(posts){
   const ids=posts.map(p=>p.id);
   if(!ids.length)return{responses:{},supports:{}};
-  const [responsesRes,supportRes]=await Promise.all([
+  const [responsesRes,supportRes,characterRes]=await Promise.all([
     supabase.from('responses').select('id,post_id,author_id,body,created_at').in('post_id',ids).order('created_at',{ascending:true}),
-    supabase.from('support_signals').select('post_id,supporter_id,kind,created_at').in('post_id',ids).order('created_at',{ascending:true})
+    supabase.from('support_signals').select('post_id,supporter_id,kind,created_at').in('post_id',ids).order('created_at',{ascending:true}),
+    supabase.from('character_interactions').select('id,post_id,character_id,body,created_at,source,visibility').in('post_id',ids).order('created_at',{ascending:true})
   ]);
   const responses=responsesRes.data||[];
   const supports=supportRes.data||[];
+  const characterReplies=(characterRes.data||[]).filter(x=>x.post_id);
   const profileIds=[...new Set([...responses.map(r=>r.author_id),...supports.map(s=>s.supporter_id)].filter(Boolean))];
   let profiles={};
   if(profileIds.length){
@@ -225,9 +227,11 @@ async function loadThreadData(posts){
   }
   const byPost={};
   const supportByPost={};
+  const charactersByPost={};
   for(const r of responses)(byPost[r.post_id]??=[]).push({...r,author:profiles[r.author_id]});
   for(const s of supports)(supportByPost[s.post_id]??=[]).push({...s,supporter:profiles[s.supporter_id]});
-  return{responses:byPost,supports:supportByPost};
+  for(const x of characterReplies)(charactersByPost[x.post_id]??=[]).push({...x,character:state.world.charactersById[x.character_id]});
+  return{responses:byPost,supports:supportByPost,characters:charactersByPost};
 }
 function supportLabel(kind){
   return({escutei:'escutei você',posso_ajudar:'posso ajudar',estou_aqui:'estou aqui'})[kind]||kind;
@@ -255,7 +259,7 @@ async function loadFeed(){
     if(state.tab==='feed')setTimeout(()=>askWorldCharacter('feed_attention'),2200);
   }else if(posts.length)algoSay('feed_default');
 }
-function renderFeed(posts,threadData={responses:{},supports:{}}){
+function renderFeed(posts,threadData={responses:{},supports:{},characters:{}}){
   const list=$('#feed-list');
   if(!posts.length){
     list.innerHTML='<div class="feed-status">Nada aqui. Talvez as pessoas estejam vivendo. Estranho, mas permitido.</div>';
@@ -265,13 +269,16 @@ function renderFeed(posts,threadData={responses:{},supports:{}}){
   list.innerHTML=posts.map(p=>{
     const responses=threadData.responses[p.id]||[];
     const supports=threadData.supports[p.id]||[];
+    const characterReplies=threadData.characters[p.id]||[];
     const responseHtml=responses.length?`<div class="thread-block"><div class="thread-title">CONVERSA // ${responses.length} ${responses.length===1?'RESPOSTA':'RESPOSTAS'}</div>${responses.map(r=>`<div class="thread-reply"><span class="mini-avatar">${initials(r.author?.display_name||'?')}</span><div><div class="thread-author">${escapeHtml(r.author?.display_name||'alguém')} <small>@${escapeHtml(r.author?.handle||'...')} · ${ago(r.created_at)}</small></div><p>${escapeHtml(r.body)}</p></div></div>`).join('')}</div>`:'';
+    const characterHtml=characterReplies.length?`<div class="thread-block character-thread"><div class="thread-title">MUNDO // HABITANTES</div>${characterReplies.map(x=>{const c=x.character||{};return `<div class="thread-reply character-reply"><img src="${escapeHtml(characterImage(c))}" alt="${escapeHtml(c.name||'Habitante')}"><div><div class="thread-author">${escapeHtml(c.name||'Habitante')} <b>HABITANTE</b> <small>· ${ago(x.created_at)}</small></div><p>${escapeHtml(x.body)}</p></div></div>`}).join('')}</div>`:'';
     const supportHtml=supports.length?`<div class="private-support-log"><span>PRIVADO // APOIO</span>${supports.map(s=>`<p><strong>${escapeHtml(s.supporter?.display_name||'alguém')}</strong> sinalizou: “${escapeHtml(supportLabel(s.kind))}”.</p>`).join('')}</div>`:'';
     const canSupport=p.author_id!==state.profile.id;
     return `<article class="post-card" data-post-card="${p.id}">
       <div class="post-route"><span class="mini-avatar">${initials(p.author_name)}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       <p class="post-body">${escapeHtml(p.body)}</p>
       ${responseHtml}
+      ${characterHtml}
       ${supportHtml}
       <div class="post-actions"><button data-reply-toggle="${p.id}">↩ responder</button>${canSupport?`<button data-support-toggle="${p.id}">＋ apoiar em privado</button>`:''}${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
       <div class="inline-reply hidden" data-reply-box="${p.id}"><textarea maxlength="420" placeholder="Responda à pessoa, não ao algoritmo."></textarea><div><button data-reply-send="${p.id}">enviar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
