@@ -14,6 +14,18 @@ Rede social invertida: atenção vale mais que exposição.
 - Atualização em tempo real de publicações e respostas.
 - RLS em todas as tabelas expostas.
 
+## Mundo do AVESSO
+
+O AVESSO está evoluindo de uma rede social funcional para um mundo digital persistente. O computador central, as ilhas, os personagens e os acontecimentos passam a fazer parte do funcionamento do produto, não apenas da identidade visual.
+
+Documentos-base:
+
+- [Bíblia do Mundo do AVESSO](docs/MUNDO_AVESSO.md)
+- [Protocolo de Interferência](docs/PROTOCOLO_INTERFERENCIA.md)
+- [Roadmap do Mundo do AVESSO](docs/ROADMAP_MUNDO_AVESSO.md)
+
+Princípio técnico: personagens podem interferir na apresentação, mas nunca falsificar autoria, destruir conteúdo ou tocar em áreas críticas de segurança e privacidade.
+
 ## Arquitetura
 
 - Front-end estático: HTML, CSS e JavaScript modular.
