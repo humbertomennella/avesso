@@ -417,7 +417,7 @@ function applyAppTabLayout(){
   const worldOpen=['residents','plaza','tower'].includes(state.tab);
   $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
   $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile'||state.tab==='public-profile');
-  $('.feed-header')?.classList.toggle('hidden',worldOpen);
+  $('.feed-header')?.classList.toggle('hidden',worldOpen||state.tab==='profile'||state.tab==='public-profile');
   $('#refresh-feed')?.classList.toggle('hidden',worldOpen||state.tab==='profile'||state.tab==='public-profile');
 }
 document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
@@ -698,8 +698,8 @@ async function openPublicProfile(userId){
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   $('#feed-status').classList.add('hidden');
   const [{data:user,error},{data:posts},friend]=await Promise.all([
-    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,created_at').eq('id',userId).maybeSingle(),
-    supabase.from('posts').select('id,body,image_url,created_at,response_count:responses(count)').eq('author_id',userId).eq('visibility','publico').order('created_at',{ascending:false}).limit(12),
+    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url').eq('id',userId).maybeSingle(),
+    supabase.from('posts').select('id,body,image_url,created_at').eq('author_id',userId).eq('visibility','publico').order('created_at',{ascending:false}).limit(12),
     friendshipWith(userId)
   ]);
   if(error||!user){$('#feed-list').innerHTML='<div class="feed-status">Esse Canto não foi encontrado. Talvez tenha ido buscar café.</div>';return;}
