@@ -1020,3 +1020,87 @@ dialog{width:min(480px,calc(100% - 28px));border:1px solid var(--line);border-ra
     background:rgba(216,255,62,.94)!important;
   }
 }
+
+
+/* =========================================================
+   WALLPAPER VISÍVEL EM DESKTOP E MOBILE
+   O fundo agora vive na viewport, não atrás de um z-index negativo.
+   ========================================================= */
+body.avesso-app-active{
+  position:relative;
+  background:var(--bg);
+}
+
+body.avesso-app-active::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  background-image:
+    linear-gradient(180deg,#0507089a 0%,#050708b8 58%,#050708d0 100%),
+    var(--avesso-app-wallpaper);
+  background-size:cover;
+  background-position:center center;
+  background-repeat:no-repeat;
+  filter:saturate(1.04) contrast(1.03);
+}
+
+body.avesso-app-active #app-view{
+  position:relative;
+  z-index:1;
+  background:transparent!important;
+}
+
+body.avesso-app-active #app-view::before,
+body.avesso-app-active #app-view::after{
+  display:none!important;
+}
+
+/* No Meu Canto o papel selecionado passa a ser o cenário da página inteira. */
+body.avesso-app-active .profile-control{
+  background:transparent!important;
+}
+
+body.avesso-app-active .profile-control::before{
+  display:none!important;
+}
+
+body.avesso-app-active .profile-control-hero{
+  background:#080c0dc4!important;
+  backdrop-filter:blur(2px);
+  -webkit-backdrop-filter:blur(2px);
+}
+
+body.avesso-app-active .profile-settings-card,
+body.avesso-app-active .friends-control,
+body.avesso-app-active .wallpaper-control,
+body.avesso-app-active .profile-album-control,
+body.avesso-app-active .world-preferences{
+  background:#0b1012df!important;
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
+}
+
+@media (max-width:760px){
+  body.avesso-app-active::before{
+    background-image:
+      linear-gradient(180deg,#05070872 0%,#0507088f 55%,#050708ad 100%),
+      var(--avesso-app-wallpaper);
+    background-size:cover;
+    background-position:center center;
+  }
+
+  body.avesso-app-active #app-view{
+    min-height:100dvh;
+  }
+
+  body.avesso-app-active .profile-control-hero,
+  body.avesso-app-active .profile-settings-card,
+  body.avesso-app-active .friends-control,
+  body.avesso-app-active .wallpaper-control,
+  body.avesso-app-active .profile-album-control,
+  body.avesso-app-active .world-preferences{
+    background:#0a0f11d1!important;
+  }
+}
