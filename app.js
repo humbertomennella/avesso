@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -95,23 +95,30 @@ function armBrowserNotifications(){
   const ask=()=>{state.notificationPermissionArmed=false;requestBrowserNotifications({quiet:true});};
   document.addEventListener('pointerdown',ask,{once:true,capture:true});
 }
-function browserNotify({title='AVESSO',body='',avatar='',kind='message',action=null}={}){
-  if(!document.hidden||!('Notification' in window)||Notification.permission!=='granted')return;
+async function registerNotificationWorker(){
+  if(state.notificationRegistration||!('serviceWorker' in navigator))return state.notificationRegistration;
   try{
-    const icon=avatar?new URL(avatar,SITE_URL).href:new URL('assets/avatars/robo-01.svg',SITE_URL).href;
-    const n=new Notification(title,{
-      body,
-      icon,
-      badge:new URL('assets/avatars/robo-01.svg',SITE_URL).href,
-      tag:`avesso-${kind}-${title}`,
-      renotify:true,
-      silent:false
-    });
-    n.onclick=()=>{
-      window.focus();
-      n.close();
-      if(typeof action==='function')action();
-    };
+    state.notificationRegistration=await navigator.serviceWorker.register(new URL('sw.js',SITE_URL).href,{scope:new URL('./',SITE_URL).pathname});
+    return state.notificationRegistration;
+  }catch{return null;}
+}
+async function browserNotify({title='AVESSO',body='',avatar='',kind='message',action=null}={}){
+  if(!document.hidden||!('Notification' in window)||Notification.permission!=='granted')return;
+  const icon=avatar?new URL(avatar,SITE_URL).href:new URL('assets/avatars/robo-01.svg',SITE_URL).href;
+  const options={
+    body,
+    icon,
+    badge:new URL('assets/avatars/robo-01.svg',SITE_URL).href,
+    tag:`avesso-${kind}-${title}`,
+    renotify:true,
+    silent:false,
+    data:{url:SITE_URL,kind}
+  };
+  try{
+    const registration=await registerNotificationWorker();
+    if(registration?.showNotification){await registration.showNotification(title,options);return;}
+    const n=new Notification(title,options);
+    n.onclick=()=>{window.focus();n.close();if(typeof action==='function')action();};
     setTimeout(()=>n.close(),9000);
   }catch{}
 }
@@ -402,7 +409,7 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();await primeFriendPresenceCache();startFriendPresenceWatch();armBrowserNotifications();startDirectRealtime();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();await primeFriendPresenceCache();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
 function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
@@ -1154,10 +1161,15 @@ async function loadFriendPanel(){
   bindProfileLinks();
 }
 async function answerFriendRequest(id,accept){
-  const {error}=accept
-    ?await supabase.from('friendships').update({status:'accepted',updated_at:new Date().toISOString()}).eq('id',id)
-    :await supabase.from('friendships').delete().eq('id',id);
-  if(error)return toast('A amizade tropeçou na burocracia.');
+  let result;
+  if(accept)result=await supabase.from('friendships').update({status:'accepted',updated_at:new Date().toISOString()}).eq('id',id).select().single();
+  else result=await supabase.from('friendships').delete().eq('id',id).select().single();
+  if(result.error)return toast('A amizade tropeçou na burocracia.');
+  if(accept&&result.data){
+    const peerId=result.data.requester_id===state.profile.id?result.data.addressee_id:result.data.requester_id;
+    const peer=await profileById(peerId);
+    if(peer)state.friendPresence[peer.id]=cachedPresenceEntry(peer);
+  }
   toast(accept?'Amizade aceita. Nenhum algoritmo comemorou.':'Pedido recusado. A civilização continua.');
   loadFriendPanel();
 }
