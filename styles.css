@@ -1104,3 +1104,288 @@ body.avesso-app-active .world-preferences{
     background:#0a0f11d1!important;
   }
 }
+
+
+/* =========================================================
+   MEU CANTO: avatar proporcional + mural de recados
+   ========================================================= */
+body.avesso-app-active .profile-control-hero{
+  min-height:160px!important;
+  align-items:center!important;
+}
+
+body.avesso-app-active .profile-avatar-large{
+  width:112px!important;
+  height:112px!important;
+  flex:0 0 112px!important;
+  border:1px solid #22d9ee66;
+  background:#050708;
+  overflow:hidden;
+  box-shadow:7px 7px 0 #020404;
+}
+
+body.avesso-app-active .profile-avatar-large img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+}
+
+body.avesso-app-active .public-profile>header{
+  grid-template-columns:118px minmax(0,1fr)!important;
+  align-items:start;
+}
+
+body.avesso-app-active .public-profile-avatar{
+  width:118px!important;
+  height:118px!important;
+}
+
+/* Recados, porque aparentemente o Orkut deixou herdeiros */
+.guestbook-section{
+  border:1px solid var(--line);
+  background:#0b1012df;
+  padding:20px;
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
+}
+
+.guestbook-section>h2{
+  margin:7px 0 8px;
+  font-size:1.5rem;
+}
+
+.guestbook-section>p{
+  max-width:780px;
+  margin:0 0 15px;
+  color:var(--muted);
+  line-height:1.55;
+}
+
+.guestbook-composer{
+  display:grid;
+  gap:8px;
+  margin:15px 0;
+  padding:12px;
+  border:1px dashed #3a494d;
+  background:#070b0dd9;
+}
+
+.guestbook-composer textarea{
+  width:100%;
+  min-height:92px;
+  max-height:260px;
+  resize:vertical;
+  margin:0;
+}
+
+.guestbook-composer>div{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+}
+
+.guestbook-file{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:36px;
+  border:1px solid #334146;
+  padding:7px 10px;
+  color:#aeb9b7;
+  font:700 .56rem var(--mono);
+  cursor:pointer;
+  background:#0a0f11;
+}
+
+.guestbook-file:hover{
+  color:var(--acid);
+  border-color:var(--acid);
+}
+
+.guestbook-file input{
+  display:none;
+}
+
+#guestbook-submit{
+  min-height:36px;
+  border:1px solid var(--acid);
+  background:var(--acid);
+  color:#090b0c;
+  padding:7px 12px;
+  font:800 .58rem var(--mono);
+  cursor:pointer;
+}
+
+#guestbook-submit:disabled{
+  opacity:.55;
+  cursor:wait;
+}
+
+.guestbook-locked{
+  margin:14px 0;
+  padding:10px 12px;
+  border-left:2px solid var(--violet);
+  background:#9b7cff0b;
+  color:#bfb7d7;
+  font:600 .58rem/1.5 var(--mono);
+}
+
+.guestbook-list{
+  display:grid;
+  gap:9px;
+}
+
+.guestbook-card{
+  border:1px solid #273438;
+  background:#080d0ff0;
+  padding:11px;
+}
+
+.guestbook-card>header{
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr) auto;
+  gap:9px;
+  align-items:center;
+  margin-bottom:9px;
+}
+
+.guestbook-avatar{
+  width:42px;
+  height:42px;
+  padding:0;
+  border:1px solid #334146;
+  background:#050708;
+  overflow:hidden;
+  cursor:pointer;
+}
+
+.guestbook-avatar img{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:cover;
+  image-rendering:pixelated;
+}
+
+.guestbook-card header small{
+  display:block;
+  margin-top:3px;
+  color:#73817f;
+  font:500 .52rem var(--mono);
+}
+
+.guestbook-delete{
+  width:28px;
+  height:28px;
+  border:1px solid #4b2c31;
+  background:#160a0c;
+  color:#ff756b;
+  font:800 .8rem var(--mono);
+  cursor:pointer;
+}
+
+.guestbook-delete:hover{
+  border-color:var(--coral);
+  color:#fff;
+}
+
+.guestbook-card>p{
+  margin:6px 0 0;
+  color:#d3d9d7;
+  line-height:1.58;
+  overflow-wrap:anywhere;
+}
+
+.guestbook-link{
+  color:var(--cyan);
+  text-decoration:none;
+  border-bottom:1px dashed #22d9ee66;
+}
+
+.guestbook-link:hover{
+  color:var(--acid);
+  border-color:var(--acid);
+}
+
+.guestbook-card figure{
+  margin:10px 0 0;
+  border:1px solid #2b383b;
+  background:#030506;
+  overflow:hidden;
+}
+
+.guestbook-card figure img{
+  display:block;
+  width:100%;
+  max-height:560px;
+  object-fit:contain;
+}
+
+.guestbook-empty{
+  margin:0;
+  padding:16px;
+  border:1px dashed #2e3a3e;
+  color:#74817f;
+  font:500 .6rem/1.5 var(--mono);
+}
+
+/* Interações dos habitantes: uma por vez e sem competir visualmente com o usuário */
+.world-encounter-float{
+  max-height:min(360px,calc(100vh - 60px));
+}
+
+@media(max-width:760px){
+  body.avesso-app-active .profile-control-hero{
+    grid-template-columns:72px minmax(0,1fr)!important;
+    min-height:0!important;
+  }
+
+  body.avesso-app-active .profile-avatar-large{
+    width:72px!important;
+    height:72px!important;
+    flex:0 0 72px!important;
+    box-shadow:4px 4px 0 #020404;
+  }
+
+  body.avesso-app-active .public-profile>header{
+    grid-template-columns:76px minmax(0,1fr)!important;
+  }
+
+  body.avesso-app-active .public-profile-avatar{
+    width:76px!important;
+    height:76px!important;
+  }
+
+  .guestbook-section{
+    padding:13px;
+  }
+
+  .guestbook-section>h2{
+    font-size:1.25rem;
+  }
+
+  .guestbook-composer>div{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+
+  .guestbook-file,
+  #guestbook-submit{
+    width:100%;
+  }
+
+  .guestbook-card>header{
+    grid-template-columns:38px minmax(0,1fr) auto;
+  }
+
+  .guestbook-avatar{
+    width:38px;
+    height:38px;
+  }
+
+  .guestbook-card figure img{
+    max-height:62vh;
+  }
+}

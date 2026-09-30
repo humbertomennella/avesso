@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -123,6 +123,8 @@ const PHOTO_REACTIONS=[
   ['quase_arte','✦','quase arte']
 ];
 function publicAlbumUrl(path){return supabase.storage.from('avesso-albums').getPublicUrl(path).data.publicUrl;}
+function guestbookImageUrl(path){return supabase.storage.from('avesso-recados').getPublicUrl(path).data.publicUrl;}
+function richText(value=''){const escaped=escapeHtml(value).replace(/\n/g,'<br>');return escaped.replace(/(https?:\/\/[^\s<]+)/g,'<a class="guestbook-link" href="$1" target="_blank" rel="noopener noreferrer">$1</a>');}
 function safeFileName(name='arquivo'){return name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/-+/g,'-').slice(-90)||'arquivo';}
 
 function avatarHtml(url,name='?'){ return url?`<img src="${escapeAttr(url)}" alt="" loading="lazy">`:escapeHtml(initials(name)); }
@@ -170,10 +172,20 @@ function paintEncounter(payload,preview=false){
   $('#encounter-line').textContent=interaction.body||payload.text||'...';
   $('#encounter-source').textContent=preview?'ARQUIVO DO HABITANTE':(interaction.source==='ai'||payload.ai?'MUNDO // AO VIVO':'MUNDO // ROTEIRO');
 }
+function encounterKey(payload){
+  const c=payload?.character||{};
+  const interaction=payload?.interaction||{};
+  return `${c.slug||c.id||c.name||'habitante'}|${String(interaction.body||payload?.text||'').trim().slice(0,120)}`;
+}
 function runEncounterQueue(){
   if(state.world.notificationBusy)return;
   const next=state.world.notificationQueue.shift();
   if(!next)return;
+  const now=Date.now();
+  if(!next.preview&&(state.socialNotificationBusy||now-state.world.lastNotificationAt<90000)){
+    state.world.notificationQueue.length=0;
+    return;
+  }
   state.world.notificationBusy=true;
   const card=$('#world-encounter');
   paintEncounter(next.payload,next.preview);
@@ -192,7 +204,8 @@ function dismissEncounter(){
     card.classList.add('hidden');
     card.classList.remove('msn-out');
     state.world.notificationBusy=false;
-    runEncounterQueue();
+    state.world.lastNotificationAt=Date.now();
+    state.world.notificationQueue.length=0;
   },480);
 }
 function showEncounter(payload,preview=false){
@@ -200,9 +213,20 @@ function showEncounter(payload,preview=false){
   const interaction=payload.interaction||{};
   if(!preview&&interaction.id&&interaction.id===state.world.lastInteractionId)return;
   if(!preview&&interaction.id)state.world.lastInteractionId=interaction.id;
-  state.world.notificationQueue.push({payload,preview});
-  if(state.world.notificationQueue.length>4)state.world.notificationQueue.shift();
+  const key=encounterKey(payload);
+  if(!preview&&state.world.recentNotificationKeys.includes(key))return;
+  if(!preview&&(state.world.notificationBusy||state.socialNotificationBusy||Date.now()-state.world.lastNotificationAt<90000))return;
+  state.world.recentNotificationKeys=[key,...state.world.recentNotificationKeys.filter(x=>x!==key)].slice(0,8);
+  state.world.notificationQueue=[{payload,preview}];
   runEncounterQueue();
+}
+function maybeWorldCharacter(trigger,options={},chance=.16,cooldown=180000){
+  const now=Date.now();
+  if(!state.session||!state.profile||state.world.notificationBusy||state.socialNotificationBusy)return null;
+  if(now-state.world.lastReactiveAt<cooldown||now-state.world.lastNotificationAt<90000)return null;
+  if(Math.random()>chance)return null;
+  state.world.lastReactiveAt=now;
+  return askWorldCharacter(trigger,options);
 }
 async function askWorldCharacter(trigger,options={}){
   if(!state.session||!state.profile)return null;
@@ -558,7 +582,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
   trackAction('tab_view',state.tab,{tab:state.tab});
-  if(!['plaza','tower'].includes(state.tab))askWorldCharacter('tab_view',{action_type:'tab_view',surface:state.tab,metadata:{tab:state.tab}});
+  if(!['plaza','tower'].includes(state.tab))maybeWorldCharacter('tab_view',{action_type:'tab_view',surface:state.tab,metadata:{tab:state.tab}},.14,180000);
   if(state.tab==='profile')renderProfile();
   else if(state.tab==='residents')await renderInhabitantsPage();
   else if(state.tab==='plaza')await renderPlaza();
@@ -818,6 +842,19 @@ function startDirectRealtime(){
       if(state.tab==='profile')loadFriendPanel();
     })
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'profiles'},()=>{if(state.tab==='messages')renderMessagesPage();})
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'guestbook_entries'},async payload=>{
+      const row=payload.new||{};
+      if(row.profile_id!==me||row.author_id===me)return;
+      const author=await profileById(row.author_id);
+      socialNotify({
+        title:'Novo recado no seu Canto',
+        body:`${author?.display_name||'Alguém'} escreveu na sua parede. A internet de 2007 foi restaurada com sucesso.`,
+        avatar:author?.avatar_url||'',
+        kind:'message',
+        action:()=>openPublicProfile(row.author_id)
+      });
+      if(state.tab==='profile')loadGuestbook(me,'#profile-guestbook');
+    })
     .subscribe();
 }
 async function loadDirectConversation(peerId){
@@ -1097,6 +1134,7 @@ async function renderProfile(){
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
     <section class="profile-album-control"><span class="section-code">ÁLBUM // FOTOS QUE VOCÊ DECIDIU NÃO APAGAR</span><h2>Seu álbum</h2><p>Poste imagens no seu Canto. Reações existem, mas continuam sem virar olimpíada social.</p><div class="album-upload-row"><input id="album-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><input id="album-caption" maxlength="180" placeholder="legenda opcional. autocontrole também."><button id="album-upload">adicionar foto</button></div><div id="profile-album" class="profile-album-grid"><p>carregando memórias...</p></div></section>
+    <section class="guestbook-section guestbook-own"><span class="section-code">RECADOS // DEIXARAM ISSO AQUI</span><h2>Recados no seu Canto</h2><p>Amigos podem deixar texto, links, emojis e imagens. Você continua com a sofisticada tecnologia chamada “apagar”.</p><div id="profile-guestbook" class="guestbook-list"><p>procurando bilhetes na porta...</p></div></section>
     <section class="friends-control"><span class="section-code">PESSOAS // AMIGOS</span><h2>Lista de pessoas que você aceitou voluntariamente</h2><div id="friends-panel"><p>carregando relações humanas...</p></div></section>
   </section>
   <section class="world-preferences">
@@ -1122,8 +1160,9 @@ async function renderProfile(){
   setWorldModeLabel();
   loadFriendPanel();
   loadAlbum(state.profile.id,true);
+  loadGuestbook(state.profile.id,'#profile-guestbook');
   algoSay('profile');
-  setTimeout(()=>askWorldCharacter('profile'),700);
+  setTimeout(()=>maybeWorldCharacter('profile',{surface:'profile'},.12,180000),900);
 }
 async function saveAvatar(url){
   if(!AVATAR_OPTIONS.some(x=>x[1]===url))return;
@@ -1155,6 +1194,69 @@ async function getFriendshipWith(userId){
     (r.addressee_id===state.profile.id&&r.requester_id===userId)
   )||null;
 }
+async function loadGuestbook(profileId,selector='#public-guestbook-list'){
+  const host=$(selector);if(!host||!profileId)return;
+  const {data:entries,error}=await supabase.from('guestbook_entries')
+    .select('id,profile_id,author_id,body,image_path,created_at')
+    .eq('profile_id',profileId)
+    .order('created_at',{ascending:false})
+    .limit(80);
+  if(error){host.innerHTML='<p class="guestbook-empty">Os recados caíram atrás da estante.</p>';return;}
+  const ids=[...new Set((entries||[]).map(x=>x.author_id))];
+  let profiles={};
+  if(ids.length){
+    const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',ids);
+    profiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));
+  }
+  host.innerHTML=(entries||[]).map(entry=>{
+    const author=profiles[entry.author_id]||{};
+    const canDelete=entry.author_id===state.profile.id||entry.profile_id===state.profile.id;
+    return `<article class="guestbook-card" data-recado-id="${entry.id}">
+      <header>
+        <button class="guestbook-avatar" data-profile-id="${entry.author_id}">${avatarHtml(author.avatar_url,author.display_name||'?')}</button>
+        <div><button class="user-link" data-profile-id="${entry.author_id}">${escapeHtml(author.display_name||'alguém')}</button><small>@${escapeHtml(author.handle||'...')} · ${ago(entry.created_at)}</small></div>
+        ${canDelete?`<button class="guestbook-delete" data-recado-delete="${entry.id}" data-recado-image="${escapeAttr(entry.image_path||'')}" title="Apagar recado">×</button>`:''}
+      </header>
+      ${entry.body?`<p>${richText(entry.body)}</p>`:''}
+      ${entry.image_path?`<figure><img src="${escapeAttr(guestbookImageUrl(entry.image_path))}" alt="Imagem deixada no recado" loading="lazy"></figure>`:''}
+    </article>`;
+  }).join('')||'<p class="guestbook-empty">Nenhum recado ainda. A parede está limpa de um jeito suspeito.</p>';
+  $$('[data-recado-delete]').forEach(b=>b.onclick=()=>deleteGuestbookEntry(b.dataset.recadoDelete,b.dataset.recadoImage,profileId,selector));
+}
+async function sendGuestbookEntry(profileId){
+  if(!profileId||profileId===state.profile.id)return;
+  const body=String($('#guestbook-body')?.value||'').trim().slice(0,1200);
+  const file=$('#guestbook-image')?.files?.[0]||null;
+  if(!body&&!file)return toast('Escreva alguma coisa ou escolha uma imagem. Telepatia segue fora do plano grátis.');
+  if(file&&file.size>8*1024*1024)return toast('Imagem de até 8 MB. O mural não é um datacenter.');
+  if(file&&!/^image\/(jpeg|png|webp|gif)$/i.test(file.type))return toast('No recado, imagem precisa ser JPG, PNG, WEBP ou GIF.');
+  const btn=$('#guestbook-submit');if(btn){btn.disabled=true;btn.textContent='pregando na parede...';}
+  let imagePath=null;
+  if(file){
+    imagePath=`${state.profile.id}/${profileId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
+    const {error:uploadError}=await supabase.storage.from('avesso-recados').upload(imagePath,file,{cacheControl:'3600',upsert:false,contentType:file.type});
+    if(uploadError){if(btn){btn.disabled=false;btn.textContent='deixar recado';}return toast('A imagem recusou a vida pública.');}
+  }
+  const {error}=await supabase.from('guestbook_entries').insert({profile_id:profileId,author_id:state.profile.id,body,image_path:imagePath});
+  if(error){
+    if(imagePath)await supabase.storage.from('avesso-recados').remove([imagePath]);
+    if(btn){btn.disabled=false;btn.textContent='deixar recado';}
+    return toast('O recado não foi deixado. Confirme se vocês ainda são amigos.');
+  }
+  if($('#guestbook-body'))$('#guestbook-body').value='';
+  if($('#guestbook-image'))$('#guestbook-image').value='';
+  if(btn){btn.disabled=false;btn.textContent='deixar recado';}
+  toast('Recado deixado. A parede agora tem testemunhas.');
+  trackAction('guestbook_post','public_profile',{profile_id:profileId,has_image:Boolean(file)});
+  loadGuestbook(profileId,'#public-guestbook-list');
+}
+async function deleteGuestbookEntry(id,imagePath,profileId,selector){
+  if(!id||!confirm('Apagar este recado? Sem cerimônia de encerramento.'))return;
+  const {error}=await supabase.from('guestbook_entries').delete().eq('id',id);
+  if(error)return toast('O recado se recusa a sair da parede.');
+  if(imagePath)await supabase.storage.from('avesso-recados').remove([imagePath]);
+  loadGuestbook(profileId,selector);
+}
 async function openPublicProfile(userId){
   if(!userId)return;
   if(userId===state.profile.id){document.querySelector('[data-app-tab="profile"]')?.click();return;}
@@ -1173,9 +1275,19 @@ async function openPublicProfile(userId){
   else if(friendship.status==='accepted')friendControl=`<button data-message-friend="${p.id}">↔ mensagem</button><button data-unfriend-public="${friendship.id}">− desfazer amizade</button>`;
   else if(friendship.status==='pending'&&friendship.addressee_id===state.profile.id)friendControl=`<button data-accept-public="${friendship.id}">aceitar amizade</button>`;
   else friendControl='<span class="friend-status">pedido enviado</span>';
+  const guestbookComposer=friendship?.status==='accepted'
+    ? '<div class="guestbook-composer"><textarea id="guestbook-body" maxlength="1200" placeholder="deixe um recado sem transformar isso em campanha..."></textarea><div><label class="guestbook-file">＋ imagem<input id="guestbook-image" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label><button id="guestbook-submit">deixar recado</button></div></div>'
+    : '<div class="guestbook-locked">Recados são para amigos. Civilização mínima, aparentemente.</div>';
   $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
     <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</p><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <section class="guestbook-section public-guestbook">
+      <span class="section-code">RECADOS // ESCREVA NA PAREDE DE ALGUÉM</span>
+      <h2>Recados para ${escapeHtml(p.display_name)}</h2>
+      <p>Uma relíquia social anterior ao “engajamento”. Texto, emoji, link e imagem. Só amigos podem escrever.</p>
+      ${guestbookComposer}
+      <div id="public-guestbook-list" class="guestbook-list"><p>carregando recados...</p></div>
+    </section>
     <section class="public-album"><h2>Álbum de ${escapeHtml(p.display_name)}</h2><div id="public-album" class="profile-album-grid"><p>abrindo gavetas...</p></div></section>
     <div class="public-posts"><h2>O que ${escapeHtml(p.display_name)} deixou por aqui</h2>${(postsRes.data||[]).map(post=>`<article class="post-card"><span class="post-meta">${ago(post.created_at)}</span><p class="post-body">${escapeHtml(post.body)}</p>${post.image_url?`<figure class="post-image"><img src="${escapeHtml(post.image_url)}" loading="lazy"></figure>`:''}</article>`).join('')||'<p class="feed-status">Nada público ainda.</p>'}</div>
   </section>`;
@@ -1184,6 +1296,8 @@ async function openPublicProfile(userId){
   $('[data-accept-public]')?.addEventListener('click',async e=>{await answerFriendRequest(e.currentTarget.dataset.acceptPublic,true);openPublicProfile(userId);});
   $('[data-message-friend]')?.addEventListener('click',e=>openFriendChat(e.currentTarget.dataset.messageFriend));
   $('[data-unfriend-public]')?.addEventListener('click',async e=>{if(confirm('Desfazer amizade? Sem textão de despedida.')){await supabase.from('friendships').delete().eq('id',e.currentTarget.dataset.unfriendPublic);openPublicProfile(userId);}});
+  $('#guestbook-submit')?.addEventListener('click',()=>sendGuestbookEntry(userId));
+  loadGuestbook(userId,'#public-guestbook-list');
   loadAlbum(userId,false);
 }
 function bindProfileLinks(){ /* links usam delegação global */ }
@@ -1201,11 +1315,10 @@ document.addEventListener('click',e=>{
   const label=(target.dataset.appTab||target.id||target.textContent||target.tagName).trim().slice(0,60);
   if(label){
     trackAction('screen_action',state.tab,{control:label});
-    const now=Date.now();
     const worldSurface=!['tower','plaza'].includes(state.tab);
-    if(worldSurface&&now-state.world.lastReactiveAt>45000&&Math.random()<0.38){
-      state.world.lastReactiveAt=now;
-      setTimeout(()=>askWorldCharacter('screen_action',{action_type:label,surface:state.tab,metadata:{control:label}}),650);
+    const noisySurface=target.closest('.dm-floating-window,.social-notifications,dialog,form,.guestbook-composer,.plaza-chat-room');
+    if(worldSurface&&!noisySurface){
+      setTimeout(()=>maybeWorldCharacter('screen_action',{action_type:label,surface:state.tab,metadata:{control:label}},.10,180000),650);
     }
   }
 },{passive:true});
@@ -1223,6 +1336,11 @@ function subscribeRealtime(){
       if(payload.new?.status==='active')toast(`EVENTO DO MUNDO // ${payload.new.title}`);
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'post_reactions'},()=>{if(isFeedTab())loadFeed();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'guestbook_entries'},payload=>{
+      const row=payload.new?.profile_id?payload.new:(payload.old||{});
+      if(state.tab==='profile'&&row.profile_id===state.profile?.id)loadGuestbook(state.profile.id,'#profile-guestbook');
+      if(state.tab==='public_profile'&&row.profile_id===state.publicProfileId)loadGuestbook(state.publicProfileId,'#public-guestbook-list');
+    })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'character_interactions'},payload=>{
       const row=payload.new||{};
       if(row.trigger_type==='plaza_chat')return;
