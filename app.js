@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', world:{preferences:null,settings:null,characters:{},dialogues:[]} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,lastInteractionId:null} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -27,6 +27,67 @@ function algoSay(context='feed_default'){
   const line=weightedPick(contextual.length?contextual:fallback);
   el.textContent=line?.body||'Estou tentando organizar pessoas sem transformá-las em gráfico. É um ambiente de trabalho hostil.';
 }
+function characterImage(character){
+  return character?.avatar_url||character?.image_path||'';
+}
+function renderResidents(){
+  const box=$('#resident-strip');
+  if(!box)return;
+  const order=['algo','404','npc','rei_engajamento','aquele_le_tudo','alem'];
+  box.innerHTML=order.map(slug=>state.world.characters[slug]).filter(Boolean).map(c=>`
+    <button class="resident" data-resident="${c.slug}" title="${escapeHtml(c.name)} — ${escapeHtml(c.role||'habitante')}">
+      <img src="${escapeHtml(characterImage(c))}" alt="${escapeHtml(c.name)}" />
+      <span>${escapeHtml(c.name)}</span>
+    </button>`).join('');
+  box.querySelectorAll('[data-resident]').forEach(b=>b.onclick=()=>{
+    const c=state.world.characters[b.dataset.resident];
+    if(!c)return;
+    showEncounter({character:c,interaction:{id:'peek-'+c.slug,body:`${c.role}. ${c.personality||'Morador do Mundo do AVESSO.'}`,source:'system'}},true);
+  });
+}
+function showEncounter(payload,preview=false){
+  const card=$('#world-encounter');
+  if(!card||!payload?.character)return;
+  const interaction=payload.interaction||{};
+  if(!preview&&interaction.id&&interaction.id===state.world.lastInteractionId)return;
+  if(!preview&&interaction.id)state.world.lastInteractionId=interaction.id;
+  const c=payload.character;
+  const img=characterImage(c)||state.world.characters[c.slug]?.avatar_url||state.world.characters[c.slug]?.image_path||'';
+  $('#encounter-image').src=img;
+  $('#encounter-image').alt=c.name||'Habitante';
+  $('#encounter-name').textContent=c.name||'Habitante';
+  $('#encounter-role').textContent=c.role||'habitante do AVESSO';
+  $('#encounter-line').textContent=interaction.body||payload.text||'...';
+  $('#encounter-source').textContent=preview?'ARQUIVO DO HABITANTE':(interaction.source==='ai'||payload.ai?'IA // AO VIVO':'MUNDO // ROTEIRO');
+  card.classList.remove('hidden');
+  card.classList.remove('pulse-in');
+  requestAnimationFrame(()=>card.classList.add('pulse-in'));
+}
+async function askWorldCharacter(trigger,options={}){
+  if(!state.session||!state.profile)return null;
+  try{
+    const {data,error}=await supabase.functions.invoke('world-character',{body:{
+      trigger,
+      character:options.character||null,
+      post_id:options.post_id||null
+    }});
+    if(error||!data||data.skipped)return null;
+    showEncounter(data);
+    return data;
+  }catch(e){
+    console.warn('O Mundo do AVESSO ficou quieto:',e);
+    return null;
+  }
+}
+function scheduleIdleWorld(){
+  clearTimeout(state.world.idleTimer);
+  if(!state.session)return;
+  const delay=(6+Math.random()*6)*60*1000;
+  state.world.idleTimer=setTimeout(async()=>{
+    await askWorldCharacter('idle');
+    scheduleIdleWorld();
+  },delay);
+}
 function setWorldModeLabel(){
   const el=$('#world-mode-label');
   if(!el)return;
@@ -40,7 +101,7 @@ async function loadWorldState(){
   const [prefsRes,settingsRes,charsRes]=await Promise.all([
     supabase.from('user_world_preferences').select('*').eq('user_id',state.profile.id).maybeSingle(),
     supabase.from('world_settings').select('*').eq('id','global').maybeSingle(),
-    supabase.from('characters').select('id,slug,name,role,accent_color').eq('is_active',true)
+    supabase.from('characters').select('id,slug,name,role,bio,accent_color,image_path,avatar_url,personality,home_location,presence_state').eq('is_active',true)
   ]);
   let prefs=prefsRes.data;
   if(!prefs&&!prefsRes.error){
@@ -50,6 +111,8 @@ async function loadWorldState(){
   state.world.preferences=prefs||{user_id:state.profile.id,participation_mode:'world',allow_post_interference:false,allow_profile_interference:false,allow_character_visits:true};
   state.world.settings=settingsRes.data||{id:'global',world_events_enabled:true,world_interventions_enabled:false};
   state.world.characters=Object.fromEntries((charsRes.data||[]).map(c=>[c.slug,c]));
+  state.world.charactersById=Object.fromEntries((charsRes.data||[]).map(c=>[c.id,c]));
+  renderResidents();
   state.world.dialogues=[];
   const algo=state.world.characters.algo;
   if(algo){
@@ -95,8 +158,8 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;$('#nav-avatar').textContent=initials(data.display_name);await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();}
-function leaveApp(){state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;$('#nav-avatar').textContent=initials(data.display_name);await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();scheduleIdleWorld();setTimeout(()=>askWorldCharacter('login'),1400);}
+function leaveApp(){clearTimeout(state.world.idleTimer);state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeHtml(p.display_name)}' data-handle='${escapeHtml(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -122,12 +185,12 @@ $('#publish-post').onclick=async()=>{
   const directed=$('#post-target').value==='person';
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
   if(body.length<12)return toast('O mínimo são 12 caracteres. A conversa merece mais que um aceno.');
-  const {error}=await supabase.from('posts').insert({
+  const {data:createdPost,error}=await supabase.from('posts').insert({
     author_id:state.profile.id,
     recipient_id:directed?state.recipient.id:null,
     body,
     visibility:directed?$('#post-visibility').value:'publico'
-  });
+  }).select('id').single();
   if(error)return toast('Não foi possível publicar. Tente novamente.');
   $('#post-body').value='';
   $('#recipient-search').value='';
@@ -136,9 +199,10 @@ $('#publish-post').onclick=async()=>{
   toast(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
   loadFeed();
   loadImpact();
+  if(createdPost?.id)setTimeout(()=>askWorldCharacter('post_created',{post_id:createdPost.id}),500);
 };
 
-async function loadFeed(){const status=$('#feed-status');status.classList.remove('hidden');status.textContent='ordenando pelo que importa, ideia radical...';algoSay('feed_loading');let query=supabase.from('feed_attention').select('*');if(state.tab==='quiet')query=query.eq('response_count',0);if(state.tab==='sent')query=query.eq('author_id',state.profile.id);const {data,error}=await query.order('attention_need',{ascending:false}).limit(40);if(error){status.textContent='O feed falhou. Até o anti-algoritmo tem segunda-feira.';algoSay('feed_error');return}status.classList.add('hidden');const posts=data||[];renderFeed(posts);if(posts.some(p=>p.response_count===0))algoSay('feed_attention');else if(posts.length)algoSay('feed_default');}
+async function loadFeed(){const status=$('#feed-status');status.classList.remove('hidden');status.textContent='ordenando pelo que importa, ideia radical...';algoSay('feed_loading');let query=supabase.from('feed_attention').select('*');if(state.tab==='quiet')query=query.eq('response_count',0);if(state.tab==='sent')query=query.eq('author_id',state.profile.id);const {data,error}=await query.order('attention_need',{ascending:false}).limit(40);if(error){status.textContent='O feed falhou. Até o anti-algoritmo tem segunda-feira.';algoSay('feed_error');return}status.classList.add('hidden');const posts=data||[];renderFeed(posts);if(posts.some(p=>p.response_count===0)){algoSay('feed_attention');if(state.tab==='feed')setTimeout(()=>askWorldCharacter('feed_attention'),2200);}else if(posts.length)algoSay('feed_default');}
 function renderFeed(posts){const list=$('#feed-list');if(!posts.length){list.innerHTML='<div class="feed-status">Nada aqui. Talvez as pessoas estejam vivendo. Estranho, mas permitido.</div>';algoSay('feed_empty');return}list.innerHTML=posts.map(p=>`<article class="post-card"><div class="post-route"><span class="mini-avatar">${initials(p.author_name)}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div><p class="post-body">${escapeHtml(p.body)}</p><div class="post-actions"><button data-reply='${p.id}'>↩ responder</button><button data-support='${p.id}'>＋ apoiar em privado</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div></article>`).join('');list.querySelectorAll('[data-support]').forEach(b=>b.onclick=()=>supportPost(b.dataset.support));list.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>replyPost(b.dataset.reply));}
 async function supportPost(post_id){const {error}=await supabase.from('support_signals').upsert({post_id,supporter_id:state.profile.id,kind:'estou_aqui'});toast(error?'Não foi possível apoiar agora.':'Apoio privado entregue. A plateia não ficou sabendo.');}
 async function replyPost(post_id){const body=prompt('Sua resposta (sim, este prompt é retrô de propósito):');if(!body||body.trim().length<2)return;const {error}=await supabase.from('responses').insert({post_id,author_id:state.profile.id,body:body.trim()});toast(error?'A resposta caiu no vazio. Tente novamente.':'Resposta enviada. Conversa: conceito vintage.');if(!error)loadFeed();}
@@ -164,6 +228,7 @@ function renderProfile(){
   $('#edit-bio').onclick=editBio;
   $('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
   algoSay('profile');
+  setTimeout(()=>askWorldCharacter('profile'),700);
 }
 async function editBio(){const bio=prompt('Bio curta, até 180 caracteres:',state.profile.bio||'');if(bio===null)return;const {data,error}=await supabase.from('profiles').update({bio:bio.slice(0,180)}).eq('id',state.profile.id).select().single();if(error)return toast('A bio resistiu à mudança.');state.profile=data;renderProfile();toast('Bio atualizada. Crise de identidade adiada.');}
 $('#refresh-feed').onclick=loadFeed;
@@ -178,6 +243,12 @@ function subscribeRealtime(){
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'world_events'},payload=>{
       if(payload.new?.status==='active')toast(`EVENTO DO MUNDO // ${payload.new.title}`);
+    })
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'character_interactions'},payload=>{
+      const row=payload.new||{};
+      if(row.user_id&&row.user_id!==state.profile?.id&&row.visibility!=='world')return;
+      const c=state.world.charactersById[row.character_id];
+      if(c)showEncounter({character:c,interaction:{id:row.id,body:row.body,source:row.source}});
     })
     .subscribe();
 }
