@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -39,6 +39,17 @@ const ACID_REACTIONS=[
   ['isso_escalou','↗','isso escalou'],
   ['humano_detectado','♡','humano detectado']
 ];
+const CHAT_THEMES=[
+  ['aqua','Aqua 2006','#3a8ea0'],
+  ['acid','Ácido','#b7e62d'],
+  ['violet','Violeta noturno','#7554c9'],
+  ['coral','Pânico coral','#db6557'],
+  ['midnight','Meia-noite azul','#315c91'],
+  ['graphite','Grafite morto','#555f67']
+];
+function chatThemeClass(theme=state.profile?.chat_theme||'aqua'){
+  return CHAT_THEMES.some(x=>x[0]===theme)?`theme-${theme}`:'theme-aqua';
+}
 function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.webp`;}
 function applyAppWallpaper(){
   const useProfileWallpaper=state.tab==='profile';
@@ -57,7 +68,7 @@ function audioContext(){
 function playUiSound(kind='message'){
   const ctx=audioContext();if(!ctx)return;
   const now=ctx.currentTime;
-  const tones=kind==='attention'?[660,880,660,1040]:kind==='friend'?[520,660]:[740,880];
+  const tones=kind==='attention'?[660,880,660,1040,880,1170]:kind==='friend'?[520,660]:kind==='online'?[523,659,784]:kind==='guestbook'?[494,659,740]:[740,880];
   tones.forEach((freq,i)=>{
     const o=ctx.createOscillator(),g=ctx.createGain();
     o.type=kind==='attention'?'square':'sine';o.frequency.value=freq;
@@ -73,9 +84,60 @@ function ensureSocialNotifyHost(){
   if(!host){host=document.createElement('div');host.id='social-notifications';host.className='social-notifications';document.body.appendChild(host);}
   return host;
 }
-function socialNotify({title='AVESSO',body='',avatar='',kind='message',action=null}={}){
-  state.socialNotificationQueue.push({title,body,avatar,kind,action});
+function notificationPermissionLabel(){
+  if(!('Notification' in window))return'notificações indisponíveis';
+  if(Notification.permission==='granted')return'notificações ativas';
+  if(Notification.permission==='denied')return'notificações bloqueadas';
+  return'ativar notificações';
+}
+async function requestBrowserNotifications({quiet=false}={}){
+  if(!('Notification' in window)){if(!quiet)toast('Este navegador não oferece notificações do sistema.');return false;}
+  if(Notification.permission==='granted')return true;
+  if(Notification.permission==='denied'){if(!quiet)toast('As notificações foram bloqueadas no navegador. Libere a permissão do site para voltar a 2006 com dignidade.');return false;}
+  try{
+    const result=await Notification.requestPermission();
+    if(!quiet)toast(result==='granted'?'Notificações ativadas. Seus amigos agora podem interromper sua produtividade oficialmente.':'Sem permissão, o AVESSO só consegue avisar dentro da própria aba.');
+    return result==='granted';
+  }catch{return false;}
+}
+function armBrowserNotifications(){
+  if(state.notificationPermissionArmed||!('Notification' in window)||Notification.permission!=='default')return;
+  state.notificationPermissionArmed=true;
+  const ask=()=>{state.notificationPermissionArmed=false;requestBrowserNotifications({quiet:true});};
+  document.addEventListener('pointerdown',ask,{once:true,capture:true});
+}
+async function registerNotificationWorker(){
+  if(state.notificationRegistration||!('serviceWorker' in navigator))return state.notificationRegistration;
+  try{
+    state.notificationRegistration=await navigator.serviceWorker.register(new URL('sw.js',SITE_URL).href,{scope:new URL('./',SITE_URL).pathname});
+    return state.notificationRegistration;
+  }catch{return null;}
+}
+async function browserNotify({title='AVESSO',body='',avatar='',kind='message',action=null}={}){
+  if(!document.hidden||!('Notification' in window)||Notification.permission!=='granted')return;
+  const icon=avatar?new URL(avatar,SITE_URL).href:new URL('assets/avatars/robo-01.svg',SITE_URL).href;
+  const options={
+    body,
+    icon,
+    badge:new URL('assets/avatars/robo-01.svg',SITE_URL).href,
+    tag:`avesso-${kind}-${title}`,
+    renotify:true,
+    silent:false,
+    data:{url:SITE_URL,kind}
+  };
+  try{
+    const registration=await registerNotificationWorker();
+    if(registration?.showNotification){await registration.showNotification(title,options);return;}
+    const n=new Notification(title,options);
+    n.onclick=()=>{window.focus();n.close();if(typeof action==='function')action();};
+    setTimeout(()=>n.close(),9000);
+  }catch{}
+}
+function socialNotify({title='AVESSO',body='',avatar='',kind='message',action=null,sound=true}={}){
+  const item={title,body,avatar,kind,action,sound};
+  state.socialNotificationQueue.push(item);
   if(state.socialNotificationQueue.length>6)state.socialNotificationQueue.shift();
+  browserNotify(item);
   runSocialNotificationQueue();
 }
 function runSocialNotificationQueue(){
@@ -90,7 +152,7 @@ function runSocialNotificationQueue(){
   const dismiss=()=>{card.classList.remove('show');card.classList.add('hide');setTimeout(()=>{card.remove();state.socialNotificationBusy=false;runSocialNotificationQueue();},430);};
   card.onclick=()=>{dismiss();if(typeof item.action==='function')item.action();};
   requestAnimationFrame(()=>requestAnimationFrame(()=>card.classList.add('show')));
-  playUiSound(item.kind==='friend'?'friend':item.kind==='attention'?'attention':'message');
+  if(item.sound!==false)playUiSound(item.kind==='friend'?'friend':item.kind==='attention'?'attention':item.kind==='online'?'online':item.kind==='guestbook'?'guestbook':'message');
   setTimeout(dismiss,5000);
 }
 function presenceView(profile){
@@ -115,7 +177,15 @@ function startPresenceHeartbeat(){
   const beat=()=>{if(!state.profile||state.profile.presence_mode==='invisible'||document.hidden)return;supabase.from('profiles').update({last_seen:new Date().toISOString()}).eq('id',state.profile.id).then(()=>{});};
   beat();state.presenceTimer=setInterval(beat,45000);
 }
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state.profile)startPresenceHeartbeat();});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden||!state.profile)return;
+  startPresenceHeartbeat();
+  if(state.pendingAttentionPeerId){
+    const peerId=state.pendingAttentionPeerId;
+    state.pendingAttentionPeerId=null;
+    openChatWindow(peerId).then(()=>{triggerScreenNudge();triggerChatNudge(peerId);});
+  }
+});
 const PHOTO_REACTIONS=[
   ['nao_foi_horrivel','♥','não foi horrível'],
   ['eu_vi','◉','eu vi'],
@@ -126,6 +196,70 @@ function publicAlbumUrl(path){return supabase.storage.from('avesso-albums').getP
 function guestbookImageUrl(path){return supabase.storage.from('avesso-recados').getPublicUrl(path).data.publicUrl;}
 function richText(value=''){const escaped=escapeHtml(value).replace(/\n/g,'<br>');return escaped.replace(/(https?:\/\/[^\s<]+)/g,'<a class="guestbook-link" href="$1" target="_blank" rel="noopener noreferrer">$1</a>');}
 function safeFileName(name='arquivo'){return name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/-+/g,'-').slice(-90)||'arquivo';}
+
+async function loadMutedPeers(){
+  if(!state.profile?.id)return;
+  const {data}=await supabase.from('mutes').select('muted_id').eq('muter_id',state.profile.id);
+  state.mutedPeers=Object.fromEntries((data||[]).map(row=>[row.muted_id,true]));
+}
+function isPeerMuted(peerId){return Boolean(peerId&&state.mutedPeers?.[peerId]);}
+async function toggleMutePeer(peerId){
+  if(!peerId)return false;
+  const muted=isPeerMuted(peerId);
+  const result=muted
+    ?await supabase.from('mutes').delete().eq('muter_id',state.profile.id).eq('muted_id',peerId)
+    :await supabase.from('mutes').insert({muter_id:state.profile.id,muted_id:peerId});
+  if(result.error){toast('O botão de silêncio fez barulho no banco. Tente de novo.');return muted;}
+  if(muted)delete state.mutedPeers[peerId];else state.mutedPeers[peerId]=true;
+  toast(muted?'Contato desmutado. Os bipes voltaram ao mercado.':'Contato mutado. Mensagens chegam, sua paz fica menos negociável.');
+  if(state.chatWindowOpen&&state.directPeerId===peerId)openChatWindow(peerId,{keepMinimized:true});
+  return !muted;
+}
+async function setChatTheme(theme){
+  if(!CHAT_THEMES.some(x=>x[0]===theme)||!state.profile?.id)return;
+  const {data,error}=await supabase.from('profiles').update({chat_theme:theme,updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
+  if(error)return toast('A tinta digital derramou antes de chegar na janela.');
+  state.profile=data;
+  const win=$('#dm-floating-window');
+  if(win){
+    CHAT_THEMES.forEach(([id])=>win.classList.remove(`theme-${id}`));
+    win.classList.add(chatThemeClass(theme));
+  }
+  $('.chat-theme-choice').forEach(b=>b.classList.toggle('active',b.dataset.chatTheme===theme));
+  toast('Cor da conversa alterada. Personalização venceu a padronização por alguns minutos.');
+}
+async function blockChatPeer(peerId){
+  if(!peerId||peerId===state.profile?.id)return;
+  const peer=await profileById(peerId);
+  if(!confirm(`Bloquear ${peer?.display_name||'este usuário'}? A amizade será encerrada e novas mensagens serão recusadas.`))return;
+  const {error}=await supabase.from('blocks').upsert({blocker_id:state.profile.id,blocked_id:peerId},{onConflict:'blocker_id,blocked_id'});
+  if(error)return toast('O bloqueio encontrou uma porta bloqueada. Ironicamente.');
+  const friendship=await getFriendshipWith(peerId);
+  if(friendship)await supabase.from('friendships').delete().eq('id',friendship.id);
+  await supabase.from('mutes').delete().eq('muter_id',state.profile.id).eq('muted_id',peerId);
+  delete state.mutedPeers[peerId];
+  delete state.friendPresence[peerId];
+  closeChatWindow(true);
+  if(state.tab==='messages')renderMessagesPage();
+  toast(`${peer?.display_name||'Usuário'} foi bloqueado. A diplomacia entrou em modo avião.`);
+}
+async function unblockPeer(peerId){
+  const {error}=await supabase.from('blocks').delete().eq('blocker_id',state.profile.id).eq('blocked_id',peerId);
+  if(error)return toast('O desbloqueio tropeçou na maçaneta.');
+  toast('Usuário desbloqueado. Isso não recria amizade. Seria intimidade demais para um botão.');
+  loadBlockedPanel();
+}
+async function loadBlockedPanel(){
+  const host=$('#blocked-panel');if(!host||!state.profile?.id)return;
+  const {data:rows,error}=await supabase.from('blocks').select('blocked_id,created_at').eq('blocker_id',state.profile.id).order('created_at',{ascending:false});
+  if(error){host.innerHTML='<p>Não foi possível consultar os bloqueios.</p>';return;}
+  const ids=(rows||[]).map(x=>x.blocked_id);
+  if(!ids.length){host.innerHTML='<p>Ninguém bloqueado. A paz pode ser temporária.</p>';return;}
+  const {data:profiles}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',ids);
+  const map=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
+  host.innerHTML=(rows||[]).map(row=>{const p=map[row.blocked_id]||{};return `<div class="blocked-row"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${escapeHtml(p.display_name||'usuário')}</b><small>@${escapeHtml(p.handle||'...')}</small></div><button data-unblock="${row.blocked_id}">desbloquear</button></div>`;}).join('');
+  $('[data-unblock]').forEach(b=>b.onclick=()=>unblockPeer(b.dataset.unblock));
+}
 
 function avatarHtml(url,name='?'){ return url?`<img src="${escapeAttr(url)}" alt="" loading="lazy">`:escapeHtml(initials(name)); }
 function renderNavAvatar(){ const el=$('#nav-avatar'); if(el)el.innerHTML=avatarHtml(state.profile?.avatar_url,state.profile?.display_name||'?'); }
@@ -350,8 +484,8 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();startDirectRealtime();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);stopPlazaRealtime();stopDirectRealtime();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -782,6 +916,41 @@ async function profileById(id){
   const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen').eq('id',id).maybeSingle();
   return data||null;
 }
+function cachedPresenceEntry(profile){
+  return {mode:presenceView(profile).mode,lastSeen:profile?.last_seen?new Date(profile.last_seen).getTime():0,profile};
+}
+async function primeFriendPresenceCache(){
+  state.friendPresence={};
+  const friends=await acceptedFriendProfiles();
+  friends.forEach(friend=>{state.friendPresence[friend.id]=cachedPresenceEntry(friend);});
+}
+function ageFriendPresenceCache(){
+  const now=Date.now();
+  Object.values(state.friendPresence||{}).forEach(entry=>{
+    if(entry?.mode==='online'&&entry.lastSeen&&now-entry.lastSeen>120000)entry.mode='away';
+  });
+}
+function startFriendPresenceWatch(){
+  clearInterval(state.presenceWatchTimer);
+  ageFriendPresenceCache();
+  state.presenceWatchTimer=setInterval(ageFriendPresenceCache,30000);
+}
+function noteFriendPresence(profile){
+  if(!profile?.id||!Object.prototype.hasOwnProperty.call(state.friendPresence,profile.id))return;
+  ageFriendPresenceCache();
+  const prev=state.friendPresence[profile.id];
+  const next=cachedPresenceEntry(profile);
+  state.friendPresence[profile.id]=next;
+  if(prev?.mode!=='online'&&next.mode==='online'&&!isPeerMuted(profile.id)){
+    socialNotify({
+      title:`${profile.display_name||'Um amigo'} entrou no AVESSO`,
+      body:'Online agora. A bolinha verde ressuscitou sem pedir licença.',
+      avatar:profile.avatar_url||'',
+      kind:'online',
+      action:()=>openFriendChat(profile.id)
+    });
+  }
+}
 function stopDirectRealtime(){
   if(state.directChannel){supabase.removeChannel(state.directChannel);state.directChannel=null;}
 }
@@ -815,15 +984,19 @@ function startDirectRealtime(){
       if(m.sender_id===me){if(state.chatWindowOpen&&state.directPeerId===m.recipient_id)refreshChatWindow();return;}
       const sender=await profileById(m.sender_id);
       const attention=m.message_kind==='attention';
-      socialNotify({
-        title:attention?`${sender?.display_name||'Alguém'} chamou sua atenção`:`Mensagem de ${sender?.display_name||'alguém'}`,
-        body:attention?'A janela tremeu. 2006 abriu a porta.':(m.message_kind==='image'?'enviou uma imagem':m.message_kind==='file'?'enviou um arquivo':String(m.body||'').slice(0,90)),
-        avatar:sender?.avatar_url||'',kind:attention?'attention':'message',
-        action:()=>openFriendChat(m.sender_id)
-      });
-      if(attention)triggerChatNudge(m.sender_id);
+      const muted=isPeerMuted(m.sender_id);
+      if(!muted){
+        socialNotify({
+          title:attention?`${sender?.display_name||'Alguém'} chamou sua atenção`:`Mensagem de ${sender?.display_name||'alguém'}`,
+          body:attention?'CHAMAR ATENÇÃO. O protocolo de 2006 foi executado.':(m.message_kind==='image'?'enviou uma imagem':m.message_kind==='file'?'enviou um arquivo':String(m.body||'').slice(0,90)),
+          avatar:sender?.avatar_url||'',kind:attention?'attention':'message',
+          sound:!attention,
+          action:()=>openFriendChat(m.sender_id)
+        });
+        if(attention)await receiveAttention(m.sender_id);
+      }
       if(state.tab==='messages')renderMessagesPage();
-      if(state.chatWindowOpen&&state.directPeerId===m.sender_id)refreshChatWindow();
+      if((muted||!attention)&&state.chatWindowOpen&&state.directPeerId===m.sender_id)refreshChatWindow();
     })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'friendships'},async payload=>{
       const f=payload.new||{};
@@ -836,12 +1009,18 @@ function startDirectRealtime(){
       const f=payload.new||{};
       if(f.status==='accepted'&&f.requester_id===me){
         const who=await profileById(f.addressee_id);
+        if(who)state.friendPresence[who.id]=cachedPresenceEntry(who);
         socialNotify({title:'Amizade aceita',body:`${who?.display_name||'Alguém'} aceitou. Nenhum contador público foi ferido.`,avatar:who?.avatar_url||'',kind:'friend',action:()=>openFriendChat(f.addressee_id)});
       }
       if(state.tab==='messages')renderMessagesPage();
       if(state.tab==='profile')loadFriendPanel();
     })
-    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'profiles'},()=>{if(state.tab==='messages')renderMessagesPage();})
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'profiles'},payload=>{
+      const p=payload.new||{};
+      if(p.id!==me)noteFriendPresence(p);
+      if(state.tab==='messages')renderMessagesPage();
+      if(state.chatWindowOpen&&state.directPeerId===p.id)openChatWindow(p.id,{keepMinimized:true});
+    })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'guestbook_entries'},async payload=>{
       const row=payload.new||{};
       if(row.profile_id!==me||row.author_id===me)return;
@@ -850,7 +1029,7 @@ function startDirectRealtime(){
         title:'Novo recado no seu Canto',
         body:`${author?.display_name||'Alguém'} escreveu na sua parede. A internet de 2007 foi restaurada com sucesso.`,
         avatar:author?.avatar_url||'',
-        kind:'message',
+        kind:'guestbook',
         action:()=>openPublicProfile(row.author_id)
       });
       if(state.tab==='profile')loadGuestbook(me,'#profile-guestbook');
@@ -887,11 +1066,12 @@ async function renderMessagesPage(){
   $('#feed-status').classList.add('hidden');
   $('#feed-list').innerHTML=`<section class="messages-hub">
     <header class="messages-hub-head"><div><span class="section-code">MSN.EXE // CONTATOS HUMANOS</span><h2>Mensagens</h2><p>Escolha alguém. Uma janela aparece. Tecnologia de ponta, circa 2006.</p></div>
-    <label class="presence-picker">aparecer como <select id="presence-mode-select"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label></header>
-    <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f);return `<button class="compact-friend" data-open-chat="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${escapeHtml(f.display_name)}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}</em></button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
+    <div class="messages-head-controls"><label class="presence-picker">aparecer como <select id="presence-mode-select"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><button id="notification-permission-button" class="notification-permission-button">${notificationPermissionLabel()}</button></div></header>
+    <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f),muted=isPeerMuted(f.id);return `<button class="compact-friend" data-open-chat="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${escapeHtml(f.display_name)}${muted?' <i class="muted-mark">🔇</i>':''}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}${muted?' · mutado':''}</em></button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
   </section>`;
   $('#presence-mode-select').value=state.profile.presence_mode||'online';
   $('#presence-mode-select').onchange=e=>setPresenceMode(e.target.value);
+  $('#notification-permission-button')?.addEventListener('click',async()=>{await requestBrowserNotifications();const b=$('#notification-permission-button');if(b)b.textContent=notificationPermissionLabel();});
   $$('[data-open-chat]').forEach(b=>b.onclick=()=>openChatWindow(b.dataset.openChat));
   startDirectRealtime();
 }
@@ -907,27 +1087,67 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
   state.directPeerId=peerId;state.chatWindowOpen=true;
   if(!keepMinimized)state.chatWindowMinimized=false;
   const p=presenceView(peer);
+  const muted=isPeerMuted(peerId);
+  const theme=state.profile?.chat_theme||'aqua';
   const win=ensureChatWindow();
-  win.className=`dm-floating-window ${state.chatWindowMinimized?'minimized':''}`;
-  win.innerHTML=`<header class="dm-floating-head" id="dm-floating-head">
-      <button class="mini-avatar profile-avatar-button" data-profile-id="${peer.id}">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
-      <div><button class="user-link" data-profile-id="${peer.id}">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}</small></div>
-      <div class="dm-window-controls"><button id="dm-minimize" title="Minimizar">_</button><button id="dm-close" title="Fechar">×</button></div>
+  win.className=`dm-floating-window ${chatThemeClass(theme)} ${state.chatWindowMinimized?'minimized':''}`;
+  win.innerHTML=`<div class="dm-msn-titlebar" id="dm-floating-head">
+      <span class="dm-msn-appmark">▾ AVESSO Messenger</span>
+      <button id="dm-restore-name" class="dm-title-peer" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}</button>
+      <span class="dm-msn-era">build 2006.2026</span>
+      <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'□':'_'}</button><button id="dm-close" title="Fechar">×</button></div>
+    </div>
+    <header class="dm-floating-head">
+      <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
+      <div><span class="dm-conversation-label">conversando com</span><button class="user-link" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
+      <span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span>
     </header>
     <div class="dm-window-body">
-      <div class="dm-log" id="dm-log">${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
-      <div class="dm-tools"><button id="dm-attention" title="Chamar atenção">⚡ chamar atenção</button><button id="dm-emoticons" title="Emoticons">☺ emoticons</button><button id="dm-attach" title="Enviar arquivo ou imagem">📎 arquivo</button><input id="dm-file-input" type="file" hidden accept="image/*,.pdf,.txt,.zip,.docx"><div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${['😀','😂','😅','🙃','👀','🤨','❤️','💀','🔥','☕','⚠️','🖥️','🐈','⌛','🫠','¯\\_(ツ)_/¯'].map(e=>`<button type="button" data-emoticon="${escapeAttr(e)}">${e}</button>`).join('')}</div></div>
-      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="escreva sem transformar em conteúdo..."><button>enviar ↵</button></form>
+      <div class="dm-msn-conversation">
+        <aside class="dm-msn-peer">
+          <div class="dm-msn-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</div>
+          <b>${escapeHtml(peer.display_name)}</b>
+          <small>${escapeHtml(peer.status_message||'online o suficiente')}</small>
+          <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span>
+        </aside>
+        <div class="dm-log" id="dm-log">${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
+      </div>
+      <div class="dm-tools">
+        <button id="dm-attention" title="Chamar atenção">⚡ chamar atenção</button>
+        <button id="dm-emoticons" title="Emoticons">☺ emoticons</button>
+        <button id="dm-attach" title="Enviar arquivo ou imagem">📎 arquivo</button>
+        <div class="dm-options-wrap">
+          <button id="dm-options" title="Opções da conversa">⚙ opções</button>
+          <div id="dm-options-menu" class="dm-options-menu hidden">
+            <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${escapeHtml(peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
+            <button id="dm-visit-profile">↗ visitar o Canto</button>
+            <button id="dm-mute-peer">${muted?'🔊 desmutar':'🔇 mutar'} notificações</button>
+            <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
+            <div class="dm-theme-section"><span>cor da janela</span><div class="dm-theme-grid">${CHAT_THEMES.map(([id,label,color])=>`<button type="button" class="chat-theme-choice ${theme===id?'active':''}" data-chat-theme="${id}" title="${escapeAttr(label)}"><i style="--theme-color:${color}"></i><b>${escapeHtml(label)}</b></button>`).join('')}</div></div>
+          </div>
+        </div>
+        <input id="dm-file-input" type="file" hidden accept="image/*,.pdf,.txt,.zip,.docx">
+        <div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${['😀','😂','😅','🙃','👀','🤨','❤️','💀','🔥','☕','⚠️','🖥️','🐈','⌛','🫠','¯\\_(ツ)_/¯'].map(e=>`<button type="button" data-emoticon="${escapeAttr(e)}">${e}</button>`).join('')}</div>
+      </div>
+      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem... e finja que não sente falta do MSN."><button>Enviar</button></form>
     </div>`;
   $('#dm-minimize').onclick=toggleChatMinimize;
   $('#dm-close').onclick=()=>closeChatWindow();
+  $('#dm-restore-name').onclick=e=>{e.stopPropagation();if(state.chatWindowMinimized)toggleChatMinimize();else $('#dm-input')?.focus();};
+  $('#dm-peer-avatar').onclick=()=>openPublicProfile(peerId);
+  $('#dm-peer-profile-name').onclick=()=>openPublicProfile(peerId);
   $('#dm-form').onsubmit=sendDirectMessage;
   $('#dm-attention').onclick=sendAttention;
-  $('#dm-emoticons').onclick=()=>$('#dm-emoticon-palette').classList.toggle('hidden');
+  $('#dm-emoticons').onclick=()=>{$('#dm-emoticon-palette').classList.toggle('hidden');$('#dm-options-menu')?.classList.add('hidden');};
   $$('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();});
   $('#dm-attach').onclick=()=>$('#dm-file-input').click();
   $('#dm-file-input').onchange=e=>{const f=e.target.files?.[0];if(f)sendDirectAttachment(f);};
-  $('#dm-floating-head').ondblclick=()=>{if(state.chatWindowMinimized)toggleChatMinimize();};
+  $('#dm-options').onclick=e=>{e.stopPropagation();$('#dm-options-menu').classList.toggle('hidden');$('#dm-emoticon-palette')?.classList.add('hidden');};
+  $('#dm-visit-profile').onclick=()=>{openPublicProfile(peerId);$('#dm-options-menu')?.classList.add('hidden');};
+  $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
+  $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
+  $$('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
+  $('#dm-floating-head').ondblclick=e=>{if(e.target.closest('.dm-window-controls'))return;toggleChatMinimize();};
   const log=$('#dm-log');if(log)log.scrollTop=log.scrollHeight;
 }
 async function refreshChatWindow(){
@@ -940,16 +1160,37 @@ async function refreshChatWindow(){
 function toggleChatMinimize(){
   if(!state.chatWindowOpen)return;
   state.chatWindowMinimized=!state.chatWindowMinimized;
-  ensureChatWindow().classList.toggle('minimized',state.chatWindowMinimized);
+  const win=ensureChatWindow();
+  win.classList.toggle('minimized',state.chatWindowMinimized);
+  const button=$('#dm-minimize');
+  if(button){button.textContent=state.chatWindowMinimized?'□':'_';button.title=state.chatWindowMinimized?'Restaurar':'Minimizar';}
+  if(!state.chatWindowMinimized)setTimeout(()=>$('#dm-input')?.focus(),80);
 }
 function closeChatWindow(silent=false){
   state.chatWindowOpen=false;state.chatWindowMinimized=false;state.directPeerId=null;
   const win=$('#dm-floating-window');if(win)win.classList.add('hidden');
   if(!silent)toast('Conversa fechada. Nenhum “tchau” automático foi enviado.');
 }
+function triggerScreenNudge(){
+  const root=document.documentElement;
+  root.classList.remove('msn-screen-nudge');
+  void root.offsetWidth;
+  root.classList.add('msn-screen-nudge');
+  setTimeout(()=>root.classList.remove('msn-screen-nudge'),1250);
+}
 function triggerChatNudge(peerId){
   if(!state.chatWindowOpen||state.directPeerId!==peerId)return;
-  const win=ensureChatWindow();win.classList.remove('nudge');void win.offsetWidth;win.classList.add('nudge');setTimeout(()=>win.classList.remove('nudge'),900);
+  const win=ensureChatWindow();win.classList.remove('nudge');void win.offsetWidth;win.classList.add('nudge');setTimeout(()=>win.classList.remove('nudge'),1100);
+}
+async function receiveAttention(peerId){
+  if(!peerId)return;
+  if(document.hidden)state.pendingAttentionPeerId=peerId;
+  await openChatWindow(peerId);
+  state.chatWindowMinimized=false;
+  ensureChatWindow().classList.remove('minimized','hidden');
+  triggerChatNudge(peerId);
+  triggerScreenNudge();
+  playUiSound('attention');
 }
 async function sendDirectMessage(e){
   e?.preventDefault();
@@ -965,7 +1206,7 @@ async function sendAttention(){
   const body=`${state.profile.display_name} chamou sua atenção. A internet acaba de voltar para 2006.`;
   const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:state.directPeerId,body,message_kind:'attention'});
   if(error)return toast('Nem chamar atenção chamou atenção.');
-  playUiSound('attention');triggerChatNudge(state.directPeerId);await refreshChatWindow();
+  playUiSound('attention');triggerChatNudge(state.directPeerId);triggerScreenNudge();await refreshChatWindow();
 }
 async function sendDirectAttachment(file){
   if(!state.directPeerId||!file)return;
@@ -1033,10 +1274,15 @@ async function loadFriendPanel(){
   bindProfileLinks();
 }
 async function answerFriendRequest(id,accept){
-  const {error}=accept
-    ?await supabase.from('friendships').update({status:'accepted',updated_at:new Date().toISOString()}).eq('id',id)
-    :await supabase.from('friendships').delete().eq('id',id);
-  if(error)return toast('A amizade tropeçou na burocracia.');
+  let result;
+  if(accept)result=await supabase.from('friendships').update({status:'accepted',updated_at:new Date().toISOString()}).eq('id',id).select().single();
+  else result=await supabase.from('friendships').delete().eq('id',id).select().single();
+  if(result.error)return toast('A amizade tropeçou na burocracia.');
+  if(accept&&result.data){
+    const peerId=result.data.requester_id===state.profile.id?result.data.addressee_id:result.data.requester_id;
+    const peer=await profileById(peerId);
+    if(peer)state.friendPresence[peer.id]=cachedPresenceEntry(peer);
+  }
   toast(accept?'Amizade aceita. Nenhum algoritmo comemorou.':'Pedido recusado. A civilização continua.');
   loadFriendPanel();
 }
@@ -1136,6 +1382,7 @@ async function renderProfile(){
     <section class="profile-album-control"><span class="section-code">ÁLBUM // FOTOS QUE VOCÊ DECIDIU NÃO APAGAR</span><h2>Seu álbum</h2><p>Poste imagens no seu Canto. Reações existem, mas continuam sem virar olimpíada social.</p><div class="album-upload-row"><input id="album-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><input id="album-caption" maxlength="180" placeholder="legenda opcional. autocontrole também."><button id="album-upload">adicionar foto</button></div><div id="profile-album" class="profile-album-grid"><p>carregando memórias...</p></div></section>
     <section class="guestbook-section guestbook-own"><span class="section-code">RECADOS // DEIXARAM ISSO AQUI</span><h2>Recados no seu Canto</h2><p>Amigos podem deixar texto, links, emojis e imagens. Você continua com a sofisticada tecnologia chamada “apagar”.</p><div id="profile-guestbook" class="guestbook-list"><p>procurando bilhetes na porta...</p></div></section>
     <section class="friends-control"><span class="section-code">PESSOAS // AMIGOS</span><h2>Lista de pessoas que você aceitou voluntariamente</h2><div id="friends-panel"><p>carregando relações humanas...</p></div></section>
+    <section class="blocked-control"><span class="section-code">CONTROLE // BLOQUEADOS</span><h2>Porta fechada também é interface</h2><p>Bloquear encerra amizade e impede novas mensagens. Desbloquear não cria amizade de volta, porque nem botão deveria ter esse poder.</p><div id="blocked-panel"><p>consultando bloqueios...</p></div></section>
   </section>
   <section class="world-preferences">
     <span class="section-code">MUNDO // NÍVEL DE INTERFERÊNCIA</span>
@@ -1159,6 +1406,7 @@ async function renderProfile(){
   document.querySelectorAll('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
   setWorldModeLabel();
   loadFriendPanel();
+  loadBlockedPanel();
   loadAlbum(state.profile.id,true);
   loadGuestbook(state.profile.id,'#profile-guestbook');
   algoSay('profile');
@@ -1177,6 +1425,8 @@ async function saveAvatar(url){
 }
 async function requestFriend(userId){
   if(!userId||userId===state.profile.id)return;
+  const {data:ownBlock}=await supabase.from('blocks').select('blocked_id').eq('blocker_id',state.profile.id).eq('blocked_id',userId).maybeSingle();
+  if(ownBlock)return toast('Você bloqueou esta pessoa. Desbloqueie antes de mandar amizade. Contradição social evitada.');
   const {error}=await supabase.from('friendships').insert({requester_id:state.profile.id,addressee_id:userId,status:'pending'});
   if(error){
     if(String(error.code)==='23505')return toast('Essa relação já existe em algum estado burocrático.');
