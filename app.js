@@ -231,6 +231,7 @@ $('#publish-post').onclick=async()=>{
   const body=$('#post-body').value.trim();
   const directed=$('#post-target').value==='person';
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
+  if(directed&&$('#post-visibility').value==='privado'&&state.postImageFile)return toast('Imagem privada ainda não entra aqui. Não vou colocar arquivo íntimo em bucket público só porque seria mais rápido.');
   if(body.length<3&&!state.postImageFile)return toast('Dê ao menos uma frase ou uma imagem. Telepatia ainda não foi integrada.');
   $('#publish-post').disabled=true;
   let image_url=null;
@@ -532,7 +533,7 @@ function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
   const interferenceOnline=Boolean(state.world.settings?.world_interventions_enabled);
-  $('#feed-list').innerHTML=`<article class="post-card"><div class="post-route"><span class="mini-avatar">${initials(state.profile.display_name)}</span><strong>${escapeHtml(state.profile.display_name)}</strong><span class="post-meta">@${escapeHtml(state.profile.handle)}</span></div><p class="post-body">${escapeHtml(state.profile.bio||'Sem bio. Um raro caso de contenção na internet.')}</p><div class="post-actions"><button id="edit-bio">editar bio</button></div></article>
+  $('#feed-list').innerHTML=`<article class="post-card"><div class="post-route"><span class="mini-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</span><strong>${escapeHtml(state.profile.display_name)}</strong><span class="post-meta">@${escapeHtml(state.profile.handle)}</span></div><p class="post-body">${escapeHtml(state.profile.bio||'Sem bio. Um raro caso de contenção na internet.')}</p><div class="post-actions"><button id="edit-bio">editar bio</button></div></article>
   <section class="avatar-picker-panel"><span class="section-code">IDENTIDADE // PIXEL</span><h2>Escolha seu rosto no AVESSO</h2><p>Nove opções. Nenhuma pede ring light.</p><div class="avatar-picker-grid">${AVATAR_OPTIONS.map(([label,url,kind])=>`<button class="avatar-choice ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${url}"><img src="${url}" alt="${label}"><span>${label}</span><small>${kind}</small></button>`).join('')}</div></section>
   <section class="world-preferences">
     <span class="section-code">MUNDO // NÍVEL DE INTERFERÊNCIA</span>
