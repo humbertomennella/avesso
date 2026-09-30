@@ -342,10 +342,10 @@ function applyAppTabLayout(){
   $('.feed-header')?.classList.toggle('hidden',worldOpen);
   $('#refresh-feed')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
 }
-$('[data-app-tab]').forEach(b=>b.onclick=async()=>{
+document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   state.tab=b.dataset.appTab;
   bumpView();
-  $('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
+  document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
   const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles'};
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
