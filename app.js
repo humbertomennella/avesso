@@ -26,7 +26,7 @@ function showCharacterInteraction(payload){
   const line=$('#world-character-line');
   const meta=$('#world-character-meta');
   if(card)card.style.setProperty('--character-accent',character.accent_color||'#22d9ee');
-  if(img){img.src=character.image_path;img.alt=character.name;}
+  if(img){img.className=`character-sprite sprite-${character.slug}`;img.setAttribute('aria-label',character.name);}
   if(name)name.textContent=character.name;
   if(role)role.textContent=character.role;
   if(line)line.textContent=interaction.body;
@@ -34,8 +34,7 @@ function showCharacterInteraction(payload){
   const visitor=$('#world-visitor');
   if(visitor){
     visitor.style.setProperty('--character-accent',character.accent_color||'#22d9ee');
-    visitor.querySelector('img').src=character.image_path;
-    visitor.querySelector('img').alt=character.name;
+    const visitorSprite=visitor.querySelector('.visitor-sprite');if(visitorSprite){visitorSprite.className=`visitor-sprite character-sprite sprite-${character.slug}`;visitorSprite.setAttribute('aria-label',character.name);}
     visitor.querySelector('[data-visitor-name]').textContent=character.name;
     visitor.querySelector('[data-visitor-line]').textContent=interaction.body;
     visitor.classList.remove('hidden');
@@ -67,7 +66,7 @@ async function renderWorld(){
   const chars=Object.values(state.world.characters);
   const order=['algo','404','npc','rei_engajamento','aquele_le_tudo','alem'];
   chars.sort((a,b)=>order.indexOf(a.slug)-order.indexOf(b.slug));
-  $('#feed-list').innerHTML=`<section class="world-intro"><span class="section-code">AVESSO.SYS // HABITANTES</span><h2>Gente, erros e outras coisas que moram aqui.</h2><p>Nem todos aparecem quando você chama. Alguns consideram isso uma qualidade.</p></section><div class="inhabitants-grid">${chars.map(c=>`<article class="inhabitant-card" style="--accent:${c.accent_color||'#d8ff3e'}"><div class="inhabitant-art"><img src="${escapeHtml(c.image_path||'')}" alt="${escapeHtml(c.name)}" loading="lazy"></div><div class="inhabitant-copy"><span class="section-code">${escapeHtml(c.home_location||'MUNDO')}</span><h3>${escapeHtml(c.name)}</h3><strong>${escapeHtml(c.role)}</strong><p>${escapeHtml(c.bio||'')}</p><div class="inhabitant-personality"><b>PERSONALIDADE</b><span>${escapeHtml(c.personality||'')}</span></div><small>estado: ${escapeHtml(presenceLabel(c.presence_state))}</small></div></article>`).join('')}</div>`;
+  $('#feed-list').innerHTML=`<section class="world-intro"><span class="section-code">AVESSO.SYS // HABITANTES</span><h2>Gente, erros e outras coisas que moram aqui.</h2><p>Nem todos aparecem quando você chama. Alguns consideram isso uma qualidade.</p></section><div class="inhabitants-grid">${chars.map(c=>`<article class="inhabitant-card" style="--accent:${c.accent_color||'#d8ff3e'}"><div class="inhabitant-art"><div class="character-sprite sprite-${escapeHtml(c.slug)}" role="img" aria-label="${escapeHtml(c.name)}"></div></div><div class="inhabitant-copy"><span class="section-code">${escapeHtml(c.home_location||'MUNDO')}</span><h3>${escapeHtml(c.name)}</h3><strong>${escapeHtml(c.role)}</strong><p>${escapeHtml(c.bio||'')}</p><div class="inhabitant-personality"><b>PERSONALIDADE</b><span>${escapeHtml(c.personality||'')}</span></div><small>estado: ${escapeHtml(presenceLabel(c.presence_state))}</small></div></article>`).join('')}</div>`;
   triggerWorldCharacter('idle',{character:'aquele_le_tudo'});
 }
 
