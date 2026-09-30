@@ -194,8 +194,8 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;$('#nav-avatar').textContent=initials(data.display_name);await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();scheduleIdleWorld();setTimeout(()=>askWorldCharacter('login'),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();await loadWorldState();await Promise.all([loadFeed(),loadImpact(),loadTower()]);subscribeRealtime();scheduleIdleWorld();scheduleTower();trackAction('login','app',{},false);setTimeout(()=>askWorldCharacter('login'),1400);}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeHtml(p.display_name)}' data-handle='${escapeHtml(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -216,26 +216,50 @@ function updateComposerTarget(){
 $('#post-target').addEventListener('change',updateComposerTarget);
 updateComposerTarget();
 $('#post-body').addEventListener('input',e=>$('#char-count').textContent=420-e.target.value.length);
+$('#choose-post-image').onclick=()=>$('#post-image').click();
+$('#post-image').addEventListener('change',e=>{
+  const file=e.target.files?.[0]||null;
+  if(!file)return;
+  if(file.size>5*1024*1024){e.target.value='';return toast('Máximo de 5 MB. O AVESSO é uma rede, não um HD externo.');}
+  state.postImageFile=file;
+  $('#post-image-name').textContent=file.name;
+  $('#post-image-preview-img').src=URL.createObjectURL(file);
+  $('#post-image-preview').classList.remove('hidden');
+  trackAction('image_selected','composer',{type:file.type,size:file.size},true);
+});
+$('#remove-post-image').onclick=()=>{
+  state.postImageFile=null; $('#post-image').value=''; $('#post-image-preview-img').src='';
+  $('#post-image-preview').classList.add('hidden'); $('#post-image-name').textContent='nenhuma imagem. o feed sobrevive.';
+};
+async function uploadPostImage(file){
+  if(!file)return null;
+  const ext=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const path=state.profile.id+'/'+crypto.randomUUID()+'.'+ext;
+  const {error}=await supabase.storage.from('post-images').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type});
+  if(error)throw error;
+  return supabase.storage.from('post-images').getPublicUrl(path).data.publicUrl;
+}
 $('#publish-post').onclick=async()=>{
   const body=$('#post-body').value.trim();
   const directed=$('#post-target').value==='person';
+  const imageFile=state.postImageFile;
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
-  if(body.length<12)return toast('O mínimo são 12 caracteres. A conversa merece mais que um aceno.');
+  if(!imageFile&&body.length<12)return toast('O mínimo são 12 caracteres. Ou mande uma imagem e poupe a literatura.');
+  $('#publish-post').disabled=true;
+  let image_url=null;
+  try{ image_url=await uploadPostImage(imageFile); }catch(e){ $('#publish-post').disabled=false; return toast('A imagem não subiu. Até pixels têm burocracia.'); }
   const {data:createdPost,error}=await supabase.from('posts').insert({
-    author_id:state.profile.id,
-    recipient_id:directed?state.recipient.id:null,
-    body,
+    author_id:state.profile.id, recipient_id:directed?state.recipient.id:null, body, image_url,
     visibility:directed?$('#post-visibility').value:'publico'
   }).select('id').single();
+  $('#publish-post').disabled=false;
   if(error)return toast('Não foi possível publicar. Tente novamente.');
-  $('#post-body').value='';
-  $('#recipient-search').value='';
-  $('#char-count').textContent='420';
-  state.recipient=null;
+  $('#post-body').value=''; $('#recipient-search').value=''; $('#char-count').textContent='420'; state.recipient=null;
+  state.postImageFile=null; $('#post-image').value=''; $('#post-image-preview').classList.add('hidden'); $('#post-image-preview-img').src=''; $('#post-image-name').textContent='nenhuma imagem. o feed sobrevive.';
   toast(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
-  if(isFeedTab())loadFeed();
-  loadImpact();
-  if(createdPost?.id)setTimeout(()=>askWorldCharacter('post_created',{post_id:createdPost.id}),500);
+  trackAction(image_url?'image_posted':'post_created','composer',{directed,has_image:Boolean(image_url)},false);
+  if(isFeedTab())loadFeed(); loadImpact();
+  if(createdPost?.id)setTimeout(()=>askWorldCharacter(image_url?'image_posted':'post_created',{post_id:createdPost.id,action_type:image_url?'image_posted':'post_created',surface:'composer'}),500);
 };
 
 async function loadThreadData(posts){
