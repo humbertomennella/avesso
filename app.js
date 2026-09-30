@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,lastInteractionId:null} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -13,6 +13,19 @@ function ago(date){ const s=Math.floor((Date.now()-new Date(date))/1000); if(s<6
 function escapeHtml(value=''){ const d=document.createElement('div'); d.textContent=value; return d.innerHTML; }
 function isFeedTab(tab=state.tab){ return ['feed','quiet','sent'].includes(tab); }
 function bumpView(){ state.viewVersion+=1; return state.viewVersion; }
+const AVATAR_OPTIONS=[
+  ['Humano 01','assets/avatars/humano-01.svg','humano'],['Humano 02','assets/avatars/humano-02.svg','humano'],['Humano 03','assets/avatars/humano-03.svg','humano'],
+  ['Humana 01','assets/avatars/humana-01.svg','humana'],['Humana 02','assets/avatars/humana-02.svg','humana'],['Humana 03','assets/avatars/humana-03.svg','humana'],
+  ['Robô 01','assets/avatars/robo-01.svg','robo'],['Robô 02','assets/avatars/robo-02.svg','robo'],['Robô 03','assets/avatars/robo-03.svg','robo']
+];
+function avatarHtml(url,name='?'){ return url?`<img src="${escapeHtml(url)}" alt="" loading="lazy">`:escapeHtml(initials(name)); }
+function renderNavAvatar(){ const el=$('#nav-avatar'); if(el)el.innerHTML=avatarHtml(state.profile?.avatar_url,state.profile?.display_name||'?'); }
+async function trackAction(action_type,surface=state.tab,metadata={}){
+  if(!state.profile?.id)return;
+  const clean={};
+  Object.entries(metadata||{}).slice(0,8).forEach(([k,v])=>clean[String(k).slice(0,40)]=String(v).slice(0,100));
+  supabase.from('user_actions').insert({user_id:state.profile.id,action_type:String(action_type).slice(0,80),surface:String(surface||'app').slice(0,40),metadata:clean}).then(()=>{});
+}
 
 function weightedPick(items=[]){
   if(!items.length)return null;
@@ -59,10 +72,13 @@ async function askWorldCharacter(trigger,options={}){
     const {data,error}=await supabase.functions.invoke('world-character',{body:{
       trigger,
       character:options.character||null,
-      post_id:options.post_id||null
+      post_id:options.post_id||null,
+      action_type:options.action_type||null,
+      surface:options.surface||state.tab||'app',
+      metadata:options.metadata||{}
     }});
     if(error||!data||data.skipped)return null;
-    showEncounter(data);
+    if(!options.silent)showEncounter(data);
     return data;
   }catch(e){
     console.warn('O Mundo do AVESSO ficou quieto:',e);
@@ -149,6 +165,8 @@ async function saveWorldMode(mode){
     world:'MUNDO ativo. Visitas e falas dos habitantes estão permitidas.',
     chaos:'CAOS ativo. O 404 recebeu autorização pessoal. Isso parece uma ideia melhor no papel.'
   };
+  trackAction('mode_changed','profile',{mode});
+  askWorldCharacter('mode_changed',{action_type:'mode_changed',surface:'profile',metadata:{mode}});
   toast(messages[mode]);
 }
 
@@ -166,8 +184,8 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;$('#nav-avatar').textContent=initials(data.display_name);await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();scheduleIdleWorld();setTimeout(()=>askWorldCharacter('login'),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeHtml(p.display_name)}' data-handle='${escapeHtml(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -188,26 +206,52 @@ function updateComposerTarget(){
 $('#post-target').addEventListener('change',updateComposerTarget);
 updateComposerTarget();
 $('#post-body').addEventListener('input',e=>$('#char-count').textContent=420-e.target.value.length);
+$('#post-image').addEventListener('change',e=>{
+  const file=e.target.files?.[0]||null;
+  if(!file){state.postImageFile=null;$('#image-preview').classList.add('hidden');return;}
+  if(!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type))return toast('Formato não suportado. A internet inventou muitos; não precisamos de todos.');
+  if(file.size>5*1024*1024){e.target.value='';return toast('Imagem acima de 5 MB. Pixels também precisam de limites.');}
+  state.postImageFile=file;
+  const url=URL.createObjectURL(file);
+  $('#image-preview-img').src=url;
+  $('#image-preview-name').textContent=file.name;
+  $('#image-preview').classList.remove('hidden');
+  trackAction('image_selected','composer',{type:file.type,size:file.size});
+});
+$('#remove-image').onclick=()=>{state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');};
+async function uploadPostImage(){
+  if(!state.postImageFile)return null;
+  const ext=(state.postImageFile.name.split('.').pop()||'webp').replace(/[^a-z0-9]/gi,'').toLowerCase();
+  const path=`${state.profile.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const {error}=await supabase.storage.from('post-images').upload(path,state.postImageFile,{cacheControl:'3600',upsert:false});
+  if(error)throw error;
+  return supabase.storage.from('post-images').getPublicUrl(path).data.publicUrl;
+}
 $('#publish-post').onclick=async()=>{
   const body=$('#post-body').value.trim();
   const directed=$('#post-target').value==='person';
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
-  if(body.length<12)return toast('O mínimo são 12 caracteres. A conversa merece mais que um aceno.');
+  if(directed&&$('#post-visibility').value==='privado'&&state.postImageFile)return toast('Imagem privada ainda não entra aqui. Não vou colocar arquivo íntimo em bucket público só porque seria mais rápido.');
+  if(body.length<3&&!state.postImageFile)return toast('Dê ao menos uma frase ou uma imagem. Telepatia ainda não foi integrada.');
+  $('#publish-post').disabled=true;
+  let image_url=null;
+  try{ image_url=await uploadPostImage(); }catch(e){$('#publish-post').disabled=false;return toast('A imagem tropeçou no upload. Tente novamente.');}
   const {data:createdPost,error}=await supabase.from('posts').insert({
     author_id:state.profile.id,
     recipient_id:directed?state.recipient.id:null,
-    body,
+    body:body||'Imagem publicada no AVESSO.',
+    image_url,
     visibility:directed?$('#post-visibility').value:'publico'
   }).select('id').single();
+  $('#publish-post').disabled=false;
   if(error)return toast('Não foi possível publicar. Tente novamente.');
-  $('#post-body').value='';
-  $('#recipient-search').value='';
-  $('#char-count').textContent='420';
-  state.recipient=null;
-  toast(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
+  $('#post-body').value='';$('#recipient-search').value='';$('#char-count').textContent='420';state.recipient=null;
+  state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');
+  toast(image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.'));
+  trackAction(image_url?'image_posted':'post_created','composer',{directed});
   if(isFeedTab())loadFeed();
   loadImpact();
-  if(createdPost?.id)setTimeout(()=>askWorldCharacter('post_created',{post_id:createdPost.id}),500);
+  if(createdPost?.id)setTimeout(()=>askWorldCharacter(image_url?'image_posted':'post_created',{post_id:createdPost.id,action_type:image_url?'image_posted':'post_created',surface:'feed'}),500);
 };
 
 async function loadThreadData(posts){
@@ -224,7 +268,7 @@ async function loadThreadData(posts){
   const profileIds=[...new Set([...responses.map(r=>r.author_id),...supports.map(s=>s.supporter_id)].filter(Boolean))];
   let profiles={};
   if(profileIds.length){
-    const {data}=await supabase.from('profiles').select('id,display_name,handle').in('id',profileIds);
+    const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',profileIds);
     profiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));
   }
   const byPost={};
@@ -263,6 +307,13 @@ async function loadFeed(){
   }
 
   const posts=data||[];
+  const profileIds=[...new Set(posts.flatMap(p=>[p.author_id,p.recipient_id]).filter(Boolean))];
+  let feedProfiles={};
+  if(profileIds.length){
+    const {data:profiles}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',profileIds);
+    feedProfiles=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
+  }
+  posts.forEach(p=>{p.author_avatar_url=feedProfiles[p.author_id]?.avatar_url||null;p.recipient_avatar_url=feedProfiles[p.recipient_id]?.avatar_url||null;});
   const threadData=await loadThreadData(posts);
 
   // Segunda barreira: loadThreadData também é assíncrono.
@@ -270,6 +321,7 @@ async function loadFeed(){
 
   status.classList.add('hidden');
   renderFeed(posts,threadData);
+  renderTowerCard();
 
   if(posts.some(p=>p.response_count===0)){
     algoSay('feed_attention');
@@ -288,13 +340,14 @@ function renderFeed(posts,threadData={responses:{},supports:{},characters:{}}){
     const responses=threadData.responses[p.id]||[];
     const supports=threadData.supports[p.id]||[];
     const characterReplies=threadData.characters[p.id]||[];
-    const responseHtml=responses.length?`<div class="thread-block"><div class="thread-title">CONVERSA // ${responses.length} ${responses.length===1?'RESPOSTA':'RESPOSTAS'}</div>${responses.map(r=>`<div class="thread-reply"><span class="mini-avatar">${initials(r.author?.display_name||'?')}</span><div><div class="thread-author">${escapeHtml(r.author?.display_name||'alguém')} <small>@${escapeHtml(r.author?.handle||'...')} · ${ago(r.created_at)}</small></div><p>${escapeHtml(r.body)}</p></div></div>`).join('')}</div>`:'';
+    const responseHtml=responses.length?`<div class="thread-block"><div class="thread-title">CONVERSA // ${responses.length} ${responses.length===1?'RESPOSTA':'RESPOSTAS'}</div>${responses.map(r=>`<div class="thread-reply"><span class="mini-avatar">${avatarHtml(r.author?.avatar_url,r.author?.display_name||'?')}</span><div><div class="thread-author">${escapeHtml(r.author?.display_name||'alguém')} <small>@${escapeHtml(r.author?.handle||'...')} · ${ago(r.created_at)}</small></div><p>${escapeHtml(r.body)}</p></div></div>`).join('')}</div>`:'';
     const characterHtml=characterReplies.length?`<div class="thread-block character-thread"><div class="thread-title">MUNDO // HABITANTES</div>${characterReplies.map(x=>{const c=x.character||{};return `<div class="thread-reply character-reply"><img src="${escapeHtml(characterImage(c))}" alt="${escapeHtml(c.name||'Habitante')}"><div><div class="thread-author">${escapeHtml(c.name||'Habitante')} <b>HABITANTE</b> <small>· ${ago(x.created_at)}</small></div><p>${escapeHtml(x.body)}</p></div></div>`}).join('')}</div>`:'';
     const supportHtml=supports.length?`<div class="private-support-log"><span>PRIVADO // APOIO</span>${supports.map(s=>`<p><strong>${escapeHtml(s.supporter?.display_name||'alguém')}</strong> sinalizou: “${escapeHtml(supportLabel(s.kind))}”.</p>`).join('')}</div>`:'';
     const canSupport=p.author_id!==state.profile.id;
     return `<article class="post-card" data-post-card="${p.id}">
-      <div class="post-route"><span class="mini-avatar">${initials(p.author_name)}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
+      <div class="post-route"><span class="mini-avatar">${avatarHtml(p.author_avatar_url,p.author_name)}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       <p class="post-body">${escapeHtml(p.body)}</p>
+      ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="lazy"></figure>`:''}
       ${responseHtml}
       ${characterHtml}
       ${supportHtml}
@@ -319,6 +372,8 @@ async function supportPost(post_id,kind){
   const {error}=await supabase.from('support_signals').upsert({post_id,supporter_id:state.profile.id,kind});
   if(error)return toast('Não foi possível enviar o apoio privado agora.');
   toast('Apoio privado entregue. Só as pessoas envolvidas conseguem ver.');
+  trackAction('support_sent','feed',{kind,post_id});
+  askWorldCharacter('support_sent',{post_id,action_type:'support_sent',surface:'feed',metadata:{kind}});
   if(isFeedTab())loadFeed();
 }
 async function sendReply(post_id){
@@ -330,13 +385,14 @@ async function sendReply(post_id){
   if(error)return toast('A resposta caiu no vazio. Tente novamente.');
   input.value='';
   toast('Resposta publicada. Agora ela aparece na conversa, como seria razoável esperar.');
+  trackAction('reply_created','feed',{post_id});
   if(isFeedTab())loadFeed();
   setTimeout(()=>askWorldCharacter('reply_created',{post_id}),650);
 }
 
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
 function applyAppTabLayout(){
-  const worldOpen=state.tab==='residents';
+  const worldOpen=['residents','plaza','tower'].includes(state.tab);
   $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
   $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
   $('.feed-header')?.classList.toggle('hidden',worldOpen);
@@ -346,11 +402,15 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   state.tab=b.dataset.appTab;
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
-  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles'};
+  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento'};
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
+  trackAction('tab_view',state.tab,{tab:state.tab});
+  askWorldCharacter('tab_view',{action_type:'tab_view',surface:state.tab,metadata:{tab:state.tab}});
   if(state.tab==='profile')renderProfile();
   else if(state.tab==='residents')await renderInhabitantsPage();
+  else if(state.tab==='plaza')await renderPlaza();
+  else if(state.tab==='tower')await renderTowerPage();
   else loadFeed();
 });
 async function renderInhabitantsPage(){
@@ -411,11 +471,70 @@ async function renderInhabitantsPage(){
       <footer class="world-footer"><span>AVESSO.SYS // HABITANTES V1.0</span><b>ESTE É SÓ O COMEÇO.</b><span>O MUNDO DO AVESSO CONTINUA...</span></footer>
     </section>`;
 }
+async function renderPlaza(){
+  if(state.tab!=='plaza')return;
+  const npc=state.world.characters.npc;
+  $('#feed-status').classList.add('hidden');
+  $('#feed-list').innerHTML=`<section class="plaza-world">
+    <div class="plaza-sky"></div><div class="plaza-sign">PRAÇA CENTRAL <small>ponto de encontro dos desencontrados</small></div>
+    <div class="plaza-buildings"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="plaza-npc"><img src="${escapeHtml(characterImage(npc))}" alt="NPC"><div><span>NPC // FIGURANTE EM PROMOÇÃO</span><h2>“A praça fica aberta. O roteiro, nem sempre.”</h2></div></div>
+    <div class="plaza-actions"><button data-plaza-action="conversar">conversar com o NPC</button><button data-plaza-action="missao">pedir uma missão</button><button data-plaza-action="rumor">perguntar um rumor</button><button data-plaza-action="ficar">só ficar por aqui</button></div>
+    <div id="plaza-dialogue" class="world-dialogue">A Praça Central range em neon. O NPC percebe você antes de decidir fingir que não.</div>
+    <div class="plaza-panels"><article><b>QUADRO DE IDEIAS</b><p>Coisas que alguém escreveu antes de perceber que precisava executar.</p></article><article><b>MISSÕES</b><p>Converse. Responda alguém esquecido. Descubra um post que ninguém viu.</p></article><article><b>MURO DO CAOS</b><p>404 deixou um aviso. O aviso diz que ele não deixou aviso nenhum.</p></article></div>
+  </section>`;
+  trackAction('plaza_opened','plaza');
+  const first=await askWorldCharacter('plaza_opened',{character:'npc',silent:true,action_type:'plaza_opened',surface:'plaza'});
+  if(state.tab==='plaza'&&first?.interaction?.body)$('#plaza-dialogue').textContent=first.interaction.body;
+  $$('[data-plaza-action]').forEach(b=>b.onclick=async()=>{
+    const action=b.dataset.plazaAction;trackAction('plaza_action','plaza',{action});
+    $('#plaza-dialogue').textContent='NPC está pensando. Isso normalmente não estava no orçamento.';
+    const result=await askWorldCharacter('plaza_action',{character:'npc',silent:true,action_type:action,surface:'plaza',metadata:{action}});
+    if(state.tab==='plaza'&&result?.interaction?.body)$('#plaza-dialogue').textContent=result.interaction.body;
+  });
+}
+function towerFallback(){
+  const lines=['CAMPANHA // VIDA REAL É BETA. O produto final segue sem previsão.','OPORTUNIDADE // monetize o silêncio antes que alguém crie um plano Pro.','EM ALTA // pessoas conversando sem intermediário. Mercado em pânico.','AVISO // respirar sem publicar reduz impressões. Faça por sua conta e risco.','PESQUISA INTERNA // 100% do Rei concorda com o Rei.'];
+  return lines[Math.floor(Math.random()*lines.length)];
+}
+function renderTowerCard(text=towerFallback()){
+  const box=$('#tower-live');if(!box)return;
+  box.innerHTML=`<div class="tower-crown">♛</div><span class="section-code">TORRE DO ENGAJAMENTO // AO VIVO</span><h3>Mensagem do Rei</h3><p>${escapeHtml(text)}</p><button id="open-tower">subir na torre →</button>`;
+  $('#open-tower').onclick=()=>document.querySelector('[data-app-tab="tower"]')?.click();
+}
+async function updateTowerAI(trigger='tower_pulse'){
+  if(!state.session||!state.profile)return;
+  const result=await askWorldCharacter(trigger,{character:'rei_engajamento',silent:true,action_type:trigger,surface:'tower'});
+  renderTowerCard(result?.interaction?.body||towerFallback());
+}
+function scheduleTowerPulse(){
+  clearTimeout(state.world.towerTimer);
+  if(!state.session)return;
+  state.world.towerTimer=setTimeout(async()=>{if(isFeedTab())await updateTowerAI('tower_pulse');scheduleTowerPulse();},(150+Math.random()*120)*1000);
+  setTimeout(()=>{if(isFeedTab())updateTowerAI('tower_opened')},2200);
+}
+async function renderTowerPage(){
+  if(state.tab!=='tower')return;
+  const king=state.world.characters.rei_engajamento;
+  $('#feed-status').classList.add('hidden');
+  $('#feed-list').innerHTML=`<section class="tower-world">
+    <div class="tower-header"><span>♛ TORRE DO ENGAJAMENTO</span><h2>PROPAGANDA, CAOS E OPORTUNIDADES™</h2><p>Um monumento vertical à ideia de que tudo fica melhor quando alguém coloca um KPI em cima.</p></div>
+    <div class="tower-king"><img src="${escapeHtml(characterImage(king))}" alt="Rei do Engajamento"><div id="tower-page-message">O Rei está preparando um PowerPoint que ninguém solicitou.</div></div>
+    <div class="tower-grid"><article><b>CAMPANHA OFICIAL</b><h3>VIDA REAL É BETA</h3><p>Aproveite enquanto ainda não tem assinatura mensal.</p></article><article><b>EM ALTA</b><ol><li>Humanos falando com humanos</li><li>Não monetizar tudo</li><li>Silêncio sem anúncios</li></ol></article><article><b>OPORTUNIDADE DO REI</b><p>Teste um recurso inexistente. Ganhe um badge invisível e absolutamente nenhum benefício.</p></article></div>
+    <button id="tower-refresh" class="tower-refresh">pedir outra ideia péssima ao Rei</button>
+  </section>`;
+  trackAction('tower_opened','tower');
+  const result=await askWorldCharacter('tower_opened',{character:'rei_engajamento',silent:true,action_type:'tower_opened',surface:'tower'});
+  if(state.tab==='tower'&&result?.interaction?.body)$('#tower-page-message').textContent=result.interaction.body;
+  $('#tower-refresh').onclick=async()=>{trackAction('tower_pulse','tower');const r=await askWorldCharacter('tower_pulse',{character:'rei_engajamento',silent:true,action_type:'manual_campaign',surface:'tower'});if(r?.interaction?.body)$('#tower-page-message').textContent=r.interaction.body;};
+}
+
 function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
   const interferenceOnline=Boolean(state.world.settings?.world_interventions_enabled);
-  $('#feed-list').innerHTML=`<article class="post-card"><div class="post-route"><span class="mini-avatar">${initials(state.profile.display_name)}</span><strong>${escapeHtml(state.profile.display_name)}</strong><span class="post-meta">@${escapeHtml(state.profile.handle)}</span></div><p class="post-body">${escapeHtml(state.profile.bio||'Sem bio. Um raro caso de contenção na internet.')}</p><div class="post-actions"><button id="edit-bio">editar bio</button></div></article>
+  $('#feed-list').innerHTML=`<article class="post-card"><div class="post-route"><span class="mini-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</span><strong>${escapeHtml(state.profile.display_name)}</strong><span class="post-meta">@${escapeHtml(state.profile.handle)}</span></div><p class="post-body">${escapeHtml(state.profile.bio||'Sem bio. Um raro caso de contenção na internet.')}</p><div class="post-actions"><button id="edit-bio">editar bio</button></div></article>
+  <section class="avatar-picker-panel"><span class="section-code">IDENTIDADE // PIXEL</span><h2>Escolha seu rosto no AVESSO</h2><p>Nove opções. Nenhuma pede ring light.</p><div class="avatar-picker-grid">${AVATAR_OPTIONS.map(([label,url,kind])=>`<button class="avatar-choice ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${url}"><img src="${url}" alt="${label}"><span>${label}</span><small>${kind}</small></button>`).join('')}</div></section>
   <section class="world-preferences">
     <span class="section-code">MUNDO // NÍVEL DE INTERFERÊNCIA</span>
     <h2>Quanto o AVESSO pode entrar no seu Canto?</h2>
@@ -428,13 +547,38 @@ function renderProfile(){
     <div class="world-pref-foot"><span id="profile-world-status">carregando modo...</span><small>${interferenceOnline?'Interferências visuais globais estão online.':'O motor visual ainda está bloqueado globalmente.'} Personagens nunca reescrevem o que você publicou.</small></div>
   </section>`;
   $('#edit-bio').onclick=editBio;
-  $$('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
+  document.querySelectorAll('[data-avatar-url]').forEach(b=>b.onclick=()=>saveAvatar(b.dataset.avatarUrl));
+  document.querySelectorAll('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
   setWorldModeLabel();
   algoSay('profile');
   setTimeout(()=>askWorldCharacter('profile'),700);
 }
+async function saveAvatar(url){
+  if(!AVATAR_OPTIONS.some(x=>x[1]===url))return;
+  const {data,error}=await supabase.from('profiles').update({avatar_url:url}).eq('id',state.profile.id).select().single();
+  if(error)return toast('O avatar se recusou a cooperar. Dramático.');
+  state.profile=data;renderNavAvatar();renderProfile();
+  trackAction('avatar_changed','profile',{avatar:url.split('/').pop()});
+  askWorldCharacter('avatar_changed',{action_type:'avatar_changed',surface:'profile',metadata:{avatar:url.split('/').pop()}});
+  toast('Avatar atualizado. A crise de identidade agora está em 16 bits.');
+}
 async function editBio(){const bio=prompt('Bio curta, até 180 caracteres:',state.profile.bio||'');if(bio===null)return;const {data,error}=await supabase.from('profiles').update({bio:bio.slice(0,180)}).eq('id',state.profile.id).select().single();if(error)return toast('A bio resistiu à mudança.');state.profile=data;renderProfile();toast('Bio atualizada. Crise de identidade adiada.');}
 $('#refresh-feed').onclick=()=>{ if(isFeedTab())loadFeed(); };
+document.addEventListener('click',e=>{
+  const target=e.target.closest('button,a,[data-app-tab]');
+  if(!target||!state.profile)return;
+  const label=(target.dataset.appTab||target.id||target.textContent||target.tagName).trim().slice(0,60);
+  if(label){
+    trackAction('screen_action',state.tab,{control:label});
+    const now=Date.now();
+    const worldSurface=!['tower','plaza'].includes(state.tab);
+    if(worldSurface&&now-state.world.lastReactiveAt>45000&&Math.random()<0.38){
+      state.world.lastReactiveAt=now;
+      setTimeout(()=>askWorldCharacter('screen_action',{action_type:label,surface:state.tab,metadata:{control:label}}),650);
+    }
+  }
+},{passive:true});
+
 function subscribeRealtime(){
   supabase.channel('avesso-feed')
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>{if(isFeedTab())loadFeed();})
