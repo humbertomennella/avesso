@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,lastInteractionId:null} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,lastInteractionId:null} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -30,21 +30,6 @@ function algoSay(context='feed_default'){
 function characterImage(character){
   return character?.avatar_url||character?.image_path||'';
 }
-function renderResidents(){
-  const box=$('#resident-strip');
-  if(!box)return;
-  const order=['algo','404','npc','rei_engajamento','aquele_le_tudo','alem'];
-  box.innerHTML=order.map(slug=>state.world.characters[slug]).filter(Boolean).map(c=>`
-    <button class="resident" data-resident="${c.slug}" title="${escapeHtml(c.name)} — ${escapeHtml(c.role||'habitante')}">
-      <img src="${escapeHtml(characterImage(c))}" alt="${escapeHtml(c.name)}" />
-      <span>${escapeHtml(c.name)}</span>
-    </button>`).join('');
-  box.querySelectorAll('[data-resident]').forEach(b=>b.onclick=()=>{
-    const c=state.world.characters[b.dataset.resident];
-    if(!c)return;
-    showEncounter({character:c,interaction:{id:'peek-'+c.slug,body:`${c.role}. ${c.personality||'Morador do Mundo do AVESSO.'}`,source:'system'}},true);
-  });
-}
 function showEncounter(payload,preview=false){
   const card=$('#world-encounter');
   if(!card||!payload?.character)return;
@@ -52,16 +37,19 @@ function showEncounter(payload,preview=false){
   if(!preview&&interaction.id&&interaction.id===state.world.lastInteractionId)return;
   if(!preview&&interaction.id)state.world.lastInteractionId=interaction.id;
   const c=payload.character;
-  const img=characterImage(c)||state.world.characters[c.slug]?.avatar_url||state.world.characters[c.slug]?.image_path||'';
+  const known=state.world.characters[c.slug]||c;
+  const img=characterImage(known);
   $('#encounter-image').src=img;
-  $('#encounter-image').alt=c.name||'Habitante';
-  $('#encounter-name').textContent=c.name||'Habitante';
-  $('#encounter-role').textContent=c.role||'habitante do AVESSO';
+  $('#encounter-image').alt=c.name||known.name||'Habitante';
+  $('#encounter-name').textContent=c.name||known.name||'Habitante';
+  $('#encounter-role').textContent=c.role||known.role||'habitante do AVESSO';
   $('#encounter-line').textContent=interaction.body||payload.text||'...';
   $('#encounter-source').textContent=preview?'ARQUIVO DO HABITANTE':(interaction.source==='ai'||payload.ai?'IA // AO VIVO':'MUNDO // ROTEIRO');
   card.classList.remove('hidden');
   card.classList.remove('pulse-in');
   requestAnimationFrame(()=>card.classList.add('pulse-in'));
+  clearTimeout(state.world.encounterTimer);
+  state.world.encounterTimer=setTimeout(()=>card.classList.add('hidden'),18000);
 }
 async function askWorldCharacter(trigger,options={}){
   if(!state.session||!state.profile)return null;
@@ -89,12 +77,15 @@ function scheduleIdleWorld(){
   },delay);
 }
 function setWorldModeLabel(){
-  const el=$('#world-mode-label');
-  if(!el)return;
   const mode=state.world.preferences?.participation_mode||'world';
-  const labels={observer:'OBSERVADOR',world:'MUNDO',chaos:'CAOS'};
-  const interventions=state.world.settings?.world_interventions_enabled?'interferências online':'interferências em preparação';
-  el.textContent=`modo ${labels[mode]||mode.toUpperCase()} // ${interventions}`;
+  const visualOnline=Boolean(state.world.settings?.world_interventions_enabled);
+  const labels={
+    observer:'OBSERVADOR // interações pessoais desligadas',
+    world:'MUNDO // visitas e falas ativas',
+    chaos:visualOnline?'CAOS // 404 e interferências visuais liberados':'CAOS // 404 autorizado; sabotagens visuais em preparação'
+  };
+  const profileStatus=$('#profile-world-status');
+  if(profileStatus)profileStatus.textContent=labels[mode]||mode.toUpperCase();
 }
 async function loadWorldState(){
   if(!state.profile?.id)return;
@@ -112,7 +103,6 @@ async function loadWorldState(){
   state.world.settings=settingsRes.data||{id:'global',world_events_enabled:true,world_interventions_enabled:false};
   state.world.characters=Object.fromEntries((charsRes.data||[]).map(c=>[c.slug,c]));
   state.world.charactersById=Object.fromEntries((charsRes.data||[]).map(c=>[c.id,c]));
-  renderResidents();
   state.world.dialogues=[];
   const algo=state.world.characters.algo;
   if(algo){
@@ -123,29 +113,45 @@ async function loadWorldState(){
   algoSay('feed_default');
 }
 async function saveWorldMode(mode){
-  if(!['observer','world','chaos'].includes(mode))return;
-  if(mode==='chaos'&&!confirm('Modo CAOS permite interferências visuais temporárias de personagens quando esse recurso estiver ativo. Seu texto original nunca será reescrito. Ativar mesmo assim?'))return;
-  const payload={
-    user_id:state.profile.id,
+  if(!['observer','world','chaos'].includes(mode)||!state.profile?.id)return;
+  if(mode==='chaos'&&!confirm('Modo CAOS autoriza o 404 a interagir pessoalmente e, quando o motor visual for liberado, fazer sabotagens cosméticas reversíveis. Seu conteúdo original continua intocável. Ativar?'))return;
+  const patch={
     participation_mode:mode,
     allow_post_interference:mode==='chaos',
     allow_profile_interference:mode==='chaos',
     allow_character_visits:mode!=='observer'
   };
-  const {data,error}=await supabase.from('user_world_preferences').upsert(payload,{onConflict:'user_id'}).select().single();
-  if(error)return toast('O mundo recusou a configuração. Muito profissional da parte dele.');
+  $$('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
+  let {data,error}=await supabase.from('user_world_preferences')
+    .update(patch)
+    .eq('user_id',state.profile.id)
+    .select()
+    .maybeSingle();
+  if(!error&&!data){
+    const created=await supabase.from('user_world_preferences')
+      .upsert({user_id:state.profile.id,...patch},{onConflict:'user_id'})
+      .select()
+      .single();
+    data=created.data; error=created.error;
+  }
+  if(error||!data){
+  $$('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
+    console.error('world mode update failed',error);
+    return toast('O modo não foi salvo. O sistema tropeçou na própria configuração.');
+  }
   state.world.preferences=data;
-  setWorldModeLabel();
   renderProfile();
+  setWorldModeLabel();
   const messages={
-    observer:'Modo observador ativo. Os personagens vão manter as mãos no bolso.',
-    world:'Modo mundo ativo. Agora o AVESSO pode bater na sua porta.',
-    chaos:'Modo caos preparado. 404 foi informado. Péssima decisão administrativa.'
+    observer:'OBSERVADOR ativo. O mundo continua, mas não entra no seu Canto.',
+    world:'MUNDO ativo. Visitas e falas dos habitantes estão permitidas.',
+    chaos:'CAOS ativo. O 404 recebeu autorização pessoal. Isso parece uma ideia melhor no papel.'
   };
   toast(messages[mode]);
 }
 
-$$('[data-open-auth]').forEach(b=>b.addEventListener('click',()=>$('#auth-dialog').showModal()));
+$('[data-open-auth]').forEach(b=>b.addEventListener('click',()=>$('#auth-dialog').showModal()));
+$('#encounter-close').onclick=()=>{$('#world-encounter').classList.add('hidden');clearTimeout(state.world.encounterTimer);};
 $('.dialog-close').onclick=()=>$('#auth-dialog').close();
 $$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
 function setAuthMode(mode){ state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
@@ -202,13 +208,186 @@ $('#publish-post').onclick=async()=>{
   if(createdPost?.id)setTimeout(()=>askWorldCharacter('post_created',{post_id:createdPost.id}),500);
 };
 
-async function loadFeed(){const status=$('#feed-status');status.classList.remove('hidden');status.textContent='ordenando pelo que importa, ideia radical...';algoSay('feed_loading');let query=supabase.from('feed_attention').select('*');if(state.tab==='quiet')query=query.eq('response_count',0);if(state.tab==='sent')query=query.eq('author_id',state.profile.id);const {data,error}=await query.order('attention_need',{ascending:false}).limit(40);if(error){status.textContent='O feed falhou. Até o anti-algoritmo tem segunda-feira.';algoSay('feed_error');return}status.classList.add('hidden');const posts=data||[];renderFeed(posts);if(posts.some(p=>p.response_count===0)){algoSay('feed_attention');if(state.tab==='feed')setTimeout(()=>askWorldCharacter('feed_attention'),2200);}else if(posts.length)algoSay('feed_default');}
-function renderFeed(posts){const list=$('#feed-list');if(!posts.length){list.innerHTML='<div class="feed-status">Nada aqui. Talvez as pessoas estejam vivendo. Estranho, mas permitido.</div>';algoSay('feed_empty');return}list.innerHTML=posts.map(p=>`<article class="post-card"><div class="post-route"><span class="mini-avatar">${initials(p.author_name)}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div><p class="post-body">${escapeHtml(p.body)}</p><div class="post-actions"><button data-reply='${p.id}'>↩ responder</button><button data-support='${p.id}'>＋ apoiar em privado</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div></article>`).join('');list.querySelectorAll('[data-support]').forEach(b=>b.onclick=()=>supportPost(b.dataset.support));list.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>replyPost(b.dataset.reply));}
-async function supportPost(post_id){const {error}=await supabase.from('support_signals').upsert({post_id,supporter_id:state.profile.id,kind:'estou_aqui'});toast(error?'Não foi possível apoiar agora.':'Apoio privado entregue. A plateia não ficou sabendo.');}
-async function replyPost(post_id){const body=prompt('Sua resposta (sim, este prompt é retrô de propósito):');if(!body||body.trim().length<2)return;const {error}=await supabase.from('responses').insert({post_id,author_id:state.profile.id,body:body.trim()});toast(error?'A resposta caiu no vazio. Tente novamente.':'Resposta enviada. Conversa: conceito vintage.');if(!error)loadFeed();}
+async function loadThreadData(posts){
+  const ids=posts.map(p=>p.id);
+  if(!ids.length)return{responses:{},supports:{}};
+  const [responsesRes,supportRes,characterRes]=await Promise.all([
+    supabase.from('responses').select('id,post_id,author_id,body,created_at').in('post_id',ids).order('created_at',{ascending:true}),
+    supabase.from('support_signals').select('post_id,supporter_id,kind,created_at').in('post_id',ids).order('created_at',{ascending:true}),
+    supabase.from('character_interactions').select('id,post_id,character_id,body,created_at,source,visibility').in('post_id',ids).order('created_at',{ascending:true})
+  ]);
+  const responses=responsesRes.data||[];
+  const supports=supportRes.data||[];
+  const characterReplies=(characterRes.data||[]).filter(x=>x.post_id);
+  const profileIds=[...new Set([...responses.map(r=>r.author_id),...supports.map(s=>s.supporter_id)].filter(Boolean))];
+  let profiles={};
+  if(profileIds.length){
+    const {data}=await supabase.from('profiles').select('id,display_name,handle').in('id',profileIds);
+    profiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));
+  }
+  const byPost={};
+  const supportByPost={};
+  const charactersByPost={};
+  for(const r of responses)(byPost[r.post_id]??=[]).push({...r,author:profiles[r.author_id]});
+  for(const s of supports)(supportByPost[s.post_id]??=[]).push({...s,supporter:profiles[s.supporter_id]});
+  for(const x of characterReplies)(charactersByPost[x.post_id]??=[]).push({...x,character:state.world.charactersById[x.character_id]});
+  return{responses:byPost,supports:supportByPost,characters:charactersByPost};
+}
+function supportLabel(kind){
+  return({escutei:'escutei você',posso_ajudar:'posso ajudar',estou_aqui:'estou aqui'})[kind]||kind;
+}
+async function loadFeed(){
+  const status=$('#feed-status');
+  status.classList.remove('hidden');
+  status.textContent='ordenando pelo que importa, ideia radical...';
+  algoSay('feed_loading');
+  let query=supabase.from('feed_attention').select('*');
+  if(state.tab==='quiet')query=query.eq('response_count',0);
+  if(state.tab==='sent')query=query.eq('author_id',state.profile.id);
+  const {data,error}=await query.order('attention_need',{ascending:false}).limit(40);
+  if(error){
+    status.textContent='O feed falhou. Até o anti-algoritmo tem segunda-feira.';
+    algoSay('feed_error');
+    return;
+  }
+  const posts=data||[];
+  const threadData=await loadThreadData(posts);
+  status.classList.add('hidden');
+  renderFeed(posts,threadData);
+  if(posts.some(p=>p.response_count===0)){
+    algoSay('feed_attention');
+    if(state.tab==='feed')setTimeout(()=>askWorldCharacter('feed_attention'),2200);
+  }else if(posts.length)algoSay('feed_default');
+}
+function renderFeed(posts,threadData={responses:{},supports:{},characters:{}}){
+  const list=$('#feed-list');
+  if(!posts.length){
+    list.innerHTML='<div class="feed-status">Nada aqui. Talvez as pessoas estejam vivendo. Estranho, mas permitido.</div>';
+    algoSay('feed_empty');
+    return;
+  }
+  list.innerHTML=posts.map(p=>{
+    const responses=threadData.responses[p.id]||[];
+    const supports=threadData.supports[p.id]||[];
+    const characterReplies=threadData.characters[p.id]||[];
+    const responseHtml=responses.length?`<div class="thread-block"><div class="thread-title">CONVERSA // ${responses.length} ${responses.length===1?'RESPOSTA':'RESPOSTAS'}</div>${responses.map(r=>`<div class="thread-reply"><span class="mini-avatar">${initials(r.author?.display_name||'?')}</span><div><div class="thread-author">${escapeHtml(r.author?.display_name||'alguém')} <small>@${escapeHtml(r.author?.handle||'...')} · ${ago(r.created_at)}</small></div><p>${escapeHtml(r.body)}</p></div></div>`).join('')}</div>`:'';
+    const characterHtml=characterReplies.length?`<div class="thread-block character-thread"><div class="thread-title">MUNDO // HABITANTES</div>${characterReplies.map(x=>{const c=x.character||{};return `<div class="thread-reply character-reply"><img src="${escapeHtml(characterImage(c))}" alt="${escapeHtml(c.name||'Habitante')}"><div><div class="thread-author">${escapeHtml(c.name||'Habitante')} <b>HABITANTE</b> <small>· ${ago(x.created_at)}</small></div><p>${escapeHtml(x.body)}</p></div></div>`}).join('')}</div>`:'';
+    const supportHtml=supports.length?`<div class="private-support-log"><span>PRIVADO // APOIO</span>${supports.map(s=>`<p><strong>${escapeHtml(s.supporter?.display_name||'alguém')}</strong> sinalizou: “${escapeHtml(supportLabel(s.kind))}”.</p>`).join('')}</div>`:'';
+    const canSupport=p.author_id!==state.profile.id;
+    return `<article class="post-card" data-post-card="${p.id}">
+      <div class="post-route"><span class="mini-avatar">${initials(p.author_name)}</span><span>${escapeHtml(p.author_name)}</span><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
+      <p class="post-body">${escapeHtml(p.body)}</p>
+      ${responseHtml}
+      ${characterHtml}
+      ${supportHtml}
+      <div class="post-actions"><button data-reply-toggle="${p.id}">↩ responder</button>${canSupport?`<button data-support-toggle="${p.id}">＋ apoiar em privado</button>`:''}${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
+      <div class="inline-reply hidden" data-reply-box="${p.id}"><textarea maxlength="420" placeholder="Responda à pessoa, não ao algoritmo."></textarea><div><button data-reply-send="${p.id}">enviar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
+      ${canSupport?`<div class="support-picker hidden" data-support-box="${p.id}"><span>APOIO PRIVADO // só você e as pessoas envolvidas nesta publicação conseguem ver.</span><div><button data-support-kind="escutei" data-support-post="${p.id}">escutei você</button><button data-support-kind="estou_aqui" data-support-post="${p.id}">estou aqui</button><button data-support-kind="posso_ajudar" data-support-post="${p.id}">posso ajudar</button></div></div>`:''}
+    </article>`;
+  }).join('');
+  $$('[data-reply-toggle]').forEach(b=>b.onclick=()=>{
+    const box=document.querySelector(`[data-reply-box="${b.dataset.replyToggle}"]`);
+    box?.classList.toggle('hidden');
+    box?.querySelector('textarea')?.focus();
+  });
+  $$('[data-reply-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-box="${b.dataset.replyCancel}"]`)?.classList.add('hidden'));
+  $$('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
+  $$('[data-support-toggle]').forEach(b=>b.onclick=()=>document.querySelector(`[data-support-box="${b.dataset.supportToggle}"]`)?.classList.toggle('hidden'));
+  $$('[data-support-kind]').forEach(b=>b.onclick=()=>supportPost(b.dataset.supportPost,b.dataset.supportKind));
+}
+async function supportPost(post_id,kind){
+  const allowed=['escutei','estou_aqui','posso_ajudar'];
+  if(!allowed.includes(kind))return;
+  const {error}=await supabase.from('support_signals').upsert({post_id,supporter_id:state.profile.id,kind});
+  if(error)return toast('Não foi possível enviar o apoio privado agora.');
+  toast('Apoio privado entregue. Só as pessoas envolvidas conseguem ver.');
+  loadFeed();
+}
+async function sendReply(post_id){
+  const box=document.querySelector(`[data-reply-box="${post_id}"]`);
+  const input=box?.querySelector('textarea');
+  const body=input?.value.trim()||'';
+  if(body.length<2)return toast('A resposta precisa de pelo menos 2 caracteres.');
+  const {error}=await supabase.from('responses').insert({post_id,author_id:state.profile.id,body});
+  if(error)return toast('A resposta caiu no vazio. Tente novamente.');
+  input.value='';
+  toast('Resposta publicada. Agora ela aparece na conversa, como seria razoável esperar.');
+  loadFeed();
+  setTimeout(()=>askWorldCharacter('reply_created',{post_id}),650);
+}
 
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
-$$('[data-app-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.appTab;$$('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco'};$('#feed-heading').textContent=headings[state.tab];if(state.tab==='profile')renderProfile();else loadFeed();});
+function applyAppTabLayout(){
+  const worldOpen=state.tab==='residents';
+  $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
+  $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
+  $('.feed-header')?.classList.toggle('hidden',worldOpen);
+  $('#refresh-feed')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
+}
+$$('[data-app-tab]').forEach(b=>b.onclick=async()=>{
+  state.tab=b.dataset.appTab;
+  $$('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
+  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles'};
+  $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
+  applyAppTabLayout();
+  if(state.tab==='profile')renderProfile();
+  else if(state.tab==='residents')await renderInhabitantsPage();
+  else loadFeed();
+});
+async function renderInhabitantsPage(){
+  $('#feed-status').classList.add('hidden');
+  const {data:presence}=await supabase.from('character_presence').select('character_id,location,activity,mood,status,updated_at');
+  const presenceById=Object.fromEntries((presence||[]).map(p=>[p.character_id,p]));
+  const abilities={
+    algo:'Reordena atenção, observa conversas esquecidas e explica por que o feed fez o que fez. Está tentando desaprender a internet moderna.',
+    '404':'No modo CAOS pode visitar, provocar e, quando o motor visual estiver liberado, sabotar a aparência de posts e do seu Canto sem tocar no conteúdo original.',
+    npc:'Circula pela Praça Central, inicia pequenas missões sociais e cutuca conversas que ficaram sem companhia. É humano. Isso explica muita coisa.',
+    rei_engajamento:'Invade eventos com métricas, campanhas e ideias de monetização que ninguém pediu. O problema é que ele acha todas excelentes.',
+    aquele_le_tudo:'Quebra a quarta parede. Percebe botões, textos, roteiro e decisões de design. Não lê suas mensagens privadas. Nem ele merece esse emprego.',
+    alem:'Quase nunca aparece. Surge quando o mundo está estranho demais até para o AVESSO. O restante do arquivo está, convenientemente, ausente.'
+  };
+  const notes={
+    algo:'STATUS: tentando não transformar você em KPI',
+    '404':'AVISO: não alimente depois da meia-noite. Também não antes.',
+    npc:'MISSÃO ATUAL: descobrir se existe missão principal',
+    rei_engajamento:'META DO TRIMESTRE: monetizar o silêncio',
+    aquele_le_tudo:'ELE LEU ESTA LINHA ANTES DE VOCÊ',
+    alem:'REGISTRO INCOMPLETO // isso talvez seja intencional'
+  };
+  const order=['algo','404','npc','rei_engajamento','aquele_le_tudo','alem'];
+  const cards=order.map((slug,i)=>{
+    const c=state.world.characters[slug];
+    if(!c)return'';
+    const p=presenceById[c.id]||{};
+    const rare=slug==='alem'?' inhabitant-card-rare':'';
+    return `<article class="inhabitant-card${rare}" style="--accent:${escapeHtml(c.accent_color||'#d8ff3e')}">
+      <div class="inhabitant-index">0${i+1}</div>
+      <div class="inhabitant-portrait"><img src="${escapeHtml(characterImage(c))}" alt="${escapeHtml(c.name)}"></div>
+      <div class="inhabitant-copy">
+        <span class="inhabitant-role">${escapeHtml(c.role)}</span>
+        <h3>${escapeHtml(c.name)}</h3>
+        <p>${escapeHtml(abilities[slug]||c.bio||'Habitante do AVESSO.')}</p>
+        <div class="inhabitant-status"><span>${escapeHtml(p.location||c.home_location||'local desconhecido')}</span><span>${escapeHtml(p.status||c.presence_state||'???')}</span></div>
+        <small>${escapeHtml(notes[slug])}</small>
+      </div>
+    </article>`;
+  }).join('');
+  $('#feed-list').innerHTML=`
+    <section class="inhabitants-world">
+      <div class="world-grid-noise"></div>
+      <header class="inhabitants-hero">
+        <span class="world-kicker">AVESSO.EXE // QUEM É QUEM</span>
+        <h2>HABITANTES DO <em>AVESSO</em></h2>
+        <p>Você não entrou numa rede. Entrou na casa deles. Seu perfil é só um Canto alugado dentro de um computador que claramente desenvolveu vida própria sem consultar o jurídico.</p>
+        <div class="world-rule">A REDE NÃO PERTENCE A NÓS. <strong>PERTENCE A ELES.</strong></div>
+      </header>
+      <div class="inhabitants-map">
+        <div class="map-wire wire-a"></div><div class="map-wire wire-b"></div><div class="map-wire wire-c"></div>
+        ${cards}
+      </div>
+      <footer class="world-footer"><span>AVESSO.SYS // HABITANTES V1.0</span><b>ESTE É SÓ O COMEÇO.</b><span>O MUNDO DO AVESSO CONTINUA...</span></footer>
+    </section>`;
+}
 function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
@@ -219,14 +398,15 @@ function renderProfile(){
     <h2>Quanto o AVESSO pode entrar no seu Canto?</h2>
     <p>Você escolhe o nível de bagunça. Porque consentimento continua sendo uma tecnologia surpreendentemente útil.</p>
     <div class="world-mode-grid">
-      <button class="world-mode-option ${mode==='observer'?'active':''}" data-world-mode="observer"><strong>OBSERVADOR</strong><small>O mundo acontece. Personagens mantêm as mãos longe do seu perfil.</small></button>
-      <button class="world-mode-option ${mode==='world'?'active':''}" data-world-mode="world"><strong>MUNDO</strong><small>Visitas, falas e acontecimentos. Sem vandalismo cosmético pessoal.</small></button>
-      <button class="world-mode-option ${mode==='chaos'?'active':''}" data-world-mode="chaos"><strong>CAOS</strong><small>404 poderá mexer no visual quando as interferências forem liberadas. Seu conteúdo original continua intocável.</small></button>
+      <button class="world-mode-option ${mode==='observer'?'active':''}" data-world-mode="observer"><strong>OBSERVADOR ${mode==='observer'?'<i>ATIVO</i>':''}</strong><small>O mundo acontece. Personagens mantêm as mãos longe do seu perfil.</small></button>
+      <button class="world-mode-option ${mode==='world'?'active':''}" data-world-mode="world"><strong>MUNDO ${mode==='world'?'<i>ATIVO</i>':''}</strong><small>Visitas, falas e acontecimentos. Sem vandalismo cosmético pessoal.</small></button>
+      <button class="world-mode-option ${mode==='chaos'?'active':''}" data-world-mode="chaos"><strong>CAOS ${mode==='chaos'?'<i>ATIVO</i>':''}</strong><small>404 pode interagir pessoalmente. A sabotagem visual continua controlada pelo sistema global.</small></button>
     </div>
-    <div class="world-pref-foot"><span>${interferenceOnline?'● INTERFERÊNCIAS VISUAIS ONLINE':'○ INTERFERÊNCIAS VISUAIS AINDA BLOQUEADAS PELO SISTEMA'}</span><small>Personagens nunca reescrevem o que você publicou.</small></div>
+    <div class="world-pref-foot"><span id="profile-world-status">carregando modo...</span><small>${interferenceOnline?'Interferências visuais globais estão online.':'O motor visual ainda está bloqueado globalmente.'} Personagens nunca reescrevem o que você publicou.</small></div>
   </section>`;
   $('#edit-bio').onclick=editBio;
-  $('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
+  $$('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
+  setWorldModeLabel();
   algoSay('profile');
   setTimeout(()=>askWorldCharacter('profile'),700);
 }
@@ -234,8 +414,8 @@ async function editBio(){const bio=prompt('Bio curta, até 180 caracteres:',stat
 $('#refresh-feed').onclick=loadFeed;
 function subscribeRealtime(){
   supabase.channel('avesso-feed')
-    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>loadFeed())
-    .on('postgres_changes',{event:'*',schema:'public',table:'responses'},()=>loadFeed())
+    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>{if(['feed','quiet','sent'].includes(state.tab))loadFeed();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'responses'},()=>{if(['feed','quiet','sent'].includes(state.tab))loadFeed();})
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'world_settings'},payload=>{
       state.world.settings=payload.new||state.world.settings;
       setWorldModeLabel();
