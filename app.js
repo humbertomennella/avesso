@@ -813,6 +813,8 @@ function subscribeRealtime(){
       if(row.trigger_type==='plaza_chat')return;
       if(row.user_id&&row.user_id!==state.profile?.id&&row.visibility!=='world')return;
       const c=state.world.charactersById[row.character_id];
+      if(state.tab==='plaza'&&c?.slug!=='npc')return;
+      if(state.tab==='tower'&&c?.slug!=='rei_engajamento')return;
       if(c)showEncounter({character:c,interaction:{id:row.id,body:row.body,source:row.source}});
     })
     .subscribe();
