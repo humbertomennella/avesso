@@ -178,6 +178,8 @@ async function saveWorldMode(mode){
     chaos:'CAOS ativo. O 404 recebeu autorização pessoal. Isso parece uma ideia melhor no papel.'
   };
   toast(messages[mode]);
+  trackAction('mode_changed','profile',{mode},false);
+  setTimeout(()=>askWorldCharacter('mode_changed',{action_type:'mode_changed',surface:'profile',metadata:{mode}}),220);
 }
 
 document.querySelectorAll('[data-open-auth]').forEach(b=>b.addEventListener('click',()=>$('#auth-dialog').showModal()));
@@ -372,7 +374,9 @@ async function supportPost(post_id,kind){
   const {error}=await supabase.from('support_signals').upsert({post_id,supporter_id:state.profile.id,kind});
   if(error)return toast('Não foi possível enviar o apoio privado agora.');
   toast('Apoio privado entregue. Só as pessoas envolvidas conseguem ver.');
+  trackAction('support_sent','feed',{kind},false);
   if(isFeedTab())loadFeed();
+  setTimeout(()=>askWorldCharacter('support_sent',{post_id,action_type:'support_sent',surface:'feed',metadata:{kind}}),300);
 }
 async function sendReply(post_id){
   const box=document.querySelector(`[data-reply-box="${post_id}"]`);
@@ -383,8 +387,9 @@ async function sendReply(post_id){
   if(error)return toast('A resposta caiu no vazio. Tente novamente.');
   input.value='';
   toast('Resposta publicada. Agora ela aparece na conversa, como seria razoável esperar.');
+  trackAction('reply_created','feed',{post_id},false);
   if(isFeedTab())loadFeed();
-  setTimeout(()=>askWorldCharacter('reply_created',{post_id}),650);
+  setTimeout(()=>askWorldCharacter('reply_created',{post_id,action_type:'reply_created',surface:'feed'}),650);
 }
 
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
@@ -554,8 +559,8 @@ async function saveAvatar(url){
   trackAction('avatar_changed','profile',{avatar:url.split('/').pop()},false);
   setTimeout(()=>askWorldCharacter('avatar_changed',{action_type:'avatar_changed',surface:'profile',metadata:{avatar:url.split('/').pop()}}),250);
 }
-async function editBio(){const bio=prompt('Bio curta, até 180 caracteres:',state.profile.bio||'');if(bio===null)return;const {data,error}=await supabase.from('profiles').update({bio:bio.slice(0,180)}).eq('id',state.profile.id).select().single();if(error)return toast('A bio resistiu à mudança.');state.profile=data;renderProfile();toast('Bio atualizada. Crise de identidade adiada.');}
-$('#refresh-feed').onclick=()=>{ if(isFeedTab())loadFeed(); };
+async function editBio(){const bio=prompt('Bio curta, até 180 caracteres:',state.profile.bio||'');if(bio===null)return;const {data,error}=await supabase.from('profiles').update({bio:bio.slice(0,180)}).eq('id',state.profile.id).select().single();if(error)return toast('A bio resistiu à mudança.');state.profile=data;renderProfile();toast('Bio atualizada. Crise de identidade adiada.');trackAction('bio_updated','profile',{},true);}
+$('#refresh-feed').onclick=()=>{ if(isFeedTab()){trackAction('feed_refresh','feed',{},true);loadFeed();} };
 function subscribeRealtime(){
   supabase.channel('avesso-feed')
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>{if(isFeedTab())loadFeed();})
@@ -591,3 +596,5 @@ function showAuthLinkError(){
 }
 
 const {data:{session}}=await supabase.auth.getSession();state.session=session;if(session)enterApp();else showAuthLinkError();
+
+window.addEventListener('scroll',()=>{if(!state.profile||!isFeedTab())return;const now=Date.now();if(now-state.scrollTrackedAt<45000)return;if(window.scrollY<300)return;state.scrollTrackedAt=now;trackAction('feed_scroll','feed',{depth:Math.round((window.scrollY/(Math.max(1,document.documentElement.scrollHeight-innerHeight)))*100)},true);},{passive:true});
