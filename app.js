@@ -45,6 +45,7 @@ function applyAppWallpaper(){
   const slug=(useProfileWallpaper?state.profile?.profile_wallpaper:state.profile?.app_wallpaper)||'cidade-56k';
   document.documentElement.style.setProperty('--avesso-app-wallpaper',`url("${wallpaperUrl(slug)}")`);
   document.documentElement.dataset.wallpaperSurface=useProfileWallpaper?'profile':'app';
+  document.body.classList.add('avesso-app-active');
 }
 function audioContext(){
   try{
@@ -326,7 +327,7 @@ $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
 async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();startDirectRealtime();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);stopPlazaRealtime();stopDirectRealtime();closeChatWindow(true);state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);stopPlazaRealtime();stopDirectRealtime();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -550,6 +551,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   const previousTab=state.tab;
   if(previousTab==='plaza'&&b.dataset.appTab!=='plaza')stopPlazaRealtime();
   state.tab=b.dataset.appTab;
+  applyAppWallpaper();
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
   const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Mensagens entre humanos'};
