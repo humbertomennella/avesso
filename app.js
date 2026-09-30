@@ -35,7 +35,7 @@ async function trackAction(action_type,surface='app',metadata={},react=false){
   supabase.from('user_actions').insert({user_id:state.profile.id,action_type,surface,metadata:safe}).then(()=>{});
   if(react && state.world.preferences?.participation_mode!=='observer'){
     const chance=surface==='plaza'||surface==='tower'?1:0.34;
-    if(Math.random()<chance)setTimeout(()=>askWorldCharacter('screen_action',{action_type,surface,metadata:safe}),220);
+    if(Math.random()<chance){const character=surface==='plaza'?'npc':(surface==='tower'?'rei_engajamento':null);setTimeout(()=>askWorldCharacter('screen_action',{action_type,surface,metadata:safe,character}),220);}
   }
 }
 
