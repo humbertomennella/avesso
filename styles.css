@@ -69,3 +69,19 @@ dialog{width:min(480px,calc(100% - 28px));border:1px solid var(--line);border-ra
 .plaza-chat-world{min-height:800px}.plaza-npc-chat{position:relative;z-index:3;display:grid;grid-template-columns:210px 1fr;gap:20px;align-items:center;margin:20px 0}.plaza-npc-chat img{width:100%;max-height:300px;object-fit:contain}.plaza-npc-chat span{font:800 .62rem var(--mono);color:var(--acid)}.plaza-npc-chat h2{font:800 clamp(1.25rem,2.6vw,2.15rem)/1.1 var(--mono);margin:8px 0}.plaza-chat-shell{position:relative;z-index:4;border:1px solid #2d6c78;background:#071014dd;box-shadow:10px 10px 0 #05090b}.plaza-chat-shell>header{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid #20454c;font:700 .58rem var(--mono);color:var(--cyan)}.plaza-chat-shell>header small{color:#76898c}.plaza-chat-log{height:360px;overflow:auto;padding:10px 14px;scrollbar-width:thin}.plaza-message{display:grid;grid-template-columns:32px 1fr;gap:10px;padding:9px 0;border-bottom:1px solid #17282c}.plaza-message.npc-message{background:#d8ff3e08;border-left:2px solid var(--acid);padding-left:8px}.plaza-message-head{font:700 .65rem var(--mono)}.plaza-message-head b{color:var(--acid)}.plaza-message-head small{color:var(--muted);font-weight:500}.plaza-message p{margin:3px 0;color:#d3dcda;font-size:.84rem}.plaza-chat-form{display:grid;grid-template-columns:34px 1fr auto;gap:8px;padding:10px;border-top:1px solid #20454c}.plaza-chat-form input{margin:0}.plaza-chat-form button{background:var(--acid);border:0;color:#111;padding:0 16px;font:800 .62rem var(--mono);cursor:pointer}.plaza-empty{padding:40px;text-align:center;color:var(--muted);font:600 .62rem var(--mono)}
 
 @media(max-width:760px){.account-grid{grid-template-columns:1fr}.account-hero,.public-profile>header,.plaza-npc-chat{grid-template-columns:1fr;display:grid;text-align:center}.profile-avatar-xl{margin:auto}.plaza-npc-chat img{max-height:240px;margin:auto}.plaza-chat-shell>header{display:block}.plaza-chat-shell>header small{display:block;margin-top:4px}.plaza-chat-form{grid-template-columns:30px 1fr}.plaza-chat-form button{grid-column:2;padding:9px}.world-encounter-float{right:10px!important;bottom:72px!important;width:calc(100vw - 20px)!important}}
+
+/* Nitidez dos habitantes: nearest-neighbor para a arte pixel existente */
+.inhabitant-portrait img,
+.tower-king img,
+.plaza-npc-chat img,
+.character-reply>img,
+.world-encounter-float .encounter-head img{
+  image-rendering:pixelated!important;
+  image-rendering:crisp-edges!important;
+  object-fit:contain!important;
+  filter:none!important;
+}
+.inhabitant-portrait img{max-width:190px!important;width:auto!important;height:auto!important;margin:auto}
+.tower-king img{max-width:300px!important;width:100%!important;height:auto!important}
+.plaza-npc-chat img{max-width:220px!important;width:100%!important;height:auto!important}
+.world-encounter-float .encounter-head img{width:72px!important;height:72px!important}
