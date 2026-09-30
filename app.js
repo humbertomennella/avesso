@@ -68,7 +68,7 @@ async function renderWorld(){
   const order=['algo','404','npc','rei_engajamento','aquele_le_tudo','alem'];
   chars.sort((a,b)=>order.indexOf(a.slug)-order.indexOf(b.slug));
   $('#feed-list').innerHTML=`<section class="world-intro"><span class="section-code">AVESSO.SYS // HABITANTES</span><h2>Gente, erros e outras coisas que moram aqui.</h2><p>Nem todos aparecem quando você chama. Alguns consideram isso uma qualidade.</p></section><div class="inhabitants-grid">${chars.map(c=>`<article class="inhabitant-card" style="--accent:${c.accent_color||'#d8ff3e'}"><div class="inhabitant-art"><img src="${escapeHtml(c.image_path||'')}" alt="${escapeHtml(c.name)}" loading="lazy"></div><div class="inhabitant-copy"><span class="section-code">${escapeHtml(c.home_location||'MUNDO')}</span><h3>${escapeHtml(c.name)}</h3><strong>${escapeHtml(c.role)}</strong><p>${escapeHtml(c.bio||'')}</p><div class="inhabitant-personality"><b>PERSONALIDADE</b><span>${escapeHtml(c.personality||'')}</span></div><small>estado: ${escapeHtml(presenceLabel(c.presence_state))}</small></div></article>`).join('')}</div>`;
-  triggerWorldCharacter('world_event',{character:'aquele_le_tudo'});
+  triggerWorldCharacter('idle',{character:'aquele_le_tudo'});
 }
 
 function weightedPick(items=[]){
@@ -117,7 +117,6 @@ async function loadWorldState(){
   }
   setWorldModeLabel();
   algoSay('feed_default');
-  const algo=state.world.characters.algo;
   if(algo&&!state.world.lastInteraction)showCharacterInteraction({character:algo,interaction:{body:'Estou online. Contra recomendação médica de vários servidores.',source:'curated'}});
 }
 async function saveWorldMode(mode){
@@ -230,6 +229,7 @@ function renderProfile(){
 }
 async function editBio(){const bio=prompt('Bio curta, até 180 caracteres:',state.profile.bio||'');if(bio===null)return;const {data,error}=await supabase.from('profiles').update({bio:bio.slice(0,180)}).eq('id',state.profile.id).select().single();if(error)return toast('A bio resistiu à mudança.');state.profile=data;renderProfile();toast('Bio atualizada. Crise de identidade adiada.');}
 $('#refresh-feed').onclick=loadFeed;
+const visitorClose=$('.world-visitor-close');if(visitorClose)visitorClose.onclick=()=>$('#world-visitor').classList.add('hidden');
 function subscribeRealtime(){
   supabase.channel('avesso-feed')
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>loadFeed())
