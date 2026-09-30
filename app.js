@@ -167,7 +167,20 @@ function renderProfile(){
 }
 async function editBio(){const bio=prompt('Bio curta, até 180 caracteres:',state.profile.bio||'');if(bio===null)return;const {data,error}=await supabase.from('profiles').update({bio:bio.slice(0,180)}).eq('id',state.profile.id).select().single();if(error)return toast('A bio resistiu à mudança.');state.profile=data;renderProfile();toast('Bio atualizada. Crise de identidade adiada.');}
 $('#refresh-feed').onclick=loadFeed;
-function subscribeRealtime(){supabase.channel('avesso-feed').on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>loadFeed()).on('postgres_changes',{event:'*',schema:'public',table:'responses'},()=>loadFeed()).subscribe();}
+function subscribeRealtime(){
+  supabase.channel('avesso-feed')
+    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>loadFeed())
+    .on('postgres_changes',{event:'*',schema:'public',table:'responses'},()=>loadFeed())
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'world_settings'},payload=>{
+      state.world.settings=payload.new||state.world.settings;
+      setWorldModeLabel();
+      toast(state.world.settings?.world_interventions_enabled?'AVESSO.SYS: interferências liberadas. Péssima hora para perder o 404 de vista.':'AVESSO.SYS: interferências visuais suspensas.');
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'world_events'},payload=>{
+      if(payload.new?.status==='active')toast(`EVENTO DO MUNDO // ${payload.new.title}`);
+    })
+    .subscribe();
+}
 
 function showAuthLinkError(){
   const query=new URLSearchParams(window.location.search);
