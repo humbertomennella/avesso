@@ -121,7 +121,7 @@ async function saveWorldMode(mode){
     allow_profile_interference:mode==='chaos',
     allow_character_visits:mode!=='observer'
   };
-  $$('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
+  $('[data-world-mode]').forEach(b=>b.disabled=true);
   let {data,error}=await supabase.from('user_world_preferences')
     .update(patch)
     .eq('user_id',state.profile.id)
@@ -135,7 +135,7 @@ async function saveWorldMode(mode){
     data=created.data; error=created.error;
   }
   if(error||!data){
-  $$('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
+    $('[data-world-mode]').forEach(b=>b.disabled=false);
     console.error('world mode update failed',error);
     return toast('O modo não foi salvo. O sistema tropeçou na própria configuração.');
   }
