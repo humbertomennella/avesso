@@ -388,23 +388,49 @@ async function sendReply(post_id){
 }
 
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
+async function loadTower(){
+  const box=$('#tower-stream');
+  const king=state.world.characters.rei_engajamento;
+  if(!box||!king||!state.profile)return;
+  const {data}=await supabase.from('character_interactions').select('id,body,created_at,source').eq('character_id',king.id).eq('user_id',state.profile.id).in('trigger_type',['tower_opened','tower_pulse']).order('created_at',{ascending:false}).limit(5);
+  const rows=data||[];
+  box.innerHTML=rows.length?rows.map(x=>'<article><span>REI // '+ago(x.created_at)+'</span><p>'+escapeHtml(x.body)+'</p></article>').join(''):'<div class="tower-loading">O Rei está preparando uma apresentação com 73 slides. Ninguém pediu.</div>';
+}
+async function pulseTower(opening=false){
+  if(!isFeedTab()||state.world.preferences?.participation_mode==='observer')return;
+  const data=await askWorldCharacter(opening?'tower_opened':'tower_pulse',{character:'rei_engajamento',silent:true,surface:'tower',action_type:opening?'tower_opened':'tower_pulse'});
+  if(data)await loadTower();
+}
+function scheduleTower(){
+  clearTimeout(state.world.towerTimer);
+  if(!state.session)return;
+  const delay=(90+Math.random()*120)*1000;
+  state.world.towerTimer=setTimeout(async()=>{if(isFeedTab())await pulseTower(false);scheduleTower();},delay);
+}
+$('#tower-refresh').onclick=async()=>{trackAction('tower_refresh','tower',{},false);await pulseTower(true);};
 function applyAppTabLayout(){
-  const worldOpen=state.tab==='residents';
-  $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
-  $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
-  $('.feed-header')?.classList.toggle('hidden',worldOpen);
-  $('#refresh-feed')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
+  const residents=state.tab==='residents';
+  const plaza=state.tab==='plaza';
+  const special=residents||plaza||state.tab==='profile';
+  $('#app-view')?.classList.toggle('inhabitants-open',residents);
+  $('#app-view')?.classList.toggle('plaza-open',plaza);
+  $('#app-view')?.classList.toggle('focus-open',special);
+  $('.composer')?.classList.toggle('hidden',special);
+  $('.feed-header')?.classList.toggle('hidden',residents||plaza);
+  $('#refresh-feed')?.classList.toggle('hidden',special);
 }
 document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   state.tab=b.dataset.appTab;
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
-  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles'};
+  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',plaza:'Praça Central',profile:'Seu canto, sem palco',residents:'Mundo deles'};
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
+  trackAction('tab_view',state.tab,{tab:state.tab},true);
   if(state.tab==='profile')renderProfile();
   else if(state.tab==='residents')await renderInhabitantsPage();
-  else loadFeed();
+  else if(state.tab==='plaza')await renderPlaza();
+  else {loadFeed();loadTower();if(state.tab==='feed')pulseTower(false);}
 });
 async function renderInhabitantsPage(){
   if(state.tab!=='residents')return;
