@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,lastInteractionId:null} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, scrollTrackedAt:0, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -13,6 +13,31 @@ function ago(date){ const s=Math.floor((Date.now()-new Date(date))/1000); if(s<6
 function escapeHtml(value=''){ const d=document.createElement('div'); d.textContent=value; return d.innerHTML; }
 function isFeedTab(tab=state.tab){ return ['feed','quiet','sent'].includes(tab); }
 function bumpView(){ state.viewVersion+=1; return state.viewVersion; }
+const PROFILE_AVATARS=[
+  'assets/avatars/human-m-01.svg','assets/avatars/human-m-02.svg','assets/avatars/human-m-03.svg',
+  'assets/avatars/human-f-01.svg','assets/avatars/human-f-02.svg','assets/avatars/human-f-03.svg',
+  'assets/avatars/robot-01.svg','assets/avatars/robot-02.svg','assets/avatars/robot-03.svg'
+];
+function avatarMarkup(url,name='',className=''){
+  return url?'<img class="'+className+'" src="'+escapeHtml(url)+'" alt="'+escapeHtml(name)+'">':'<span>'+initials(name)+'</span>';
+}
+function renderNavAvatar(){
+  const el=$('#nav-avatar'); if(!el||!state.profile)return;
+  el.innerHTML=avatarMarkup(state.profile.avatar_url,state.profile.display_name,'avatar-image');
+}
+async function trackAction(action_type,surface='app',metadata={},react=false){
+  if(!state.profile?.id)return;
+  const safe={};
+  for(const [k,v] of Object.entries(metadata||{})){
+    if(['password','email','body','message','content'].includes(k))continue;
+    safe[k]=typeof v==='string'?v.slice(0,120):v;
+  }
+  supabase.from('user_actions').insert({user_id:state.profile.id,action_type,surface,metadata:safe}).then(()=>{});
+  if(react && state.world.preferences?.participation_mode!=='observer'){
+    const chance=surface==='plaza'||surface==='tower'?1:0.34;
+    if(Math.random()<chance)setTimeout(()=>askWorldCharacter('screen_action',{action_type,surface,metadata:safe}),220);
+  }
+}
 
 function weightedPick(items=[]){
   if(!items.length)return null;
@@ -59,10 +84,13 @@ async function askWorldCharacter(trigger,options={}){
     const {data,error}=await supabase.functions.invoke('world-character',{body:{
       trigger,
       character:options.character||null,
-      post_id:options.post_id||null
+      post_id:options.post_id||null,
+      action_type:options.action_type||null,
+      surface:options.surface||state.tab||'app',
+      metadata:options.metadata||{}
     }});
     if(error||!data||data.skipped)return null;
-    showEncounter(data);
+    if(!options.silent)showEncounter(data);
     return data;
   }catch(e){
     console.warn('O Mundo do AVESSO ficou quieto:',e);
