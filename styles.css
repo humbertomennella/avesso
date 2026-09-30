@@ -43,3 +43,4 @@ dialog{width:min(480px,calc(100% - 28px));border:1px solid var(--line);border-ra
   .post-image img{max-height:70vh}
   .tower-world,.plaza-world{padding:15px;min-height:auto}.tower-king,.plaza-npc{grid-template-columns:1fr;text-align:center}.tower-king img,.plaza-npc img{max-height:300px}.tower-grid,.plaza-panels{grid-template-columns:1fr}.plaza-npc{margin-top:-30px}
 }
+.inhabitants-hero h2{font-family:"Press Start 2P",var(--mono)!important;font-size:clamp(2rem,4.6vw,4.5rem)!important;letter-spacing:-.04em!important;line-height:1.05!important;text-shadow:5px 5px 0 #243000,9px 9px 0 #000!important}.inhabitants-hero h2 em{font-family:inherit!important}
