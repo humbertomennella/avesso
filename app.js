@@ -41,8 +41,10 @@ const ACID_REACTIONS=[
 ];
 function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.webp`;}
 function applyAppWallpaper(){
-  const slug=state.profile?.app_wallpaper||'cidade-56k';
+  const useProfileWallpaper=state.tab==='profile';
+  const slug=(useProfileWallpaper?state.profile?.profile_wallpaper:state.profile?.app_wallpaper)||'cidade-56k';
   document.documentElement.style.setProperty('--avesso-app-wallpaper',`url("${wallpaperUrl(slug)}")`);
+  document.documentElement.dataset.wallpaperSurface=useProfileWallpaper?'profile':'app';
 }
 function audioContext(){
   try{
@@ -542,6 +544,7 @@ function applyAppTabLayout(){
   $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
   $('.feed-header')?.classList.toggle('hidden',worldOpen);
   $('#refresh-feed')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
+  applyAppWallpaper();
 }
 document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   const previousTab=state.tab;
@@ -958,7 +961,7 @@ async function saveWallpaper(target,slug){
   const {data,error}=await supabase.from('profiles').update({[column]:slug,updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
   if(error)return toast('O papel de parede se recusou a colar na parede.');
   state.profile=data;
-  if(target==='app')applyAppWallpaper();
+  applyAppWallpaper();
   $('#wallpaper-dialog').close();
   renderProfile();
   toast(target==='profile'?'Seu Canto ganhou cenário novo.':'O AVESSO trocou de cenário. A realidade continua em beta.');
