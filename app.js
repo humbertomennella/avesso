@@ -39,7 +39,7 @@ const ACID_REACTIONS=[
   ['isso_escalou','↗','isso escalou'],
   ['humano_detectado','♡','humano detectado']
 ];
-function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.webp`;}
+function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.svg`;}
 function applyAppWallpaper(){
   const slug=state.profile?.app_wallpaper||'cidade-56k';
   document.documentElement.style.setProperty('--avesso-app-wallpaper',`url("${wallpaperUrl(slug)}")`);
@@ -323,7 +323,7 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();startDirectRealtime();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();startDirectRealtime();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
 function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);stopPlazaRealtime();stopDirectRealtime();closeChatWindow(true);state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
@@ -755,6 +755,26 @@ async function profileById(id){
 }
 function stopDirectRealtime(){
   if(state.directChannel){supabase.removeChannel(state.directChannel);state.directChannel=null;}
+}
+async function notifyPendingFriendRequests(){
+  if(!state.profile?.id)return;
+  const {data,error}=await supabase.from('friendships')
+    .select('id,requester_id,created_at')
+    .eq('addressee_id',state.profile.id)
+    .eq('status','pending')
+    .order('created_at',{ascending:false})
+    .limit(5);
+  if(error||!data?.length)return;
+  const newest=data[0];
+  const who=await profileById(newest.requester_id);
+  const extra=data.length>1?` +${data.length-1} outro${data.length>2?'s':''}`:'';
+  socialNotify({
+    title:'Pedido de amizade pendente',
+    body:`${who?.display_name||'Alguém'} quer entrar na sua lista${extra}. A diplomacia digital exige um clique.`,
+    avatar:who?.avatar_url||'',
+    kind:'friend',
+    action:()=>openPublicProfile(newest.requester_id)
+  });
 }
 function startDirectRealtime(){
   if(state.directChannel||!state.profile?.id)return;
