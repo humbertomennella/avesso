@@ -121,7 +121,7 @@ async function saveWorldMode(mode){
     allow_profile_interference:mode==='chaos',
     allow_character_visits:mode!=='observer'
   };
-  $('[data-world-mode]').forEach(b=>b.disabled=true);
+  document.querySelectorAll('[data-world-mode]').forEach(b=>b.disabled=true);
   let {data,error}=await supabase.from('user_world_preferences')
     .update(patch)
     .eq('user_id',state.profile.id)
@@ -135,7 +135,7 @@ async function saveWorldMode(mode){
     data=created.data; error=created.error;
   }
   if(error||!data){
-    $('[data-world-mode]').forEach(b=>b.disabled=false);
+    document.querySelectorAll('[data-world-mode]').forEach(b=>b.disabled=false);
     console.error('world mode update failed',error);
     return toast('O modo não foi salvo. O sistema tropeçou na própria configuração.');
   }
@@ -150,7 +150,7 @@ async function saveWorldMode(mode){
   toast(messages[mode]);
 }
 
-$('[data-open-auth]').forEach(b=>b.addEventListener('click',()=>$('#auth-dialog').showModal()));
+document.querySelectorAll('[data-open-auth]').forEach(b=>b.addEventListener('click',()=>$('#auth-dialog').showModal()));
 $('#encounter-close').onclick=()=>{$('#world-encounter').classList.add('hidden');clearTimeout(state.world.encounterTimer);};
 $('.dialog-close').onclick=()=>$('#auth-dialog').close();
 $$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
