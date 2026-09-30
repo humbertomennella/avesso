@@ -47,7 +47,7 @@ async function loadWorldState(){
     const created=await supabase.from('user_world_preferences').upsert({user_id:state.profile.id},{onConflict:'user_id'}).select().single();
     prefs=created.data;
   }
-  state.world.preferences=prefs||{user_id:state.profile.id,participation_mode:'world',allow_post_interference:true,allow_profile_interference:true,allow_character_visits:true};
+  state.world.preferences=prefs||{user_id:state.profile.id,participation_mode:'world',allow_post_interference:false,allow_profile_interference:false,allow_character_visits:true};
   state.world.settings=settingsRes.data||{id:'global',world_events_enabled:true,world_interventions_enabled:false};
   state.world.characters=Object.fromEntries((charsRes.data||[]).map(c=>[c.slug,c]));
   state.world.dialogues=[];
