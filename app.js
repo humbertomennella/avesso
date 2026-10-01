@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -139,7 +139,7 @@ async function loadStoriesStrip(){
   host.classList.remove('hidden');
   const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(60);
   if(error){host.innerHTML='<div class="stories-error">stories deram tela azul.</div>';return;}
-  const stories=await hydrateStories(data||[]);
+  const stories=await hydrateStories((data||[]).filter(s=>!isPeerBlocked(s.author_id)));
   const latestByAuthor=[],seen=new Set();
   for(const s of stories){if(!seen.has(s.author_id)){seen.add(s.author_id);latestByAuthor.push(s);}}
   host.innerHTML=`<div class="stories-head"><div><span class="section-code">STORIES // 24H</span><b>temporário, como toda boa decisão na internet</b></div><button id="story-create-feed">＋ postar story</button></div><div class="stories-strip"><button class="story-new-card" id="story-create-feed-card"><span class="story-ring self"><i>${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</i><em>＋</em></span><b>seu story</b><small>24h e acabou</small></button>${latestByAuthor.map(s=>storyCardHtml(s,{compact:true})).join('')}</div>`;
@@ -209,6 +209,7 @@ async function loadProfileStories(userId,selector){
 async function openStory(storyId){
   const {data:story,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').eq('id',storyId).gt('expires_at',new Date().toISOString()).maybeSingle();
   if(error||!story)return toast('Este story expirou ou você não pode vê-lo. O tempo venceu outra vez.');
+  if(isPeerBlocked(story.author_id))return toast('Este usuário está bloqueado. O story ficou do outro lado da porta.');
   const [authorRes,reactionsRes,commentsRes]=await Promise.all([
     supabase.from('profiles').select('id,display_name,handle,avatar_url').eq('id',story.author_id).maybeSingle(),
     supabase.from('story_reactions').select('story_id,user_id,reaction,created_at').eq('story_id',story.id),
@@ -441,6 +442,14 @@ function guestbookImageUrl(path){return supabase.storage.from('avesso-recados').
 function richText(value=''){const escaped=escapeHtml(value).replace(/\n/g,'<br>');return escaped.replace(/(https?:\/\/[^\s<]+)/g,'<a class="guestbook-link" href="$1" target="_blank" rel="noopener noreferrer">$1</a>');}
 function safeFileName(name='arquivo'){return name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/-+/g,'-').slice(-90)||'arquivo';}
 
+async function loadBlockedPeers(){
+  if(!state.profile?.id)return;
+  const {data,error}=await supabase.from('blocks').select('blocked_id').eq('blocker_id',state.profile.id);
+  if(error){state.blockedPeers={};return;}
+  state.blockedPeers=Object.fromEntries((data||[]).map(row=>[row.blocked_id,true]));
+}
+function isPeerBlocked(peerId){return Boolean(peerId&&state.blockedPeers?.[peerId]);}
+
 async function loadMutedPeers(){
   if(!state.profile?.id)return;
   const {data}=await supabase.from('mutes').select('muted_id').eq('muter_id',state.profile.id);
@@ -482,28 +491,45 @@ async function blockChatPeer(peerId){
   const friendship=await getFriendshipWith(peerId);
   if(friendship)await supabase.from('friendships').delete().eq('id',friendship.id);
   await supabase.from('mutes').delete().eq('muter_id',state.profile.id).eq('muted_id',peerId);
+  state.blockedPeers[peerId]=true;
   delete state.mutedPeers[peerId];
   delete state.friendPresence[peerId];
   closeChatWindow(true);
   if(state.tab==='messages')renderMessagesPage();
-  toast(`${peer?.display_name||'Usuário'} foi bloqueado. A diplomacia entrou em modo avião.`);
+  if(isFeedTab()){loadFeed();if(state.tab==='feed')loadStoriesStrip();}
+  toast(`${peer?.display_name||'Usuário'} foi bloqueado. Ele também saiu do seu feed.`);
 }
 async function unblockPeer(peerId){
-  const {error}=await supabase.from('blocks').delete().eq('blocker_id',state.profile.id).eq('blocked_id',peerId);
-  if(error)return toast('O desbloqueio tropeçou na maçaneta.');
-  toast('Usuário desbloqueado. Isso não recria amizade. Seria intimidade demais para um botão.');
-  loadBlockedPanel();
+  if(!peerId||!state.profile?.id)return;
+  const button=document.querySelector(`[data-unblock="${CSS.escape(peerId)}"]`);
+  if(button){button.disabled=true;button.textContent='desbloqueando...';}
+  const {data,error}=await supabase.from('blocks').delete().eq('blocker_id',state.profile.id).eq('blocked_id',peerId).select('blocked_id');
+  if(error){
+    if(button){button.disabled=false;button.textContent='desbloquear';}
+    console.error('unblock failed',error);
+    return toast('O desbloqueio tropeçou na maçaneta.');
+  }
+  if(!data?.length){
+    await loadBlockedPeers();
+    loadBlockedPanel();
+    return toast('Esse bloqueio já não existia. A interface estava atrasada.');
+  }
+  delete state.blockedPeers[peerId];
+  await loadBlockedPanel();
+  if(isFeedTab()){loadFeed();if(state.tab==='feed')loadStoriesStrip();}
+  toast('Usuário desbloqueado. A amizade não volta sozinha, porque até botão precisa de limites.');
 }
 async function loadBlockedPanel(){
   const host=$('#blocked-panel');if(!host||!state.profile?.id)return;
   const {data:rows,error}=await supabase.from('blocks').select('blocked_id,created_at').eq('blocker_id',state.profile.id).order('created_at',{ascending:false});
   if(error){host.innerHTML='<p>Não foi possível consultar os bloqueios.</p>';return;}
   const ids=(rows||[]).map(x=>x.blocked_id);
+  state.blockedPeers=Object.fromEntries(ids.map(id=>[id,true]));
   if(!ids.length){host.innerHTML='<p>Ninguém bloqueado. A paz pode ser temporária.</p>';return;}
   const {data:profiles}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',ids);
   const map=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
   host.innerHTML=(rows||[]).map(row=>{const p=map[row.blocked_id]||{};return `<div class="blocked-row"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${escapeHtml(p.display_name||'usuário')}</b><small>@${escapeHtml(p.handle||'...')}</small></div><button data-unblock="${row.blocked_id}">desbloquear</button></div>`;}).join('');
-  $('[data-unblock]').forEach(b=>b.onclick=()=>unblockPeer(b.dataset.unblock));
+  $$('[data-unblock]').forEach(b=>b.onclick=()=>unblockPeer(b.dataset.unblock));
 }
 
 function avatarHtml(url,name='?'){ return url?`<img src="${escapeAttr(url)}" alt="" loading="lazy">`:escapeHtml(initials(name)); }
@@ -739,11 +765,11 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await loadBlockedPeers();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.blockedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
-async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
+async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
 
 function updateComposerTarget(){
   const directed=$('#post-target').value==='person';
@@ -818,8 +844,8 @@ async function loadThreadData(posts){
     supabase.from('post_reactions').select('post_id,user_id,reaction,created_at').in('post_id',ids),
     supabase.from('character_interactions').select('id,post_id,character_id,body,created_at,source,visibility').in('post_id',ids).order('created_at',{ascending:true})
   ]);
-  const responses=responsesRes.data||[];
-  const reactions=reactionsRes.data||[];
+  const responses=(responsesRes.data||[]).filter(r=>!isPeerBlocked(r.author_id));
+  const reactions=(reactionsRes.data||[]).filter(r=>!isPeerBlocked(r.user_id));
   const characterReplies=(characterRes.data||[]).filter(x=>x.post_id);
   const profileIds=[...new Set(responses.map(r=>r.author_id).filter(Boolean))];
   let profiles={};
@@ -857,7 +883,7 @@ async function loadFeed(){
     return;
   }
 
-  const posts=data||[];
+  const posts=(data||[]).filter(p=>!isPeerBlocked(p.author_id)&&!isPeerBlocked(p.recipient_id));
   const profileIds=[...new Set(posts.flatMap(p=>[p.author_id,p.recipient_id]).filter(Boolean))];
   let feedProfiles={};
   if(profileIds.length){
