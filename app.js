@@ -389,6 +389,7 @@ async function openStory(storyId,options={}){
     const signed=await supabase.storage.from('avesso-stories').createSignedUrl(story.image_path,300);
     image_url=signed.data?.signedUrl||'';
   }
+  const storyIsVideo=story.media_type==='video';
   const comments=commentsRes.data||[],commentIds=[...new Set(comments.map(x=>x.user_id))];
   let commentProfiles={};
   if(commentIds.length){
@@ -405,7 +406,7 @@ async function openStory(storyId,options={}){
   const host=$('#story-view-content');
   host.innerHTML=`<article class="story-view-card">
     <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${escapeHtml(a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
-    <div class="story-stage ${image_url?'has-image':''}" style="${image_url?`--story-image:url('${escapeAttr(image_url)}')`:''}">${image_url?`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||'usuário')}" decoding="async" fetchpriority="high">`:''}${story.body?`<p>${escapeHtml(story.body)}</p>`:''}</div>
+    <div class="story-stage ${image_url?\'has-image\':\'\'} ${storyIsVideo?\'has-video\':\'\'}" style="${image_url&&!storyIsVideo?`--story-image:url(\'${escapeAttr(image_url)}\')`:\'\'}">${image_url?(storyIsVideo?`<video class="story-video" src="${escapeAttr(image_url)}" controls playsinline preload="metadata"></video>`:`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||\'usuário\')}" decoding="async" fetchpriority="high">`):\'\'}${story.body?`<p>${escapeHtml(story.body)}</p>`:\'\'}</div>
     <div class="story-reactions">${reactionHtml}</div>
     <section class="story-comments"><h3>respostas // sem plateia</h3><div class="story-comment-list">${commentsHtml}</div><div class="story-comment-compose"><textarea id="story-comment-body" maxlength="420" placeholder="responda antes que isso desapareça..."></textarea><div><button id="story-comment-emoticons" type="button">☻ avessícones</button><button id="story-comment-send" type="button">responder</button></div><div id="story-comment-palette" class="feed-emoticon-palette hidden">${avessoEmoticonButtons('data-story-comment-emoticon')}</div></div></section>
   </article>`;
@@ -414,6 +415,10 @@ async function openStory(storyId,options={}){
   $('#story-comment-send').onclick=()=>sendStoryComment(story.id);
   $('#story-comment-emoticons').onclick=()=>$('#story-comment-palette').classList.toggle('hidden');
   host.querySelectorAll('[data-story-comment-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#story-comment-body');if(input){input.value+=`${input.value?' ':''}${b.dataset.storyCommentEmoticon}`;input.focus();}});
+  const storyVideo=host.querySelector('.story-video');
+  storyVideo?.addEventListener('play',pauseStoryTimer);
+  storyVideo?.addEventListener('pause',resumeStoryTimer);
+  storyVideo?.addEventListener('ended',resumeStoryTimer);
   const commentInput=$('#story-comment-body');
   commentInput?.addEventListener('focus',pauseStoryTimer);
   commentInput?.addEventListener('blur',resumeStoryTimer);
@@ -821,7 +826,7 @@ async function setPresenceMode(mode){
 function presenceLeasePatch(){
   const now=Date.now();
   return {
-    online_until:new Date(now+45000).toISOString(),
+    online_until:new Date(now+30000).toISOString(),
     updated_at:new Date(now).toISOString()
   };
 }
@@ -832,7 +837,7 @@ function markPresenceActivity({force=false}={}){
   state.lastPresenceActivityAt=now;
   const patch={
     last_seen:new Date(now).toISOString(),
-    online_until:new Date(now+45000).toISOString(),
+    online_until:new Date(now+30000).toISOString(),
     updated_at:new Date(now).toISOString()
   };
   state.profile={...state.profile,...patch};
@@ -871,7 +876,7 @@ function startPresenceHeartbeat(){
     supabase.from('profiles').update(patch).eq('id',state.profile.id).then(()=>{});
   };
   beat();
-  state.presenceTimer=setInterval(beat,15000);
+  state.presenceTimer=setInterval(beat,10000);
 }
 document.addEventListener('visibilitychange',()=>{
   if(!state.profile)return;
@@ -901,8 +906,8 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 window.addEventListener('blur',()=>{if(state.profile)autoMinimizeChat();});
-window.addEventListener('pagehide',()=>{if(state.profile)markPresenceOffline({keepalive:true});});
-window.addEventListener('beforeunload',()=>{if(state.profile)markPresenceOffline({keepalive:true});});
+// Não marcamos offline em pagehide/beforeunload: refresh também dispara esses eventos.
+ // O lease curto expira sozinho se a aba realmente fechar; logout explícito continua imediato.
 ['pointerdown','keydown','touchstart'].forEach(type=>document.addEventListener(type,()=>markPresenceActivity(),{passive:true}));
 window.addEventListener('focus',()=>markPresenceActivity({force:true}));
 const PHOTO_REACTIONS=[
@@ -1191,6 +1196,18 @@ async function askWorldCharacter(trigger,options={}){
     return null;
   }
 }
+async function askAlgoFeedReview(trigger,postId){
+  if(!postId||!state.session||!state.profile)return null;
+  const payload=await askWorldCharacter(trigger,{
+    character:'algo',
+    post_id:postId,
+    action_type:trigger,
+    surface:'feed',
+    silent:true
+  });
+  if(payload?.interaction&&isFeedTab())loadFeed();
+  return payload;
+}
 function deliverAqueleReaction(payload){
   if(!payload?.character||!payload?.interaction?.body)return;
   if(payload.delivery==='message'){
@@ -1326,7 +1343,12 @@ $('#encounter-close').onclick=()=>dismissEncounter();
 $('.dialog-close').onclick=()=>$('#auth-dialog').close();
 $('.avatar-dialog-close').onclick=()=>$('#avatar-dialog').close();
 $('.wallpaper-dialog-close').onclick=()=>$('#wallpaper-dialog').close();
-$('.story-create-close').onclick=()=>$('#story-create-dialog').close();
+$('.story-create-close').onclick=()=>{
+  stopStoryCamera();
+  clearStoryPreview();
+  state.storyCapturedFile=null;
+  $('#story-create-dialog').close();
+};
 $('.story-view-close').onclick=closeStoryViewer;
 const storyViewDialog=$('#story-view-dialog');
 storyViewDialog?.addEventListener('click',e=>{
@@ -1336,13 +1358,26 @@ storyViewDialog?.addEventListener('close',()=>{
   clearStoryTimer();
   state.storyCurrentId=null;
 });
+const storyCreateDialog=$('#story-create-dialog');
+storyCreateDialog?.addEventListener('close',()=>{
+  stopStoryCamera();
+  clearStoryPreview();
+  state.storyCapturedFile=null;
+});
 $('#story-publish').onclick=publishStory;
+$('#story-camera-open').onclick=openStoryCamera;
+$('#story-camera-switch').onclick=switchStoryCamera;
+$('#story-camera-photo').onclick=takeStoryPhoto;
+$('#story-camera-record').onclick=toggleStoryRecording;
+$('#story-camera-close').onclick=stopStoryCamera;
 $('#story-image').onchange=e=>{
-  const file=e.target.files?.[0]||null,box=$('#story-image-preview');
-  if(!file){box.classList.add('hidden');box.innerHTML='';return;}
-  const url=URL.createObjectURL(file);
-  box.innerHTML=`<img src="${url}" alt="prévia do story"><small>${escapeHtml(file.name)}</small>`;
-  box.classList.remove('hidden');
+  const file=e.target.files?.[0]||null;
+  state.storyCapturedFile=null;
+  stopStoryCamera();
+  if(!file){clearStoryPreview();return;}
+  const allowed=/^(image\/(jpeg|png|webp|gif)|video\/(webm|mp4|quicktime))$/i.test(file.type||'');
+  if(!allowed){e.target.value='';clearStoryPreview();return toast('Story aceita imagem, GIF, WEBM, MP4 ou MOV.');}
+  renderStoryMediaPreview(file);
 };
 $$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
 function setAuthMode(mode){ state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
@@ -1879,7 +1914,7 @@ $('#publish-post').onclick=async()=>{
   trackAction(media_kind?`${media_kind}_posted`:gifSelected?'gif_posted':image_url?'image_posted':'post_created','composer',{directed,media_kind});
   if(isFeedTab())loadFeed();
   loadImpact();
-  if(createdPost?.id)setTimeout(()=>askWorldCharacter(image_url?'image_posted':'post_created',{post_id:createdPost.id,action_type:image_url?'image_posted':'post_created',surface:'feed'}),500);
+  if(createdPost?.id)setTimeout(()=>askAlgoFeedReview(image_url?'image_posted':'post_created',createdPost.id),900);
 };
 
 async function loadThreadData(posts){
@@ -1888,7 +1923,7 @@ async function loadThreadData(posts){
   const [responsesRes,reactionsRes,characterRes]=await Promise.all([
     supabase.from('responses').select('id,post_id,author_id,body,created_at').in('post_id',ids).order('created_at',{ascending:true}),
     supabase.from('post_reactions').select('post_id,user_id,reaction,created_at').in('post_id',ids),
-    supabase.from('character_interactions').select('id,post_id,character_id,body,created_at,source,visibility').in('post_id',ids).order('created_at',{ascending:true})
+    supabase.from('character_interactions').select('id,post_id,character_id,body,created_at,source,visibility,metadata').in('post_id',ids).order('created_at',{ascending:true})
   ]);
   const responses=(responsesRes.data||[]).filter(r=>!isPeerBlocked(r.author_id));
   const reactions=(reactionsRes.data||[]).filter(r=>!isPeerBlocked(r.user_id));
@@ -1948,7 +1983,10 @@ async function loadFeed(){
 
   if(posts.some(p=>p.response_count===0)){
     algoSay('feed_attention');
-    if(state.tab==='feed')setTimeout(()=>{ if(state.tab==='feed'&&viewVersion===state.viewVersion) askWorldCharacter('feed_attention'); },2200);
+    if(state.tab==='feed')setTimeout(()=>{
+      if(state.tab==='feed'&&viewVersion===state.viewVersion)
+        maybeWorldCharacter('feed_attention',{character:'algo',surface:'feed',action_type:'feed_attention'},.035,12*60*1000);
+    },2600);
   }else if(posts.length)algoSay('feed_default');
 }
 function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
@@ -1961,10 +1999,12 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
   list.innerHTML=posts.map((p,postIndex)=>{
     const responses=threadData.responses[p.id]||[];
     const characterReplies=threadData.characters[p.id]||[];
+    const characterReactions=characterReplies.filter(x=>x.metadata?.interaction_kind==='reaction'&&x.metadata?.reaction);
+    const characterComments=characterReplies.filter(x=>x.metadata?.interaction_kind!=='reaction');
     const reactionRows=threadData.reactions[p.id]||[];
     const conversation=[
       ...responses.map(x=>({...x,type:'human'})),
-      ...characterReplies.map(x=>({...x,type:'character'}))
+      ...characterComments.map(x=>({...x,type:'character'}))
     ].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
     const conversationHtml=conversation.length?`<section class="conversation-thread">
       <header><span>CONVERSA // ${conversation.length} ${conversation.length===1?'RESPOSTA':'RESPOSTAS'}</span><small>sem hierarquia. conceito quase ofensivo.</small></header>
@@ -1977,8 +2017,10 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       }).join('')}</div></section>`:'';
     const reactionHtml=ACID_REACTIONS.map(([id,icon,label])=>{
       const rows=reactionRows.filter(x=>x.reaction===id);
+      const botRows=characterReactions.filter(x=>x.metadata?.reaction===id);
       const active=rows.some(x=>x.user_id===state.profile.id);
-      return `<button class="acid-reaction ${active?'active':''}" data-react-post="${p.id}" data-reaction="${id}" aria-pressed="${active}"><span>${icon}</span>${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`;
+      const total=rows.length+botRows.length;
+      return `<button class="acid-reaction ${active?'active':''}" data-react-post="${p.id}" data-reaction="${id}" aria-pressed="${active}"><span>${icon}</span>${label}${total?` <b>${total}</b>`:''}${botRows.length?'<i class="character-reaction-mark" title="ALGO reagiu">ALGO</i>':''}</button>`;
     }).join('');
     const ownerActions=p.author_id===state.profile.id?`<div class="post-owner-actions"><button data-post-edit="${p.id}">editar</button><button class="danger" data-post-delete="${p.id}">apagar</button></div>`:'';
     return `<article class="post-card" data-post-card="${p.id}">
@@ -2073,7 +2115,7 @@ async function sendReply(post_id){
   toast('Resposta publicada. Agora ela aparece na conversa, como seria razoável esperar.');
   trackAction('reply_created','feed',{post_id});
   if(isFeedTab())loadFeed();
-  setTimeout(()=>askWorldCharacter('reply_created',{post_id}),650);
+  setTimeout(()=>askAlgoFeedReview('reply_created',post_id),1100);
 }
 
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
@@ -2335,7 +2377,15 @@ async function profileById(id){
   return data||null;
 }
 function cachedPresenceEntry(profile){
-  return {mode:presenceView(profile).mode,lastSeen:profile?.last_seen?new Date(profile.last_seen).getTime():0,profile};
+  const mode=presenceView(profile).mode;
+  const lastSeen=profile?.last_seen?new Date(profile.last_seen).getTime():0;
+  const leaseEnd=profile?.online_until?new Date(profile.online_until).getTime():0;
+  return {mode,lastSeen,offlineSince:mode==='offline'?Math.max(lastSeen,leaseEnd||0):0,profile};
+}
+function shouldNotifyFriendOnline(previous,next){
+  if(previous?.mode!=='offline'||next?.mode!=='online')return false;
+  const offlineSince=Number(previous.offlineSince||previous.lastSeen||0);
+  return Boolean(offlineSince&&Date.now()-offlineSince>=60000);
 }
 function renderOnlineFriendsDock(){
   const dock=$('#online-friends-dock'),list=$('#online-friends-list'),count=$('#online-friends-count');
@@ -2392,7 +2442,7 @@ async function refreshFriendPresenceCache({notify=true}={}){
     const previous=state.friendPresence[friend.id];
     const entry=cachedPresenceEntry(friend);
     next[friend.id]=entry;
-    if(notify&&previous?.mode==='offline'&&entry.mode==='online'&&!isPeerMuted(friend.id)&&onlineNoticeAllowed(friend.id)){
+    if(notify&&shouldNotifyFriendOnline(previous,entry)&&!isPeerMuted(friend.id)&&onlineNoticeAllowed(friend.id)){
       socialNotify({
         title:`${friend.display_name||'Um amigo'} entrou no AVESSO`,
         body:'Online agora. Uma notificação basta; o modem não precisa de bis.',
@@ -2429,7 +2479,7 @@ function startFriendPresenceWatch(){
 function onlineNoticeAllowed(profileId){
   const key=`avesso.online.notice.${profileId}`;
   const last=Number(state.onlineNoticeAt?.[profileId]||localStorage.getItem(key)||0);
-  if(Date.now()-last<90*1000)return false;
+  if(Date.now()-last<3*60*1000)return false;
   state.onlineNoticeAt[profileId]=Date.now();
   try{localStorage.setItem(key,String(Date.now()));}catch{}
   return true;
@@ -2441,7 +2491,7 @@ function noteFriendPresence(profile){
   state.friendPresence[profile.id]=next;
   renderOnlineFriendsDock();
   if(state.chatWindowOpen&&state.directPeerId===profile.id)updateChatPeerHeader(profile);
-  if(prev?.mode==='offline'&&next.mode==='online'&&!isPeerMuted(profile.id)&&onlineNoticeAllowed(profile.id)){
+  if(shouldNotifyFriendOnline(prev,next)&&!isPeerMuted(profile.id)&&onlineNoticeAllowed(profile.id)){
     socialNotify({
       title:`${profile.display_name||'Um amigo'} entrou no AVESSO`,
       body:'Online agora. Uma notificação basta; o modem não precisa de bis.',
