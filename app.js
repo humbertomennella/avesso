@@ -2442,141 +2442,563 @@ function adminAuditRow(row){
   return '<div class="admin-audit-row"><b>'+escapeHtml(labels[row.action]||row.action||'ação')+'</b><span>'+escapeHtml(row.target_type||'sistema')+(row.target_id?' · '+escapeHtml(String(row.target_id).slice(0,12)):'')+'</span><time>'+ago(row.created_at)+'</time></div>';
 }
 
-async function renderAdminDashboard(){
+
+function staffRoleLabel(role){
+  return STAFF_ROLE_INFO[role]?.label||'USUÁRIO';
+}
+function staffAllowedViews(){
+  const rank=staffRank();
+  const views=[
+    ['overview','VISÃO GERAL','▦'],
+    ['reports','DENÚNCIAS','⚑'],
+    ['monitor','MONITOR 24H','◎'],
+    ['users','USUÁRIOS','◉'],
+    ['plaza','PRAÇA','⌂'],
+    ['chat','CHAT INTERNO','↔']
+  ];
+  if(rank>=20)views.splice(5,0,['staff','STAFF','♜']);
+  if(rank>=30)views.push(
+    ['appearance','SITE & LAYOUT','▤'],
+    ['cms','PÁGINAS / CMS','✎'],
+    ['characters','HABITANTES / IA','◇'],
+    ['assets','ASSETS / EMBLEMAS','▣'],
+    ['database','BANCO DE DADOS','⌘']
+  );
+  return views;
+}
+function staffSetView(view){
+  if(!staffAllowedViews().some(v=>v[0]===view))view='overview';
+  state.staffView=view;
+  renderAdminDashboard({reuse:true});
+}
+function staffTopNav(){
+  return '<nav class="staff-dashboard-nav">'+staffAllowedViews().map(([id,label,icon])=>
+    '<button type="button" class="'+(state.staffView===id?'active':'')+'" data-staff-view="'+id+'"><i>'+icon+'</i><span>'+label+'</span></button>'
+  ).join('')+'</nav>';
+}
+function staffStat(label,value,detail=''){
+  return '<article class="staff-stat"><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(String(value??0))+'</strong><small>'+escapeHtml(detail)+'</small></article>';
+}
+function staffRoleCapabilities(role=state.adminRole){
+  const rank=STAFF_ROLE_INFO[role]?.rank||0;
+  const rows=[
+    ['Receber e assumir denúncias',rank>=10],
+    ['Banir usuário por tempo ou permanentemente',rank>=10],
+    ['Enviar notificação direta a usuário',rank>=10],
+    ['Gerenciar termos monitorados',rank>=10],
+    ['Moderar posts, fotos e Praça',rank>=10],
+    ['Gerenciar moderadores',rank>=20],
+    ['Advertir / remover direitos de moderador',rank>=20],
+    ['Assumir casos graves e encaminhados',rank>=20],
+    ['Tema, layout, Stories e Feed globais',rank>=30],
+    ['CMS das páginas e login/cadastro',rank>=30],
+    ['Habitantes, IA, frases e comportamento',rank>=30],
+    ['Assets, avatares, emoticons e emblemas',rank>=30],
+    ['Explorador administrativo do banco',rank>=30]
+  ];
+  return '<div class="staff-capability-grid">'+rows.map(([label,ok])=>
+    '<div class="'+(ok?'enabled':'disabled')+'"><b>'+(ok?'✓':'×')+'</b><span>'+escapeHtml(label)+'</span></div>'
+  ).join('')+'</div>';
+}
+function staffOverviewHtml(data){
+  const c=data.counts||{};
+  return '<section class="staff-view active-view">'+
+    '<div class="staff-section-head"><div><span class="section-code">DASHBOARD // '+escapeHtml(staffRoleLabel(state.adminRole))+'</span><h2>Controle sem culto ao KPI</h2></div><button id="staff-refresh">↻ atualizar</button></div>'+
+    '<div class="staff-stats">'+
+      staffStat('habitantes',c.users,'contas')+
+      staffStat('online',c.online,'agora')+
+      staffStat('denúncias',c.reports_open,'em aberto')+
+      staffStat('alertas 24h',c.hits_open,'aguardando revisão')+
+      staffStat('banidos',c.banned,'ativos')+
+      staffStat('staff',c.staff,'pessoas')+
+    '</div>'+
+    '<section class="staff-panel"><span class="section-code">PERMISSÕES // O QUE ESTE CARGO PODE FAZER</span>'+
+      '<h3>'+escapeHtml(staffRoleLabel(state.adminRole))+'</h3>'+staffRoleCapabilities()+
+    '</section>'+
+    '<section class="staff-panel staff-privacy-note"><span class="section-code">PRIVACIDADE</span>'+
+      '<p>O monitor 24h cobre superfícies públicas: feed, respostas, perfis e Praça. Mensagens privadas entre usuários não entram no scanner. Administração não precisa virar vigilância doméstica.</p>'+
+    '</section>'+
+  '</section>';
+}
+function staffReportCard(report,staffRows){
+  const assignees=staffRows.map(x=>'<option value="'+escapeAttr(x.user_id)+'" '+(report.assigned_to===x.user_id?'selected':'')+'>'+escapeHtml('@'+x.handle+' · '+staffRoleLabel(x.role))+'</option>').join('');
+  return '<article class="staff-report-card" data-report-card="'+escapeAttr(report.id)+'">'+
+    '<header><div><span class="staff-priority '+escapeAttr(report.priority||'normal')+'">'+escapeHtml(report.priority||'normal')+'</span>'+
+      '<b>'+escapeHtml(String(report.reason||'denúncia'))+'</b><small>'+ago(report.created_at)+'</small></div>'+
+      '<code>'+escapeHtml(String(report.id).slice(0,8))+'</code></header>'+
+    '<p>'+escapeHtml(report.details||'sem detalhes fornecidos')+'</p>'+
+    '<div class="staff-report-meta"><span>denunciante: @'+escapeHtml(report.reporter_handle||'...')+'</span>'+
+      '<span>alvo: '+escapeHtml(report.reported_handle?'@'+report.reported_handle:(report.post_id?'post '+String(report.post_id).slice(0,8):'conteúdo'))+'</span></div>'+
+    '<div class="staff-form-grid report-grid">'+
+      '<label>status<select data-report-status><option value="aberto" '+(report.status==='aberto'?'selected':'')+'>aberto</option><option value="em_analise" '+(report.status==='em_analise'?'selected':'')+'>em análise</option><option value="encaminhado" '+(report.status==='encaminhado'?'selected':'')+'>encaminhado</option><option value="resolvido" '+(report.status==='resolvido'?'selected':'')+'>resolvido</option><option value="descartado" '+(report.status==='descartado'?'selected':'')+'>descartado</option><option value="arquivado" '+(report.status==='arquivado'?'selected':'')+'>arquivado</option></select></label>'+
+      '<label>prioridade<select data-report-priority><option value="baixa" '+(report.priority==='baixa'?'selected':'')+'>baixa</option><option value="normal" '+(report.priority==='normal'?'selected':'')+'>normal</option><option value="alta" '+(report.priority==='alta'?'selected':'')+'>alta</option><option value="critica" '+(report.priority==='critica'?'selected':'')+'>crítica</option></select></label>'+
+      '<label>encaminhar / assumir<select data-report-assignee><option value="">manter responsável</option>'+assignees+'</select></label>'+
+    '</div>'+
+    '<label class="staff-wide-field">notas internas<textarea data-report-notes maxlength="3000">'+escapeHtml(report.staff_notes||'')+'</textarea></label>'+
+    '<label class="staff-wide-field">resolução<textarea data-report-resolution maxlength="2000">'+escapeHtml(report.resolution||'')+'</textarea></label>'+
+    '<footer><button data-report-save="'+escapeAttr(report.id)+'">salvar caso</button></footer>'+
+  '</article>';
+}
+function staffReportsHtml(data){
+  const reports=Array.isArray(data.reports)?data.reports:[];
+  const staffRows=Array.isArray(data.staff)?data.staff:[];
+  return '<section class="staff-view active-view"><div class="staff-section-head"><div><span class="section-code">DENÚNCIAS // TRIAGEM</span><h2>Fila de casos</h2></div><small>'+reports.length+' carregados</small></div>'+
+    '<div class="staff-report-list">'+(reports.map(r=>staffReportCard(r,staffRows)).join('')||'<p class="staff-empty">Nenhuma denúncia. A internet teve cinco minutos de comportamento aceitável.</p>')+'</div></section>';
+}
+function staffMonitorHtml(data){
+  const terms=Array.isArray(data.terms)?data.terms:[];
+  const hits=Array.isArray(data.hits)?data.hits:[];
+  const staffRows=Array.isArray(data.staff)?data.staff:[];
+  const assignees=staffRows.map(x=>'<option value="'+escapeAttr(x.user_id)+'">@'+escapeHtml(x.handle)+' · '+escapeHtml(staffRoleLabel(x.role))+'</option>').join('');
+  return '<section class="staff-view active-view">'+
+    '<div class="staff-section-head"><div><span class="section-code">MONITOR 24H // SUPERFÍCIES PÚBLICAS</span><h2>Termos e ocorrências</h2></div><small>Feed · respostas · perfis · Praça</small></div>'+
+    '<section class="staff-panel"><h3>Adicionar termo monitorado</h3><div class="staff-form-grid">'+
+      '<label>palavra / frase<input id="staff-term-text" maxlength="160" placeholder="termo a monitorar"></label>'+
+      '<label>categoria<input id="staff-term-category" maxlength="60" placeholder="racismo, homofobia, ameaça..."></label>'+
+      '<label>gravidade<select id="staff-term-severity"><option value="baixa">baixa</option><option value="media" selected>média</option><option value="alta">alta</option><option value="critica">crítica</option></select></label>'+
+      '<label>estado<select id="staff-term-enabled"><option value="1">ativo</option><option value="0">pausado</option></select></label>'+
+    '</div><label class="staff-wide-field">nota interna<input id="staff-term-notes" maxlength="500" placeholder="contexto para a equipe"></label><button id="staff-term-save">＋ adicionar ao monitor</button></section>'+
+    '<section class="staff-panel"><h3>Termos atuais</h3><div class="staff-term-list">'+terms.map(t=>
+      '<article><div><b>'+escapeHtml(t.term)+'</b><small>'+escapeHtml(t.category)+' · '+escapeHtml(t.severity)+'</small></div><span class="'+(t.enabled?'on':'off')+'">'+(t.enabled?'ATIVO':'PAUSADO')+'</span><button data-term-toggle="'+escapeAttr(t.id)+'" data-term-enabled="'+(t.enabled?'0':'1')+'" data-term-term="'+escapeAttr(t.term)+'" data-term-category="'+escapeAttr(t.category)+'" data-term-severity="'+escapeAttr(t.severity)+'" data-term-notes="'+escapeAttr(t.notes||'')+'">'+(t.enabled?'pausar':'ativar')+'</button></article>'
+    ).join('')+'</div></section>'+
+    '<section class="staff-panel"><h3>Ocorrências detectadas</h3><div class="staff-hit-list">'+(hits.map(h=>
+      '<article class="staff-hit '+escapeAttr(h.severity)+'"><header><b>'+escapeHtml(h.matched_term)+'</b><span>'+escapeHtml(h.category)+' · '+escapeHtml(h.severity)+'</span><time>'+ago(h.created_at)+'</time></header>'+
+      '<p>'+escapeHtml(h.excerpt||'')+'</p><small>'+escapeHtml(h.source_type)+' · '+escapeHtml(h.user_handle?'@'+h.user_handle:'sem usuário')+'</small>'+
+      '<div><select data-hit-status="'+h.id+'"><option value="novo" '+(h.status==='novo'?'selected':'')+'>novo</option><option value="revisando" '+(h.status==='revisando'?'selected':'')+'>revisando</option><option value="encaminhado" '+(h.status==='encaminhado'?'selected':'')+'>encaminhado</option><option value="ignorado" '+(h.status==='ignorado'?'selected':'')+'>ignorado</option><option value="acao_tomada" '+(h.status==='acao_tomada'?'selected':'')+'>ação tomada</option></select>'+
+      '<select data-hit-assignee="'+h.id+'"><option value="">responsável atual</option>'+assignees+'</select><button data-hit-save="'+h.id+'">salvar</button></div></article>'
+    ).join('')||'<p class="staff-empty">Nenhuma ocorrência detectada.</p>')+'</div></section>'+
+  '</section>';
+}
+function staffUserCard(user){
+  const role=user.staff_role||null;
+  const self=user.id===state.profile.id;
+  const rank=staffRank();
+  const canManageRole=rank>=20&&!self&&(state.adminRole==='owner'||!role||role==='moderator');
+  let roleControl='<span class="staff-user-role">'+escapeHtml(staffRoleLabel(role))+'</span>';
+  if(canManageRole){
+    const opts=state.adminRole==='owner'
+      ?[['none','usuário'],['moderator','moderador'],['senior_admin','administrador-senior']]
+      :[['none','usuário'],['moderator','moderador']];
+    roleControl='<select data-staff-role="'+user.id+'">'+opts.map(([v,l])=>'<option value="'+v+'" '+((role||'none')===v?'selected':'')+'>'+l+'</option>').join('')+'</select>';
+  }
+  return '<article class="staff-user-card '+(user.banned?'banned':'')+'">'+
+    '<button class="staff-user-identity" data-profile-id="'+user.id+'"><span class="mini-avatar">'+avatarHtml(user.avatar_url,user.display_name||'?')+'</span><span><b>'+userDisplayNameHtml(user,user.id)+'</b><small>@'+escapeHtml(user.handle||'...')+'</small></span></button>'+
+    '<div class="staff-user-status"><span>'+escapeHtml(user.status_message||'sem status')+'</span><small>'+escapeHtml(user.banned?'BANIDO · '+(user.ban_reason||'sem motivo'):presenceView(user).label)+'</small></div>'+
+    '<div class="staff-user-role-control">'+roleControl+'</div>'+
+    '<div class="staff-user-actions">'+
+      (!self?'<button data-staff-notify="'+user.id+'" data-staff-name="'+escapeAttr(user.display_name||user.handle)+'">notificar</button>':'')+
+      (!self&&staffRank(role)<rank?'<button class="'+(user.banned?'restore':'danger')+'" data-staff-ban="'+user.id+'" data-staff-banned="'+(user.banned?'1':'0')+'">'+(user.banned?'reativar':'banir')+'</button>':'')+
+    '</div></article>';
+}
+function staffUsersHtml(data){
+  const users=Array.isArray(data.users)?data.users:[];
+  return '<section class="staff-view active-view"><div class="staff-section-head"><div><span class="section-code">USUÁRIOS // CONTAS</span><h2>Perfis e sanções</h2></div><input id="staff-user-filter" class="staff-filter" placeholder="filtrar por nome ou @"></div>'+
+    '<div class="staff-user-list" id="staff-user-list">'+users.map(staffUserCard).join('')+'</div></section>';
+}
+function staffStaffHtml(data){
+  const rows=Array.isArray(data.staff)?data.staff:[];
+  const warnings=Array.isArray(data.warnings)?data.warnings:[];
+  return '<section class="staff-view active-view"><div class="staff-section-head"><div><span class="section-code">STAFF // HIERARQUIA</span><h2>Equipe interna</h2></div><small>Moderador → Admin-Senior → Admin-Geral</small></div>'+
+    '<div class="staff-team-list">'+rows.map(x=>'<article><span class="mini-avatar">'+avatarHtml(x.avatar_url,x.display_name||'?')+'</span><div><b>'+userDisplayNameHtml(x,x.user_id)+'</b><small>@'+escapeHtml(x.handle)+' · '+escapeHtml(staffRoleLabel(x.role))+'</small></div><strong>'+x.warnings+' advertência'+(x.warnings===1?'':'s')+'</strong>'+
+      (staffRank()>STAFF_ROLE_INFO[x.role]?.rank&&x.user_id!==state.profile.id?'<button data-staff-warn="'+x.user_id+'" data-staff-name="'+escapeAttr(x.display_name||x.handle)+'">advertir</button>':'')+'</article>').join('')+'</div>'+
+    '<section class="staff-panel"><h3>Advertências</h3><div class="staff-warning-list">'+(warnings.map(w=>'<article><b>@'+escapeHtml(w.staff_handle||'...')+'</b><span>'+escapeHtml(w.reason)+'</span><small>por @'+escapeHtml(w.issuer_handle||'...')+' · '+ago(w.created_at)+'</small></article>').join('')||'<p class="staff-empty">Nenhuma advertência ativa.</p>')+'</div></section>'+
+  '</section>';
+}
+function staffPlazaHtml(data){
+  const rows=Array.isArray(data.plaza)?data.plaza:[];
+  return '<section class="staff-view active-view"><div class="staff-section-head"><div><span class="section-code">PRAÇA // MONITOR PÚBLICO</span><h2>Mensagens recentes</h2></div><small>'+rows.length+' carregadas</small></div>'+
+    '<div class="staff-plaza-log">'+(rows.map(x=>'<article><header><b>'+escapeHtml(x.display_name||'alguém')+'</b><small>@'+escapeHtml(x.handle||'...')+' · '+ago(x.created_at)+'</small></header><p>'+escapeHtml(x.body)+'</p></article>').join('')||'<p class="staff-empty">Praça silenciosa. Suspeito, porém permitido.</p>')+'</div></section>';
+}
+function staffChatHtml(){
+  const scopes=[['all','todos']];
+  if(state.adminRole==='moderator'||state.adminRole==='owner')scopes.push(['moderators','só moderadores']);
+  if(state.adminRole==='senior_admin'||state.adminRole==='owner')scopes.push(['senior','só Admin-Senior / Geral']);
+  return '<section class="staff-view active-view"><div class="staff-section-head"><div><span class="section-code">STAFF.MSG // INTERNO</span><h2>Canal da equipe</h2></div><small>não aparece para usuários comuns</small></div>'+
+    '<section class="staff-chat-shell"><div id="staff-chat-log" class="staff-chat-log"><p>carregando mensagens internas...</p></div>'+
+    '<form id="staff-chat-form"><select id="staff-chat-scope">'+scopes.map(([v,l])=>'<option value="'+v+'">'+l+'</option>').join('')+'</select><input id="staff-chat-input" maxlength="1200" placeholder="mensagem interna..."><button>enviar</button></form></section></section>';
+}
+function ownerAppearanceHtml(data){
+  const site=data.site||{};
+  const feed=site.feed_config||{};
+  const story=site.story_config||{};
+  const layout=site.layout_config||{};
+  const colorFields=[
+    ['bg','fundo',site.color_bg||'#090b0c','--bg'],['panel','painel',site.color_panel||'#111517','--panel'],
+    ['panel2','painel 2',site.color_panel2||'#191f21','--panel2'],['ink','texto',site.color_ink||'#f5f3e8','--ink'],
+    ['muted','texto apagado',site.color_muted||'#8e9999','--muted'],['line','linhas',site.color_line||'#293235','--line'],
+    ['acid','ácido',site.color_acid||'#d8ff3e','--acid'],['cyan','ciano',site.color_cyan||'#22d9ee','--cyan'],
+    ['coral','coral',site.color_coral||'#ff5c4d','--coral'],['violet','violeta',site.color_violet||'#9b7cff','--violet']
+  ].map(([key,label,value,cssVar])=>'<label><span>'+label+'</span><input id="admin-color-'+key+'" data-admin-color-var="'+cssVar+'" type="color" value="'+escapeAttr(value)+'"></label>').join('');
+  return '<section class="staff-view active-view"><div class="staff-section-head"><div><span class="section-code">ADMIN-GERAL // EXPERIÊNCIA</span><h2>Site, Feed, Stories e layout</h2></div><small>salvo globalmente</small></div>'+
+    '<section class="staff-panel admin-appearance-panel"><h3>Identidade visual</h3><div class="admin-site-copy"><label>nome da rede<input id="admin-site-name" maxlength="40" value="'+escapeAttr(site.site_name||'AVESSO')+'"></label><label>tagline<input id="admin-site-tagline" maxlength="120" value="'+escapeAttr(site.tagline||'menos palco, mais presença')+'"></label></div>'+
+    '<label class="admin-announcement">aviso global<textarea id="admin-announcement" maxlength="240">'+escapeHtml(site.announcement||'')+'</textarea></label>'+
+    '<div class="admin-presets"><span>PRESETS</span><button data-admin-preset="avesso">AVESSO</button><button data-admin-preset="phosphor">Fósforo</button><button data-admin-preset="cyan">Ciano</button><button data-admin-preset="magenta">Magenta CRT</button></div>'+
+    '<div class="admin-color-grid">'+colorFields+'</div><label class="admin-custom-css"><span>CSS GLOBAL</span><textarea id="admin-custom-css" spellcheck="false">'+escapeHtml(site.custom_css||'')+'</textarea></label><button id="admin-site-save" class="admin-primary">salvar aparência</button></section>'+
+    '<section class="staff-panel"><h3>Feed</h3><div class="staff-form-grid"><label>itens por carga<input id="owner-feed-page-size" type="number" min="10" max="60" value="'+escapeAttr(feed.page_size??40)+'"></label><label>Stories no feed<select id="owner-feed-stories"><option value="1" '+(feed.show_stories!==false?'selected':'')+'>mostrar</option><option value="0" '+(feed.show_stories===false?'selected':'')+'>ocultar</option></select></label><label>Torre lateral<select id="owner-feed-tower"><option value="1" '+(feed.show_tower!==false?'selected':'')+'>mostrar</option><option value="0" '+(feed.show_tower===false?'selected':'')+'>ocultar</option></select></label></div></section>'+
+    '<section class="staff-panel"><h3>Stories</h3><div class="staff-form-grid"><label>duração (h)<input id="owner-story-hours" type="number" min="1" max="24" value="'+escapeAttr(story.duration_hours??24)+'"></label><label>vídeo máximo (s)<input id="owner-story-video" type="number" min="5" max="30" value="'+escapeAttr(story.max_video_seconds??15)+'"></label><label>câmera<select id="owner-story-camera"><option value="1" '+(story.camera_enabled!==false?'selected':'')+'>habilitada</option><option value="0" '+(story.camera_enabled===false?'selected':'')+'>desabilitada</option></select></label><label>visibilidade padrão<select id="owner-story-visibility"><option value="publico" '+(story.default_visibility!=='amigos'?'selected':'')+'>público</option><option value="amigos" '+(story.default_visibility==='amigos'?'selected':'')+'>amigos</option></select></label></div></section>'+
+    '<section class="staff-panel"><h3>Layout</h3><div class="staff-form-grid"><label>densidade<select id="owner-layout-density"><option value="compact" '+(layout.density!=='comfortable'?'selected':'')+'>compacta</option><option value="comfortable" '+(layout.density==='comfortable'?'selected':'')+'>confortável</option></select></label><label>largura do feed<select id="owner-layout-width"><option value="narrow" '+(layout.feed_width==='narrow'?'selected':'')+'>estreito</option><option value="normal" '+(layout.feed_width!=='narrow'&&layout.feed_width!=='wide'?'selected':'')+'>normal</option><option value="wide" '+(layout.feed_width==='wide'?'selected':'')+'>largo</option></select></label><label>sidebar<select id="owner-layout-sidebar"><option value="fixed" '+(layout.sidebar_mode!=='compact'?'selected':'')+'>fixa</option><option value="compact" '+(layout.sidebar_mode==='compact'?'selected':'')+'>compacta</option></select></label></div><button id="owner-experience-save">salvar experiência global</button></section>'+
+  '</section>';
+}
+function ownerCmsHtml(data){
+  const rows=Array.isArray(data.cms)?data.cms:[];
+  const quick=[
+    ['landing','hero_title','Título principal da página inicial'],
+    ['landing','hero_text','Texto principal da página inicial'],
+    ['auth','title','Título da janela de login/cadastro'],
+    ['auth','subtitle','Subtítulo da janela de login/cadastro'],
+    ['auth','signup_button','Texto do botão criar conta'],
+    ['auth','login_button','Texto do botão entrar']
+  ];
+  return '<section class="staff-view active-view"><div class="staff-section-head"><div><span class="section-code">CMS // PÁGINAS</span><h2>Texto e blocos gerenciáveis</h2></div><small>login/cadastro incluído</small></div>'+
+    '<section class="staff-panel"><h3>Novo / atualizar bloco</h3><div class="staff-form-grid"><label>página<select id="owner-cms-page"><option value="landing">landing</option><option value="auth">auth</option><option value="feed">feed</option><option value="profile">perfil</option><option value="plaza">Praça</option><option value="tower">Torre</option></select></label><label>chave<input id="owner-cms-key" placeholder="hero_title"></label><label>tipo<select id="owner-cms-kind"><option value="text">texto</option><option value="image">imagem</option><option value="toggle">toggle</option><option value="json">json</option></select></label><label>ordem<input id="owner-cms-order" type="number" value="100"></label></div><label class="staff-wide-field">valor<textarea id="owner-cms-value" maxlength="20000"></textarea></label><label class="staff-check"><input id="owner-cms-enabled" type="checkbox" checked> ativo</label><button id="owner-cms-save">salvar bloco</button></section>'+
+    '<section class="staff-panel"><h3>Atalhos da página inicial / acesso</h3><div class="staff-quick-keys">'+quick.map(([p,k,l])=>'<button data-cms-quick-page="'+p+'" data-cms-quick-key="'+k+'">'+escapeHtml(l)+'</button>').join('')+'</div></section>'+
+    '<section class="staff-panel"><h3>Blocos atuais</h3><div class="staff-cms-list">'+rows.map(x=>'<article><div><b>'+escapeHtml(x.page_slug)+' / '+escapeHtml(x.block_key)+'</b><small>'+escapeHtml(x.kind)+' · ordem '+x.sort_order+' · '+(x.enabled?'ativo':'oculto')+'</small></div><p>'+escapeHtml(String(x.value||'').slice(0,220))+'</p><button data-cms-edit="'+x.id+'" data-cms-page="'+escapeAttr(x.page_slug)+'" data-cms-key="'+escapeAttr(x.block_key)+'" data-cms-kind="'+escapeAttr(x.kind)+'" data-cms-value="'+escapeAttr(x.value||'')+'" data-cms-order="'+x.sort_order+'" data-cms-enabled="'+(x.enabled?'1':'0')+'">editar</button></article>').join('')+'</div></section>'+
+  '</section>';
+}
+function ownerCharactersHtml(data){
+  const entries=Array.isArray(data.characters)?data.characters:[];
+  return '<section class="staff-view active-view"><div class="staff-section-head"><div><span class="section-code">HABITANTES // IA</span><h2>Personalidade, imagem e comportamento</h2></div><small>'+entries.length+' habitantes</small></div>'+
+    '<section class="staff-panel"><h3>Criar habitante</h3><div class="staff-form-grid"><label>slug<input id="owner-char-new-slug" placeholder="novo_habitante"></label><label>nome<input id="owner-char-new-name"></label><label>função<input id="owner-char-new-role"></label><label>cor<input id="owner-char-new-color" type="color" value="#d8ff3e"></label></div><label class="staff-wide-field">bio<textarea id="owner-char-new-bio"></textarea></label><button id="owner-char-create">criar habitante</button></section>'+
+    '<div class="owner-character-list">'+entries.map(entry=>{const c=entry.character||{},ai=entry.ai||{},dialogs=entry.dialogues||[];return '<article class="owner-character-card" data-character-card="'+c.id+'"><header><div><span class="character-thumb">'+characterVisual(c,'')+'</span><div><b>'+escapeHtml(c.name||c.slug)+'</b><small>'+escapeHtml(c.slug)+' · '+escapeHtml(c.role||'')+'</small></div></div><label>ativo <input data-char-active type="checkbox" '+(c.is_active?'checked':'')+'></label></header>'+
+      '<div class="staff-form-grid"><label>nome<input data-char-name value="'+escapeAttr(c.name||'')+'"></label><label>função<input data-char-role value="'+escapeAttr(c.role||'')+'"></label><label>cor<input data-char-color type="color" value="'+escapeAttr(c.accent_color||'#d8ff3e')+'"></label><label>raridade<input data-char-rarity type="number" min="1" max="1000" value="'+escapeAttr(c.rarity??50)+'"></label><label>avatar URL<input data-char-avatar value="'+escapeAttr(c.avatar_url||'')+'"></label><label>local<input data-char-home value="'+escapeAttr(c.home_location||'Praça Central')+'"></label></div>'+
+      '<label class="staff-wide-field">bio<textarea data-char-bio>'+escapeHtml(c.bio||'')+'</textarea></label><label class="staff-wide-field">personalidade<textarea data-char-personality>'+escapeHtml(c.personality||'')+'</textarea></label><label class="staff-wide-field">prompt do habitante<textarea data-char-system>'+escapeHtml(c.system_prompt||'')+'</textarea></label>'+
+      '<div class="staff-form-grid"><label>modelo IA<input data-ai-model value="'+escapeAttr(ai.model||'gpt-5.6-luna')+'"></label><label>IA<select data-ai-enabled><option value="1" '+((ai.ai_enabled??c.ai_enabled)?'selected':'')+'>ativa</option><option value="0" '+(!(ai.ai_enabled??c.ai_enabled)?'selected':'')+'>desativada</option></select></label><label>máx. caracteres<input data-ai-max type="number" min="80" max="1200" value="'+escapeAttr(ai.max_output_chars??420)+'"></label></div>'+
+      '<label class="staff-wide-field">resumo de persona<textarea data-ai-persona>'+escapeHtml(ai.persona_summary||'')+'</textarea></label><label class="staff-wide-field">system prompt IA<textarea data-ai-prompt>'+escapeHtml(ai.system_prompt||'')+'</textarea></label>'+
+      '<details><summary>frases / diálogos ('+dialogs.length+')</summary><div class="character-dialogue-list">'+dialogs.map(d=>'<div><code>'+escapeHtml(d.context)+'</code><span>'+escapeHtml(d.body)+'</span><small>peso '+d.weight+' · '+(d.enabled?'ativo':'pausado')+'</small></div>').join('')+'</div><div class="staff-form-grid"><label>contexto<input data-new-dialogue-context placeholder="feed_attention"></label><label>peso<input data-new-dialogue-weight type="number" min="1" max="100" value="1"></label></div><label class="staff-wide-field">nova frase<textarea data-new-dialogue-body maxlength="420"></textarea></label><button data-save-dialogue="'+c.id+'">adicionar frase</button></details>'+
+      '<footer><button data-save-character="'+c.id+'">salvar habitante</button><button class="danger" data-deactivate-character="'+c.id+'">desativar</button></footer></article>';}).join('')+'</div>'+
+  '</section>';
+}
+function ownerAssetsHtml(data){
+  const assets=Array.isArray(data.assets)?data.assets:[];
+  const badges=Array.isArray(data.badges)?data.badges:[];
+  const users=Array.isArray(data.users)?data.users:[];
+  return '<section class="staff-view active-view"><div class="staff-section-head"><div><span class="section-code">ASSETS // ARQUIVOS</span><h2>Wallpapers, avatares, emoticons e emblemas</h2></div><small>upload pelo Admin-Geral</small></div>'+
+    '<section class="staff-panel"><h3>Enviar asset</h3><div class="staff-form-grid"><label>tipo<select id="owner-asset-kind"><option value="wallpaper">papel de parede</option><option value="avatar">avatar</option><option value="emoticon">emoticon</option><option value="character">habitante</option><option value="landing">página inicial</option><option value="other">outro</option></select></label><label>nome<input id="owner-asset-name"></label><label>slug<input id="owner-asset-slug" placeholder="meu_asset"></label><label>token do emoticon<input id="owner-asset-token" placeholder="opcional"></label></div><label class="staff-file-field">arquivo<input id="owner-asset-file" type="file" accept="image/*,.gif,.webp,.svg"></label><button id="owner-asset-upload">enviar e cadastrar</button></section>'+
+    '<section class="staff-panel"><h3>Assets cadastrados</h3><div class="owner-asset-grid">'+assets.map(a=>'<article><div class="owner-asset-preview" style="background-image:url(\''+escapeAttr(managedAssetPublicUrl(a.storage_path))+'\')"></div><b>'+escapeHtml(a.name)+'</b><small>'+escapeHtml(a.kind)+' · '+escapeHtml(a.slug)+'</small></article>').join('')+'</div></section>'+
+    '<section class="staff-panel"><h3>Novo emblema</h3><div class="staff-form-grid"><label>slug<input id="owner-badge-slug"></label><label>nome<input id="owner-badge-name"></label><label>descrição<input id="owner-badge-description"></label></div><label class="staff-file-field">imagem<input id="owner-badge-file" type="file" accept="image/*,.gif,.webp,.svg"></label><button id="owner-badge-create">criar emblema</button></section>'+
+    '<section class="staff-panel"><h3>Conceder / retirar emblema</h3><div class="staff-form-grid"><label>usuário<select id="owner-badge-user">'+users.map(u=>'<option value="'+u.id+'">'+escapeHtml('@'+u.handle+' · '+u.display_name)+'</option>').join('')+'</select></label><label>emblema<select id="owner-badge-select">'+badges.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></label><label>ação<select id="owner-badge-action"><option value="1">conceder</option><option value="0">retirar</option></select></label></div><button id="owner-badge-grant">aplicar</button></section>'+
+  '</section>';
+}
+function ownerDatabaseHtml(){
+  const tables=['profiles','posts','reports','moderation_hits','characters','asset_catalog','badges','site_content_blocks','admin_audit_log'];
+  return '<section class="staff-view active-view"><div class="staff-section-head"><div><span class="section-code">BANCO // EXPLORADOR ADMINISTRATIVO</span><h2>Dados operacionais</h2></div><small>consultas allowlisted no servidor</small></div>'+
+    '<section class="staff-panel"><p>Este console não expõe uma service-role nem aceita SQL arbitrário no navegador. Você consegue inspecionar tabelas administrativas e alterar os dados pelas ferramentas específicas da Dashboard, sem criar uma porta traseira com CSS bonito.</p><div class="staff-form-grid"><label>tabela<select id="owner-db-table">'+tables.map(t=>'<option>'+t+'</option>').join('')+'</select></label><label>limite<input id="owner-db-limit" type="number" min="1" max="100" value="50"></label></div><button id="owner-db-load">carregar</button><pre id="owner-db-output" class="owner-db-output">selecione uma tabela.</pre></section></section>';
+}
+async function staffSaveReport(reportId){
+  const card=document.querySelector('[data-report-card="'+CSS.escape(reportId)+'"]');if(!card)return;
+  const assigned=card.querySelector('[data-report-assignee]')?.value||null;
+  const {error}=await supabase.rpc('staff_update_report',{
+    p_report_id:reportId,
+    p_status:card.querySelector('[data-report-status]')?.value||'em_analise',
+    p_assigned_to:assigned||null,
+    p_priority:card.querySelector('[data-report-priority]')?.value||'normal',
+    p_staff_notes:card.querySelector('[data-report-notes]')?.value||'',
+    p_resolution:card.querySelector('[data-report-resolution]')?.value||''
+  });
+  if(error)return toast('Não foi possível atualizar a denúncia.');
+  toast('Caso atualizado. A burocracia serviu para alguma coisa.');
+  renderAdminDashboard();
+}
+async function staffSaveTerm({id=null,term,category,severity,enabled=true,notes=''}) {
+  const {error}=await supabase.rpc('staff_upsert_moderation_term',{
+    p_id:id,p_term:term,p_category:category||'outro',p_severity:severity||'media',p_enabled:Boolean(enabled),p_notes:notes||''
+  });
+  if(error)return toast('O termo não entrou no monitor.');
+  toast('Monitor atualizado.');
+  renderAdminDashboard();
+}
+async function staffSaveHit(id){
+  const status=document.querySelector('[data-hit-status="'+id+'"]')?.value||'revisando';
+  const assigned=document.querySelector('[data-hit-assignee="'+id+'"]')?.value||null;
+  const {error}=await supabase.rpc('staff_update_moderation_hit',{p_hit_id:Number(id),p_status:status,p_assigned_to:assigned||null});
+  if(error)return toast('A ocorrência não foi atualizada.');
+  renderAdminDashboard();
+}
+async function staffBanUser(userId,isBanned){
+  if(isBanned){
+    const {error}=await supabase.rpc('staff_set_user_ban',{p_user_id:userId,p_banned:false,p_reason:'',p_until:null});
+    if(error)return toast('Não foi possível reativar a conta.');
+    toast('Conta reativada.');
+  }else{
+    const reason=prompt('Motivo do banimento:','violação das regras do AVESSO')||'';
+    if(reason.trim().length<2)return;
+    const duration=prompt('Duração em horas. Deixe vazio para permanente. Exemplos: 24, 72, 168','24');
+    let until=null;
+    if(duration&&Number(duration)>0)until=new Date(Date.now()+Number(duration)*3600000).toISOString();
+    const {error}=await supabase.rpc('staff_set_user_ban',{p_user_id:userId,p_banned:true,p_reason:reason.trim(),p_until:until});
+    if(error)return toast('Não foi possível aplicar o banimento.');
+    toast(until?'Banimento temporário aplicado.':'Banimento permanente aplicado.');
+  }
+  renderAdminDashboard();
+}
+async function staffNotifyUser(userId,name){
+  const title=prompt('Título da notificação:','Mensagem da equipe AVESSO')||'';
+  if(!title.trim())return;
+  const body=prompt('Mensagem para '+name+':','')||'';
+  if(!body.trim())return;
+  const severity=prompt('Severidade: info, warning ou critical','info')||'info';
+  const valid=['info','warning','critical'].includes(severity)?severity:'info';
+  const {error}=await supabase.rpc('staff_notify_user',{p_user_id:userId,p_title:title,p_body:body,p_severity:valid});
+  if(error)return toast('A notificação não foi enviada.');
+  toast('Notificação entregue ao usuário.');
+}
+async function staffSetRoleAction(userId,role){
+  const {error}=await supabase.rpc('staff_set_role',{p_user_id:userId,p_role:role});
+  if(error)return toast('Esse cargo não pode ser aplicado pelo seu nível atual.');
+  await loadStaffDirectory();
+  await loadUserBadges();
+  toast('Cargo atualizado.');
+  renderAdminDashboard();
+}
+async function staffWarnAction(userId,name){
+  const reason=prompt('Advertência para '+name+':','')||'';
+  if(!reason.trim())return;
+  const {error}=await supabase.rpc('staff_warn_staff',{p_user_id:userId,p_reason:reason});
+  if(error)return toast('Não foi possível registrar a advertência.');
+  toast('Advertência registrada.');
+  renderAdminDashboard();
+}
+async function loadStaffChat(){
+  const host=$('#staff-chat-log');if(!host)return;
+  const {data,error}=await supabase.from('staff_messages').select('id,sender_id,scope,body,created_at').order('created_at',{ascending:false}).limit(100);
+  if(error){host.innerHTML='<p>O chat interno caiu atrás do servidor.</p>';return;}
+  const rows=[...(data||[])].reverse();
+  const ids=[...new Set(rows.map(x=>x.sender_id))];
+  let profiles={};
+  if(ids.length){
+    const {data:ps}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',ids);
+    profiles=Object.fromEntries((ps||[]).map(x=>[x.id,x]));
+  }
+  host.innerHTML=rows.map(m=>{const p=profiles[m.sender_id]||{};return '<article class="staff-chat-message '+(m.sender_id===state.profile.id?'mine':'')+'"><span class="mini-avatar">'+avatarHtml(p.avatar_url,p.display_name||'?')+'</span><div><header><b>'+userDisplayNameHtml(p,m.sender_id)+'</b><small>@'+escapeHtml(p.handle||'...')+' · '+escapeHtml(m.scope)+' · '+ago(m.created_at)+'</small></header><p>'+escapeHtml(m.body)+'</p></div></article>';}).join('')||'<p class="staff-empty">Nenhuma mensagem interna ainda.</p>';
+  host.scrollTop=host.scrollHeight;
+}
+async function sendStaffChat(e){
+  e.preventDefault();
+  const input=$('#staff-chat-input');const body=input?.value.trim()||'';if(!body)return;
+  const scope=$('#staff-chat-scope')?.value||'all';
+  const {error}=await supabase.from('staff_messages').insert({sender_id:state.profile.id,scope,body});
+  if(error)return toast('Essa mensagem não pode ser enviada para esse canal.');
+  input.value='';
+  loadStaffChat();
+}
+function startStaffRealtime(){
+  if(state.staffChannel){supabase.removeChannel(state.staffChannel);state.staffChannel=null;}
+  if(state.tab!=='admin'||state.staffView!=='chat')return;
+  state.staffChannel=supabase.channel('avesso-staff-chat-'+state.profile.id)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_messages'},()=>{if(state.tab==='admin'&&state.staffView==='chat')loadStaffChat();})
+    .subscribe();
+}
+async function ownerSaveExperience(){
+  const feed={page_size:Number($('#owner-feed-page-size')?.value||40),show_stories:$('#owner-feed-stories')?.value!=='0',show_tower:$('#owner-feed-tower')?.value!=='0'};
+  const stories={duration_hours:Number($('#owner-story-hours')?.value||24),camera_enabled:$('#owner-story-camera')?.value!=='0',max_video_seconds:Number($('#owner-story-video')?.value||15),default_visibility:$('#owner-story-visibility')?.value||'publico'};
+  const layout={density:$('#owner-layout-density')?.value||'compact',feed_width:$('#owner-layout-width')?.value||'normal',sidebar_mode:$('#owner-layout-sidebar')?.value||'fixed'};
+  const {data,error}=await supabase.rpc('owner_update_experience_settings',{p_feed_config:feed,p_story_config:stories,p_layout_config:layout});
+  if(error)return toast('Configurações de experiência não foram salvas.');
+  state.siteSettings=data||state.siteSettings;applySiteSettings(state.siteSettings);applyExperienceSettings(state.siteSettings);
+  toast('Feed, Stories e layout atualizados globalmente.');
+}
+async function ownerSaveCms(){
+  const page=$('#owner-cms-page')?.value||'landing',key=$('#owner-cms-key')?.value.trim()||'';
+  if(!key)return toast('Informe a chave do bloco.');
+  const {error}=await supabase.rpc('owner_save_cms_block',{
+    p_page_slug:page,p_block_key:key,p_kind:$('#owner-cms-kind')?.value||'text',
+    p_value:$('#owner-cms-value')?.value||'',p_enabled:Boolean($('#owner-cms-enabled')?.checked),
+    p_sort_order:Number($('#owner-cms-order')?.value||100)
+  });
+  if(error)return toast('O bloco não foi salvo.');
+  toast('Bloco do CMS salvo.');
+  await loadCmsContent();renderAdminDashboard();
+}
+async function ownerCreateCharacter(){
+  const {error}=await supabase.rpc('owner_create_character',{
+    p_slug:$('#owner-char-new-slug')?.value.trim(),p_name:$('#owner-char-new-name')?.value.trim(),
+    p_role:$('#owner-char-new-role')?.value.trim(),p_bio:$('#owner-char-new-bio')?.value||'',
+    p_accent_color:$('#owner-char-new-color')?.value||'#d8ff3e'
+  });
+  if(error)return toast('Não foi possível criar o habitante.');
+  toast('Novo habitante criado. A responsabilidade é sua.');
+  await loadWorldState();renderAdminDashboard();
+}
+async function ownerSaveCharacter(id){
+  const card=document.querySelector('[data-character-card="'+CSS.escape(id)+'"]');if(!card)return;
+  const patch={
+    name:card.querySelector('[data-char-name]')?.value||'',role:card.querySelector('[data-char-role]')?.value||'',
+    bio:card.querySelector('[data-char-bio]')?.value||'',personality:card.querySelector('[data-char-personality]')?.value||'',
+    system_prompt:card.querySelector('[data-char-system]')?.value||'',accent_color:card.querySelector('[data-char-color]')?.value||'#d8ff3e',
+    avatar_url:card.querySelector('[data-char-avatar]')?.value||'',home_location:card.querySelector('[data-char-home]')?.value||'Praça Central',
+    rarity:Number(card.querySelector('[data-char-rarity]')?.value||50),ai_enabled:card.querySelector('[data-ai-enabled]')?.value==='1',
+    is_active:Boolean(card.querySelector('[data-char-active]')?.checked)
+  };
+  const base=await supabase.rpc('owner_update_character',{p_character_id:id,p_patch:patch});
+  if(base.error)return toast('O habitante recusou a edição.');
+  let behavior={},voice={};
+  try{behavior=JSON.parse(card.dataset.behaviorRules||'{}');}catch{}
+  try{voice=JSON.parse(card.dataset.voiceRules||'{}');}catch{}
+  const ai=await supabase.rpc('owner_upsert_character_ai',{
+    p_character_id:id,p_model:card.querySelector('[data-ai-model]')?.value||'gpt-5.6-luna',
+    p_persona_summary:card.querySelector('[data-ai-persona]')?.value||'',
+    p_system_prompt:card.querySelector('[data-ai-prompt]')?.value||'',
+    p_behavior_rules:behavior,p_voice_rules:voice,
+    p_max_output_chars:Number(card.querySelector('[data-ai-max]')?.value||420),
+    p_ai_enabled:card.querySelector('[data-ai-enabled]')?.value==='1'
+  });
+  if(ai.error)return toast('Base salva, mas a configuração de IA falhou.');
+  toast('Habitante e IA atualizados.');
+  await loadWorldState();renderAdminDashboard();
+}
+async function ownerSaveDialogue(characterId){
+  const card=document.querySelector('[data-character-card="'+CSS.escape(characterId)+'"]');if(!card)return;
+  const context=card.querySelector('[data-new-dialogue-context]')?.value.trim()||'',body=card.querySelector('[data-new-dialogue-body]')?.value.trim()||'';
+  if(!context||!body)return toast('Contexto e frase são obrigatórios.');
+  const {error}=await supabase.rpc('owner_save_character_dialogue',{p_id:null,p_character_id:characterId,p_context:context,p_body:body,p_weight:Number(card.querySelector('[data-new-dialogue-weight]')?.value||1),p_enabled:true});
+  if(error)return toast('A frase não foi adicionada.');
+  toast('Nova frase adicionada ao habitante.');
+  renderAdminDashboard();
+}
+async function ownerDeactivateCharacter(id){
+  if(!confirm('Desativar este habitante?'))return;
+  const {error}=await supabase.rpc('owner_remove_character',{p_character_id:id,p_hard_delete:false});
+  if(error)return toast('O habitante se recusou a sair de cena.');
+  toast('Habitante desativado.');
+  await loadWorldState();renderAdminDashboard();
+}
+async function ownerUploadFile(file,folder='dashboard'){
+  if(!file)return null;
+  const ext=(file.name.split('.').pop()||'bin').replace(/[^a-z0-9]/gi,'').toLowerCase();
+  const path=state.profile.id+'/staff-assets/'+folder+'/'+Date.now()+'-'+crypto.randomUUID()+'.'+ext;
+  const {error}=await supabase.storage.from('avesso-media').upload(path,file,{contentType:file.type,upsert:false,cacheControl:'31536000'});
+  if(error)throw error;
+  return path;
+}
+async function ownerUploadAsset(){
+  const file=$('#owner-asset-file')?.files?.[0];if(!file)return toast('Escolha um arquivo.');
+  try{
+    const path=await ownerUploadFile(file,'assets');
+    const slug=($('#owner-asset-slug')?.value.trim()||file.name.replace(/\.[^.]+$/,'')).toLowerCase().normalize('NFKD').replace(/[^a-z0-9_]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60);
+    const {error}=await supabase.rpc('owner_upsert_asset',{p_id:null,p_kind:$('#owner-asset-kind')?.value||'other',p_slug:slug,p_name:$('#owner-asset-name')?.value.trim()||slug,p_storage_path:path,p_token:$('#owner-asset-token')?.value.trim()||null,p_metadata:{},p_active:true});
+    if(error)return toast('Arquivo enviado, mas o catálogo recusou o cadastro.');
+    await loadManagedAssets();toast('Asset cadastrado e disponível globalmente.');renderAdminDashboard();
+  }catch{toast('O upload do asset falhou.');}
+}
+async function ownerCreateBadge(){
+  const file=$('#owner-badge-file')?.files?.[0];if(!file)return toast('Escolha a imagem do emblema.');
+  try{
+    const path=await ownerUploadFile(file,'badges');
+    const {error}=await supabase.rpc('owner_upsert_badge',{p_id:null,p_slug:$('#owner-badge-slug')?.value.trim(),p_name:$('#owner-badge-name')?.value.trim(),p_description:$('#owner-badge-description')?.value.trim()||'',p_image_path:path,p_active:true});
+    if(error)return toast('O emblema não foi cadastrado.');
+    await loadUserBadges();toast('Emblema criado.');renderAdminDashboard();
+  }catch{toast('Upload do emblema falhou.');}
+}
+async function ownerGrantBadge(){
+  const {error}=await supabase.rpc('owner_grant_badge',{p_user_id:$('#owner-badge-user')?.value,p_badge_id:$('#owner-badge-select')?.value,p_grant:$('#owner-badge-action')?.value==='1'});
+  if(error)return toast('Não foi possível alterar o emblema do usuário.');
+  await loadUserBadges();toast('Emblemas atualizados.');renderAdminDashboard();
+}
+async function ownerLoadDbTable(){
+  const host=$('#owner-db-output');if(!host)return;
+  host.textContent='consultando...';
+  const {data,error}=await supabase.rpc('owner_db_table_rows',{p_table:$('#owner-db-table')?.value,p_limit:Number($('#owner-db-limit')?.value||50)});
+  host.textContent=error?'Erro: '+error.message:JSON.stringify(data,null,2);
+}
+function applyExperienceSettings(settings=state.siteSettings||{}){
+  const feed=settings.feed_config||{},layout=settings.layout_config||{};
+  document.body.classList.toggle('avesso-density-comfortable',layout.density==='comfortable');
+  document.body.dataset.feedWidth=layout.feed_width||'normal';
+  document.body.dataset.sidebarMode=layout.sidebar_mode||'fixed';
+  $('#stories-zone')?.classList.toggle('owner-hidden',feed.show_stories===false);
+  $('.app-aside')?.classList.toggle('owner-hide-tower',feed.show_tower===false);
+}
+async function loadCmsContent(){
+  const {data}=await supabase.from('site_content_blocks').select('*').eq('enabled',true).order('sort_order',{ascending:true});
+  state.cmsBlocks=data||[];
+  applyCmsContent(state.cmsBlocks);
+}
+function applyCmsContent(rows=state.cmsBlocks||[]){
+  for(const row of rows){
+    const el=document.querySelector('[data-cms-block="'+CSS.escape(row.page_slug+'.'+row.block_key)+'"]');
+    if(!el)continue;
+    if(row.kind==='text')el.textContent=row.value;
+    else if(row.kind==='image'&&el.tagName==='IMG')el.src=row.value;
+    else if(row.kind==='toggle')el.classList.toggle('hidden',!['1','true','on','show'].includes(String(row.value).toLowerCase()));
+  }
+}
+async function renderAdminDashboard({reuse=false}={}){
   if(state.tab!=='admin')return;
   if(!state.isAdmin){await goToFeedHome();return;}
   $('#feed-status').classList.add('hidden');
   const host=$('#feed-list');
-  host.innerHTML='<section class="admin-shell"><div class="admin-loading">ADMIN.SYS // carregando a chave mestra sem fingir que isso é um SaaS...</div></section>';
-  const {data,error}=await supabase.rpc('admin_dashboard_snapshot');
+  if(!reuse)host.innerHTML='<section class="admin-shell"><div class="admin-loading">DASHBOARD.SYS // carregando permissões reais do servidor...</div></section>';
+  const {data,error}=await supabase.rpc('staff_dashboard_snapshot');
   if(state.tab!=='admin')return;
   if(error){
-    console.error('admin dashboard',error);
-    host.innerHTML='<section class="admin-shell"><div class="admin-error">A dashboard não conseguiu provar que você manda aqui.</div></section>';
+    console.error('staff dashboard',error);
+    host.innerHTML='<section class="admin-shell"><div class="admin-error">A Dashboard não conseguiu carregar seu nível de acesso.</div></section>';
     return;
   }
+  state.staffSnapshot=data||{};
   state.adminSnapshot=data||{};
-  const counts=data?.counts||{};
-  const users=Array.isArray(data?.recent_users)?data.recent_users:[];
-  const reports=Array.isArray(data?.reports)?data.reports:[];
-  const world=data?.world||{};
-  const site=data?.site||state.siteSettings||{};
-  const recentPosts=Array.isArray(data?.recent_posts)?data.recent_posts:[];
-  const recentResponses=Array.isArray(data?.recent_responses)?data.recent_responses:[];
-  const recentPhotos=Array.isArray(data?.recent_photos)?data.recent_photos:[];
-  const recentStories=Array.isArray(data?.recent_stories)?data.recent_stories:[];
-  const audit=Array.isArray(data?.audit)?data.audit:[];
-
-  const statCards=[
-    ['habitantes',counts.users??0,'contas registradas'],
-    ['novos // 7d',counts.users_7d??0,'entraram nesta semana'],
-    ['online',counts.online_now??0,'presenças agora'],
-    ['suspensos',counts.suspended_users??0,'bloqueados para novas ações'],
-    ['publicações',counts.posts??0,'posts no sistema'],
-    ['respostas',counts.responses??0,'respostas humanas'],
-    ['stories',counts.stories_active??0,'ativos agora'],
-    ['mensagens',counts.direct_messages??0,'somente contagem, não conteúdo'],
-    ['amizades',counts.friendships??0,'conexões aceitas'],
-    ['denúncias',counts.reports_open??0,'abertas']
-  ].map(([label,value,detail])=>'<article><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(String(value))+'</strong><small>'+escapeHtml(detail)+'</small></article>').join('');
-
-  const usersHtml=users.map(user=>{
-    const presence=adminPresenceLabel(user);
-    const isSelf=user.id===state.profile.id;
-    const status=user.suspended?'SUSPENSO':(user.admin_role?user.admin_role.toUpperCase():'USUÁRIO');
-    const roleControl=state.adminRole==='owner'
-      ?'<select class="admin-role-select" data-admin-role-user="'+escapeAttr(user.id)+'" '+(isSelf?'disabled':'')+'>'+
-        '<option value="none" '+(!user.admin_role?'selected':'')+'>usuário</option>'+
-        '<option value="admin" '+(user.admin_role==='admin'?'selected':'')+'>admin</option>'+
-        '<option value="owner" '+(user.admin_role==='owner'?'selected':'')+'>owner</option></select>'
-      :'<span class="admin-role-label">'+escapeHtml(user.admin_role||'usuário')+'</span>';
-    return '<article class="admin-user-row '+(user.suspended?'is-suspended':'')+'">'+
-      '<button class="admin-user-profile" data-profile-id="'+escapeAttr(user.id)+'"><span class="admin-user-avatar">'+avatarHtml(user.avatar_url,user.display_name||'?')+'</span>'+
-      '<span><b>'+escapeHtml(user.display_name||'sem nome')+'</b><small>@'+escapeHtml(user.handle||'...')+'</small></span></button>'+
-      '<em class="'+presence+'">'+presence+'</em>'+
-      '<strong class="admin-account-state" title="'+escapeAttr(user.suspension_reason||'')+'">'+status+'</strong>'+
-      '<time>'+ago(user.created_at)+'</time>'+
-      '<div class="admin-user-controls">'+roleControl+
-        (isSelf?'<span class="admin-self-tag">VOCÊ</span>':'<button class="'+(user.suspended?'restore':'danger')+'" data-admin-suspend-user="'+escapeAttr(user.id)+'" data-admin-suspend-value="'+(user.suspended?'0':'1')+'">'+(user.suspended?'reativar':'suspender')+'</button>')+
-      '</div></article>';
-  }).join('')||'<p class="admin-empty">Nenhum perfil. Administração perfeita por ausência de humanidade.</p>';
-
-  const reportsHtml=reports.map(report=>{
-    const target=report.reported_profile?.handle?'@'+report.reported_profile.handle:(report.post_id?'post '+String(report.post_id).slice(0,8):'conteúdo');
-    return '<article class="admin-report-card"><header><div><b>'+escapeHtml(String(report.reason||'denúncia'))+'</b>'+
-      '<small>'+escapeHtml(report.reporter?.handle?'@'+report.reporter.handle:'reportante')+' · '+ago(report.created_at)+'</small></div>'+
-      '<select data-admin-report-status="'+escapeAttr(report.id)+'">'+adminReportStatusOptions(report.status)+'</select></header>'+
-      '<p>'+escapeHtml(report.details||'sem detalhes')+'</p><footer><span>alvo: '+escapeHtml(target)+'</span>'+
-      (report.post_id?'<code>'+escapeHtml(String(report.post_id))+'</code>':'')+'</footer></article>';
-  }).join('')||'<p class="admin-empty">Nenhuma denúncia na fila. Estranhamente civilizado.</p>';
-
-  const colorFields=[
-    ['bg','fundo',site.color_bg||'#090b0c','--bg'],
-    ['panel','painel',site.color_panel||'#111517','--panel'],
-    ['panel2','painel 2',site.color_panel2||'#191f21','--panel2'],
-    ['ink','texto',site.color_ink||'#f5f3e8','--ink'],
-    ['muted','texto apagado',site.color_muted||'#8e9999','--muted'],
-    ['line','linhas',site.color_line||'#293235','--line'],
-    ['acid','ácido',site.color_acid||'#d8ff3e','--acid'],
-    ['cyan','ciano',site.color_cyan||'#22d9ee','--cyan'],
-    ['coral','coral',site.color_coral||'#ff5c4d','--coral'],
-    ['violet','violeta',site.color_violet||'#9b7cff','--violet']
-  ].map(([key,label,value,cssVar])=>'<label><span>'+label+'</span><input id="admin-color-'+key+'" data-admin-color-var="'+cssVar+'" type="color" value="'+escapeAttr(value)+'"></label>').join('');
-
-  const moderationContent=
-    '<div class="admin-content-column"><h4>PUBLICAÇÕES</h4>'+recentPosts.map(x=>adminContentCard('post',x)).join('')+'</div>'+
-    '<div class="admin-content-column"><h4>RESPOSTAS</h4>'+recentResponses.map(x=>adminContentCard('response',x)).join('')+'</div>'+
-    '<div class="admin-content-column"><h4>FOTOS</h4>'+recentPhotos.map(x=>adminContentCard('photo',x)).join('')+'</div>'+
-    '<div class="admin-content-column"><h4>STORIES</h4>'+recentStories.map(x=>adminContentCard('story',x)).join('')+'</div>';
-
-  host.innerHTML='<section class="admin-shell">'+
-    '<header class="admin-hero"><div><span class="section-code">ADMIN.SYS // ACESSO '+escapeHtml((state.adminRole||'admin').toUpperCase())+'</span>'+
-    '<h2>Painel do AVESSO '+adminCrownHtml('admin-hero-crown')+'</h2>'+
-    '<p>Controle operacional, visual e de moderação. Mensagens privadas continuam privadas. Poder total não precisa virar bisbilhotagem.</p></div>'+
-    '<button id="admin-refresh" type="button">↻ atualizar</button></header>'+
-
-    '<div class="admin-stats">'+statCards+'</div>'+
-
-    '<section class="admin-panel admin-appearance-panel"><div class="admin-panel-head"><div><span class="section-code">APARÊNCIA // CHAVE MESTRA</span>'+
-    '<h3>Personalização global</h3></div><small>cores + CSS global</small></div>'+
-    '<div class="admin-site-copy"><label>nome da rede<input id="admin-site-name" maxlength="40" value="'+escapeAttr(site.site_name||'AVESSO')+'"></label>'+
-    '<label>frase principal<input id="admin-site-tagline" maxlength="120" value="'+escapeAttr(site.tagline||'menos palco, mais presença')+'"></label></div>'+
-    '<label class="admin-announcement">aviso global<textarea id="admin-announcement" maxlength="240" placeholder="vazio = sem aviso">'+escapeHtml(site.announcement||'')+'</textarea></label>'+
-    '<div class="admin-presets"><span>PRESETS</span><button data-admin-preset="avesso">AVESSO</button><button data-admin-preset="phosphor">Fósforo</button>'+
-    '<button data-admin-preset="cyan">Ciano</button><button data-admin-preset="magenta">Magenta CRT</button></div>'+
-    '<div class="admin-color-grid">'+colorFields+'</div>'+
-    '<label class="admin-custom-css"><span>CSS GLOBAL // 20.000 caracteres</span><textarea id="admin-custom-css" spellcheck="false" placeholder="/* você realmente pediu a chave mestra */">'+escapeHtml(site.custom_css||'')+'</textarea>'+
-    '<small>Este campo altera qualquer parte visual do AVESSO. Sem JavaScript e sem HTML injetável.</small></label>'+
-    '<button id="admin-site-save" class="admin-primary" type="button">salvar aparência global</button></section>'+
-
-    '<div class="admin-grid"><section class="admin-panel"><div class="admin-panel-head"><div><span class="section-code">CONTAS // GERÊNCIA</span><h3>Habitantes</h3></div>'+
-    '<small>'+users.length+' carregados</small></div><div class="admin-user-list">'+usersHtml+'</div></section>'+
-    '<section class="admin-panel admin-world-panel"><div class="admin-panel-head"><div><span class="section-code">MUNDO // CONTROLES</span><h3>Estado global</h3></div>'+
-    '<strong>'+(world.world_events_enabled?'ONLINE':'PAUSADO')+'</strong></div>'+
-    '<label class="admin-switch"><input id="admin-world-events" type="checkbox" '+(world.world_events_enabled?'checked':'')+'><span><b>eventos do mundo</b><small>habilita acontecimentos gerais</small></span></label>'+
-    '<label class="admin-switch"><input id="admin-world-interventions" type="checkbox" '+(world.world_interventions_enabled?'checked':'')+'><span><b>interferências visuais</b><small>libera intervenções quando a regra permitir</small></span></label>'+
-    '<label class="admin-world-message">mensagem do sistema<textarea id="admin-world-message" maxlength="240">'+escapeHtml(world.message||'')+'</textarea></label>'+
-    '<button id="admin-world-save" type="button">salvar controles</button></section></div>'+
-
-    '<section class="admin-panel admin-content-moderation"><div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // CONTEÚDO PÚBLICO</span>'+
-    '<h3>Remoção direta</h3></div><small>ações registradas</small></div><div class="admin-content-grid">'+moderationContent+'</div></section>'+
-
-    '<section class="admin-panel admin-reports-panel"><div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // DENÚNCIAS</span><h3>Fila de revisão</h3></div>'+
-    '<small>'+reports.length+' carregadas</small></div><div class="admin-report-list">'+reportsHtml+'</div></section>'+
-
-    '<section class="admin-panel admin-audit-panel"><div class="admin-panel-head"><div><span class="section-code">AUDITORIA // QUEM FEZ O QUÊ</span><h3>Registro administrativo</h3></div>'+
-    '<small>'+audit.length+' eventos</small></div><div class="admin-audit-list">'+(audit.map(adminAuditRow).join('')||'<p class="admin-empty">Nenhuma ação administrativa registrada ainda.</p>')+'</div></section>'+
-  '</section>';
-
-  $('#admin-refresh')?.addEventListener('click',renderAdminDashboard);
-  $('#admin-world-save')?.addEventListener('click',saveAdminWorldControls);
-  $('#admin-site-save')?.addEventListener('click',saveAdminSiteSettings);
-  host.querySelectorAll('[data-admin-preset]').forEach(b=>b.onclick=()=>adminApplyPreset(b.dataset.adminPreset));
-  host.querySelectorAll('[data-admin-color-var]').forEach(input=>input.oninput=()=>document.documentElement.style.setProperty(input.dataset.adminColorVar,input.value));
-  host.querySelectorAll('[data-admin-report-status]').forEach(select=>select.onchange=()=>setAdminReportStatus(select.dataset.adminReportStatus,select.value));
-  host.querySelectorAll('[data-admin-suspend-user]').forEach(b=>b.onclick=()=>adminToggleSuspension(b.dataset.adminSuspendUser,b.dataset.adminSuspendValue==='1'));
-  host.querySelectorAll('[data-admin-role-user]').forEach(select=>select.onchange=()=>adminSetRole(select.dataset.adminRoleUser,select.value));
-  host.querySelectorAll('[data-admin-delete-kind]').forEach(b=>b.onclick=()=>adminDeleteContent(b.dataset.adminDeleteKind,b.dataset.adminDeleteId));
+  state.adminRole=data?.role||state.adminRole;
+  state.staffRoles=Object.fromEntries((data?.staff||[]).map(x=>[x.user_id,x.role]));
+  if(!staffAllowedViews().some(v=>v[0]===state.staffView))state.staffView='overview';
+  const role=staffRoleLabel(state.adminRole);
+  let content='';
+  if(state.staffView==='overview')content=staffOverviewHtml(data);
+  else if(state.staffView==='reports')content=staffReportsHtml(data);
+  else if(state.staffView==='monitor')content=staffMonitorHtml(data);
+  else if(state.staffView==='users')content=staffUsersHtml(data);
+  else if(state.staffView==='staff')content=staffStaffHtml(data);
+  else if(state.staffView==='plaza')content=staffPlazaHtml(data);
+  else if(state.staffView==='chat')content=staffChatHtml();
+  else if(state.staffView==='appearance')content=ownerAppearanceHtml(data);
+  else if(state.staffView==='cms')content=ownerCmsHtml(data);
+  else if(state.staffView==='characters')content=ownerCharactersHtml(data);
+  else if(state.staffView==='assets')content=ownerAssetsHtml(data);
+  else if(state.staffView==='database')content=ownerDatabaseHtml();
+  host.innerHTML='<section class="staff-dashboard">'+
+    '<header class="staff-dashboard-hero"><div><span class="section-code">AVESSO.STAFF // '+escapeHtml(role)+'</span><h1>Dashboard '+staffBadgeHtml(state.profile.id)+'</h1><p>Uma central diferente para cada nível de responsabilidade. Porque dar a todos o mesmo botão vermelho seria muito humano.</p></div><div class="staff-dashboard-self"><span class="mini-avatar">'+avatarHtml(state.profile.avatar_url,state.profile.display_name)+'</span><div><b>'+userDisplayNameHtml(state.profile)+'</b><small>@'+escapeHtml(state.profile.handle)+'</small></div></div></header>'+
+    staffTopNav()+'<main class="staff-dashboard-main">'+content+'</main></section>';
+  bindStaffDashboard();
+  decorateStaffIdentity(host);
+}
+function bindStaffDashboard(){
+  const host=$('#feed-list');if(!host)return;
+  host.querySelectorAll('[data-staff-view]').forEach(b=>b.onclick=()=>staffSetView(b.dataset.staffView));
+  $('#staff-refresh')?.addEventListener('click',()=>renderAdminDashboard());
+  host.querySelectorAll('[data-report-save]').forEach(b=>b.onclick=()=>staffSaveReport(b.dataset.reportSave));
+  $('#staff-term-save')?.addEventListener('click',()=>staffSaveTerm({term:$('#staff-term-text')?.value.trim(),category:$('#staff-term-category')?.value.trim(),severity:$('#staff-term-severity')?.value,enabled:$('#staff-term-enabled')?.value==='1',notes:$('#staff-term-notes')?.value||''}));
+  host.querySelectorAll('[data-term-toggle]').forEach(b=>b.onclick=()=>staffSaveTerm({id:b.dataset.termToggle,term:b.dataset.termTerm,category:b.dataset.termCategory,severity:b.dataset.termSeverity,enabled:b.dataset.termEnabled==='1',notes:b.dataset.termNotes||''}));
+  host.querySelectorAll('[data-hit-save]').forEach(b=>b.onclick=()=>staffSaveHit(b.dataset.hitSave));
+  host.querySelectorAll('[data-staff-ban]').forEach(b=>b.onclick=()=>staffBanUser(b.dataset.staffBan,b.dataset.staffBanned==='1'));
+  host.querySelectorAll('[data-staff-notify]').forEach(b=>b.onclick=()=>staffNotifyUser(b.dataset.staffNotify,b.dataset.staffName));
+  host.querySelectorAll('[data-staff-role]').forEach(s=>s.onchange=()=>staffSetRoleAction(s.dataset.staffRole,s.value));
+  host.querySelectorAll('[data-staff-warn]').forEach(b=>b.onclick=()=>staffWarnAction(b.dataset.staffWarn,b.dataset.staffName));
+  const filter=$('#staff-user-filter');if(filter)filter.oninput=()=>{const q=filter.value.trim().toLowerCase();host.querySelectorAll('.staff-user-card').forEach(card=>card.classList.toggle('filtered-out',q&&!card.textContent.toLowerCase().includes(q)));};
+  if(state.staffView==='chat'){
+    $('#staff-chat-form')?.addEventListener('submit',sendStaffChat);loadStaffChat();startStaffRealtime();
+  }else if(state.staffChannel){supabase.removeChannel(state.staffChannel);state.staffChannel=null;}
+  if(state.staffView==='appearance'){
+    $('#admin-site-save')?.addEventListener('click',saveAdminSiteSettings);
+    host.querySelectorAll('[data-admin-preset]').forEach(b=>b.onclick=()=>adminApplyPreset(b.dataset.adminPreset));
+    host.querySelectorAll('[data-admin-color-var]').forEach(i=>i.oninput=()=>document.documentElement.style.setProperty(i.dataset.adminColorVar,i.value));
+    $('#owner-experience-save')?.addEventListener('click',ownerSaveExperience);
+  }
+  if(state.staffView==='cms'){
+    $('#owner-cms-save')?.addEventListener('click',ownerSaveCms);
+    host.querySelectorAll('[data-cms-quick-key]').forEach(b=>b.onclick=()=>{$('#owner-cms-page').value=b.dataset.cmsQuickPage;$('#owner-cms-key').value=b.dataset.cmsQuickKey;$('#owner-cms-value').focus();});
+    host.querySelectorAll('[data-cms-edit]').forEach(b=>b.onclick=()=>{$('#owner-cms-page').value=b.dataset.cmsPage;$('#owner-cms-key').value=b.dataset.cmsKey;$('#owner-cms-kind').value=b.dataset.cmsKind;$('#owner-cms-value').value=b.dataset.cmsValue;$('#owner-cms-order').value=b.dataset.cmsOrder;$('#owner-cms-enabled').checked=b.dataset.cmsEnabled==='1';window.scrollTo({top:host.offsetTop,behavior:'smooth'});});
+  }
+  if(state.staffView==='characters'){
+    $('#owner-char-create')?.addEventListener('click',ownerCreateCharacter);
+    host.querySelectorAll('[data-save-character]').forEach(b=>b.onclick=()=>ownerSaveCharacter(b.dataset.saveCharacter));
+    host.querySelectorAll('[data-save-dialogue]').forEach(b=>b.onclick=()=>ownerSaveDialogue(b.dataset.saveDialogue));
+    host.querySelectorAll('[data-deactivate-character]').forEach(b=>b.onclick=()=>ownerDeactivateCharacter(b.dataset.deactivateCharacter));
+  }
+  if(state.staffView==='assets'){
+    $('#owner-asset-upload')?.addEventListener('click',ownerUploadAsset);
+    $('#owner-badge-create')?.addEventListener('click',ownerCreateBadge);
+    $('#owner-badge-grant')?.addEventListener('click',ownerGrantBadge);
+  }
+  if(state.staffView==='database')$('#owner-db-load')?.addEventListener('click',ownerLoadDbTable);
   bindProfileLinks();
 }
 
