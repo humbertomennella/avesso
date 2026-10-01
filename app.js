@@ -4744,6 +4744,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   if(state.voiceRecorder&&state.voicePeerId&&state.voicePeerId!==peerId)cancelVoiceRecording(true);
   const [peer,messages]=await Promise.all([profileById(peerId),loadDirectConversation(peerId,{markRead})]);
   if(!peer)return toast('Essa pessoa sumiu da lista. Dramático.');
+  if(markRead)document.querySelector(`[data-open-chat="${CSS.escape(String(peerId))}"] .friend-unread-badge`)?.remove();
   state.directPeerId=peerId;state.chatWindowOpen=true;
   if(!keepMinimized)state.chatWindowMinimized=false;
   const p=presenceView(peer);
