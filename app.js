@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, onlineDockCollapsed:false, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -1005,6 +1005,56 @@ function externalMediaShareUrl(raw){
   const parsed=parseExternalMediaLink(raw);
   return parsed?.canonical||String(raw||'');
 }
+async function resolveMediaMetadata(raw){
+  const parsed=parseExternalMediaLink(raw);
+  if(!parsed)return null;
+  try{
+    const {data,error}=await supabase.functions.invoke('media-metadata',{body:{url:parsed.canonical||raw}});
+    if(error)return{title:null,provider:parsed.provider||'',canonical:parsed.canonical||raw};
+    return{
+      title:String(data?.title||'').trim().slice(0,220)||null,
+      provider:String(data?.provider||parsed.provider||'').trim().slice(0,40)||null,
+      canonical:parsed.canonical||raw
+    };
+  }catch{
+    return{title:null,provider:parsed.provider||'',canonical:parsed.canonical||raw};
+  }
+}
+function cornerMusicLabel(profile){
+  if(!profile?.corner_music_url)return'';
+  return String(profile.corner_music_title||profile.corner_music_provider||parseExternalMediaLink(profile.corner_music_url)?.provider||'trilha do Canto');
+}
+function cornerMusicBadgeHtml(profile,{owner=false}={}){
+  if(!profile?.corner_music_url)return'';
+  const enabled=Boolean(profile.corner_music_enabled);
+  const label=cornerMusicLabel(profile);
+  return `<div class="corner-music-badge ${enabled?'active':'off'}"><span class="now-playing-eq" aria-hidden="true"><i></i><i></i><i></i></span><span><b>♫ ${owner?'sua trilha':'deixou ouvindo'}</b><small>${escapeHtml(label)}</small></span>${owner?'':`<button id="public-corner-music-toggle" type="button">${state.cornerMusicLocallyPaused?'ouvir novamente':'parar de ouvir'}</button>`}</div>`;
+}
+function refreshPublicCornerMusicControl(profile=state.publicCornerMusicProfile){
+  const host=$('#public-corner-music');
+  if(!host||!profile)return;
+  host.innerHTML=cornerMusicBadgeHtml(profile);
+  const toggle=$('#public-corner-music-toggle');
+  if(toggle)toggle.onclick=()=>state.cornerMusicLocallyPaused?resumeCornerMusicForVisitor():pauseCornerMusicForVisitor();
+}
+function pauseCornerMusicForVisitor(){
+  if(!state.publicCornerMusicProfile)return;
+  clearCornerMusicHost();
+  if(state.cornerMusicGestureHandler){
+    document.removeEventListener('pointerdown',state.cornerMusicGestureHandler,true);
+    document.removeEventListener('keydown',state.cornerMusicGestureHandler,true);
+  }
+  state.cornerMusicGestureHandler=null;
+  state.cornerMusicLocallyPaused=true;
+  refreshPublicCornerMusicControl();
+}
+function resumeCornerMusicForVisitor(){
+  const profile=state.publicCornerMusicProfile;
+  if(!profile?.corner_music_enabled||!profile.corner_music_url)return;
+  state.cornerMusicLocallyPaused=false;
+  mountCornerMusic(profile);
+  refreshPublicCornerMusicControl(profile);
+}
 function cornerMusicEmbed(raw){
   const parsed=parseExternalMediaLink(raw);
   if(!parsed)return null;
@@ -1032,7 +1082,7 @@ function cornerMusicEmbed(raw){
 function clearCornerMusicHost(){
   document.getElementById('corner-music-host')?.remove();
 }
-function stopCornerMusic(){
+function stopCornerMusic({forgetProfile=true}={}){
   clearCornerMusicHost();
   if(state.cornerMusicGestureHandler){
     document.removeEventListener('pointerdown',state.cornerMusicGestureHandler,true);
@@ -1040,6 +1090,8 @@ function stopCornerMusic(){
   }
   state.cornerMusicGestureHandler=null;
   state.cornerMusicProfileId=null;
+  state.cornerMusicLocallyPaused=false;
+  if(forgetProfile)state.publicCornerMusicProfile=null;
 }
 function mountCornerMusic(profile){
   if(!profile?.corner_music_enabled||!profile.corner_music_url)return false;
@@ -1063,6 +1115,9 @@ function mountCornerMusic(profile){
 }
 function startCornerMusic(profile){
   stopCornerMusic();
+  state.publicCornerMusicProfile=profile||null;
+  state.cornerMusicLocallyPaused=false;
+  refreshPublicCornerMusicControl(profile);
   if(!profile?.corner_music_enabled||!profile.corner_music_url)return;
   if(!cornerMusicEmbed(profile.corner_music_url))return;
   state.cornerMusicProfileId=profile.id;
@@ -1092,8 +1147,11 @@ async function saveCornerMusicSettings(){
   if(raw&&!parsed)return toast('Use um link válido do YouTube ou Spotify.');
   if(enabled&&!parsed)return toast('Escolha uma música antes de ligar a trilha automática.');
   const corner_music_url=parsed?.canonical||null;
+  const metadata=corner_music_url?await resolveMediaMetadata(corner_music_url):null;
+  const corner_music_title=metadata?.title||null;
+  const corner_music_provider=metadata?.provider||parsed?.provider||null;
   const {data,error}=await supabase.from('profiles')
-    .update({corner_music_url,corner_music_enabled:enabled,updated_at:new Date().toISOString()})
+    .update({corner_music_url,corner_music_enabled:enabled,corner_music_title,corner_music_provider,updated_at:new Date().toISOString()})
     .eq('id',state.profile.id)
     .select()
     .single();
@@ -1106,7 +1164,7 @@ async function saveCornerMusicSettings(){
 }
 async function clearCornerMusicSettings(){
   const {data,error}=await supabase.from('profiles')
-    .update({corner_music_url:null,corner_music_enabled:false,updated_at:new Date().toISOString()})
+    .update({corner_music_url:null,corner_music_enabled:false,corner_music_title:null,corner_music_provider:null,updated_at:new Date().toISOString()})
     .eq('id',state.profile.id)
     .select()
     .single();
