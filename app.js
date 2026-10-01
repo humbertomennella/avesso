@@ -2326,12 +2326,15 @@ function renderAlbumPhotos(host,photos,userId,editable,reactions=[]){
   host.dataset.albumUser=userId;
   host.innerHTML=photos.map((photo,index)=>`<article class="album-photo" data-album-photo="${photo.id}">
     <img src="${escapeAttr(photo._url)}" alt="${escapeAttr(photo.caption||'Foto do álbum')}" loading="${index<10?'eager':'lazy'}" decoding="async" fetchpriority="${index<4?'high':'auto'}">
-    <div class="album-photo-meta"><p>${escapeHtml(photo.caption||'sem legenda. corajoso.')}</p><small>${ago(photo.created_at)}</small></div>
+    <div class="album-photo-meta"><p data-photo-caption="${photo.id}">${escapeHtml(photo.caption||'sem legenda. corajoso.')}</p><small>${ago(photo.created_at)}</small></div>
     <div class="photo-reactions" data-photo-reactions="${photo.id}">${albumReactionButtons(photo.id,reactions)}</div>
-    ${editable?`<button class="album-delete" data-photo-delete="${photo.id}" data-storage-path="${escapeAttr(photo.storage_path)}">apagar foto</button>`:''}
+    ${editable?`<div class="album-owner-actions"><button data-photo-edit="${photo.id}">editar legenda</button><button class="album-delete" data-photo-delete="${photo.id}" data-storage-path="${escapeAttr(photo.storage_path)}">apagar foto</button></div><div class="album-caption-edit hidden" data-photo-edit-panel="${photo.id}"><input maxlength="180" value="${escapeAttr(photo.caption||'')}" placeholder="legenda"><div><button data-photo-save="${photo.id}">salvar</button><button data-photo-cancel="${photo.id}">cancelar</button></div></div>`:''}
   </article>`).join('')||'<p class="album-empty">Álbum vazio. Nenhuma lembrança foi monetizada.</p>';
   host.querySelectorAll('[data-photo-react]').forEach(b=>b.onclick=()=>togglePhotoReaction(b.dataset.photoReact,b.dataset.reaction,userId,editable));
   host.querySelectorAll('[data-photo-delete]').forEach(b=>b.onclick=()=>deleteAlbumPhoto(b.dataset.photoDelete,b.dataset.storagePath));
+  host.querySelectorAll('[data-photo-edit]').forEach(b=>b.onclick=()=>host.querySelector(`[data-photo-edit-panel="${b.dataset.photoEdit}"]`)?.classList.remove('hidden'));
+  host.querySelectorAll('[data-photo-cancel]').forEach(b=>b.onclick=()=>host.querySelector(`[data-photo-edit-panel="${b.dataset.photoCancel}"]`)?.classList.add('hidden'));
+  host.querySelectorAll('[data-photo-save]').forEach(b=>b.onclick=()=>saveAlbumPhotoCaption(b.dataset.photoSave));
 }
 function updateAlbumReactions(host,photos,reactions,userId,editable){
   if(!host||host.dataset.albumUser!==userId)return;
@@ -2373,10 +2376,20 @@ async function uploadAlbumPhoto(){
   if(error){await supabase.storage.from('avesso-albums').remove([path]);return toast('A foto chegou, o álbum fingiu que não conhece.');}
   $('#album-file').value='';$('#album-caption').value='';delete state.albumDataCache[state.profile.id];toast('Foto adicionada. Nenhum filtro de pôr do sol obrigatório.');loadAlbum(state.profile.id,true);
 }
+async function saveAlbumPhotoCaption(id){
+  const panel=document.querySelector(`[data-photo-edit-panel="${CSS.escape(id)}"]`);
+  const caption=String(panel?.querySelector('input')?.value||'').trim().slice(0,180);
+  const {error}=await supabase.from('profile_photos').update({caption}).eq('id',id).eq('user_id',state.profile.id);
+  if(error)return toast('A legenda se recusou a mudar.');
+  delete state.albumDataCache[state.profile.id];
+  toast('Legenda atualizada.');
+  loadAlbum(state.profile.id,true);
+}
 async function deleteAlbumPhoto(id,path){
   if(!confirm('Apagar esta foto do seu Canto?'))return;
-  await supabase.from('profile_photos').delete().eq('id',id).eq('user_id',state.profile.id);
-  await supabase.storage.from('avesso-albums').remove([path]);
+  const {error}=await supabase.from('profile_photos').delete().eq('id',id).eq('user_id',state.profile.id);
+  if(error)return toast('A foto se recusou a desaparecer.');
+  if(path)await supabase.storage.from('avesso-albums').remove([path]);
   delete state.albumDataCache[state.profile.id];
   loadAlbum(state.profile.id,true);
 }
