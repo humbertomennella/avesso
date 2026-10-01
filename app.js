@@ -574,15 +574,18 @@ window.addEventListener('message',event=>{
 
 function awayThresholdMs(profile){
   const minutes=Number(profile?.away_after_minutes);
-  if(minutes===0)return 8*60*60*1000;
+  if(minutes===0)return Infinity;
   return (Number.isFinite(minutes)&&[5,10,15,20,30].includes(minutes)?minutes:10)*60*1000;
 }
 function presenceView(profile){
   if(!profile)return{mode:'offline',label:'offline'};
   if(profile.presence_mode==='invisible')return{mode:'offline',label:'offline'};
   if(profile.presence_mode==='away')return{mode:'away',label:'ausente'};
-  const fresh=profile.last_seen&&Date.now()-new Date(profile.last_seen).getTime()<awayThresholdMs(profile);
-  return fresh?{mode:'online',label:'online'}:{mode:'away',label:'ausente'};
+  const seen=profile.last_seen?new Date(profile.last_seen).getTime():0;
+  const age=seen?Date.now()-seen:Infinity;
+  if(age>45*60*1000)return{mode:'offline',label:'offline'};
+  if(Number(profile.away_after_minutes)===0)return{mode:'online',label:'online'};
+  return age<awayThresholdMs(profile)?{mode:'online',label:'online'}:{mode:'away',label:'ausente'};
 }
 async function saveAwayAfterMinutes(value){
   const away_after_minutes=Number(value);
@@ -1836,9 +1839,8 @@ async function primeFriendPresenceCache(){
   renderOnlineFriendsDock();
 }
 function ageFriendPresenceCache(render=true){
-  const now=Date.now();
   Object.values(state.friendPresence||{}).forEach(entry=>{
-    if(entry?.mode==='online'&&entry.lastSeen&&now-entry.lastSeen>awayThresholdMs(entry.profile))entry.mode='away';
+    if(entry?.profile)entry.mode=presenceView(entry.profile).mode;
   });
   if(render)renderOnlineFriendsDock();
 }
@@ -2121,7 +2123,10 @@ async function refreshDirectMessageBubble(messageId){
   const row=await directMessageWithReactions(messageId);
   const old=log.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
   if(!row){old?.remove();return;}
-  if(old)old.outerHTML=dmMessageHtml(row);
+  if(old){
+    old.outerHTML=dmMessageHtml(row);
+    repairLegacyVoicePlayers(log);
+  }
 }
 function dmReactionSummary(m){
   const rows=Array.isArray(m?._reactions)?m._reactions:[];
