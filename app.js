@@ -4788,7 +4788,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('#dm-chat-search-close').onclick=()=>{const input=$('#dm-chat-search-input');if(input)input.value='';filterChatMessages('');$('#dm-chat-search').classList.add('hidden');};
   $('#dm-chat-search-input').oninput=e=>filterChatMessages(e.target.value);
   $('#dm-attach').onclick=()=>$('#dm-file-input').click();
-  $('#dm-file-input').onchange=e=>{const file=e.target.files?.[0];if(file)sendDirectAttachment(file);};
+  $('#dm-file-input').onchange=e=>{const file=e.target.files?.[0];if(file)showDirectAttachmentPreview(file);};
   $('#dm-load-older')?.addEventListener('click',loadMoreDirectHistory);
   bindDirectMessageActions(win);
   bindTypingIndicator();
@@ -4933,6 +4933,7 @@ function autoMinimizeChat(){
 }
 function closeChatWindow(silent=false){
   setChatOptionsOpen(false);
+  clearDirectAttachmentPreview();
   if(state.voiceRecorder||state.voicePendingStart)cancelVoiceRecording(true);
   clearTimeout(state.incomingMessagePulseTimer);
   state.incomingMessagePulseTimer=null;
@@ -5020,6 +5021,33 @@ async function sendAttention(){
   playUiSound('attention');
   const button=$('#dm-attention');
   if(button){button.classList.remove('sent');void button.offsetWidth;button.classList.add('sent');setTimeout(()=>button.classList.remove('sent'),450);}
+}
+function clearDirectAttachmentPreview(){
+  const preview=$('#dm-attachment-preview');
+  const url=preview?.dataset?.objectUrl;
+  if(url){try{URL.revokeObjectURL(url);}catch{}}
+  preview?.remove();
+  const input=$('#dm-file-input');if(input)input.value='';
+}
+function showDirectAttachmentPreview(file){
+  if(!file)return;
+  clearDirectAttachmentPreview();
+  const body=$('.dm-window-body');if(!body)return;
+  const preview=document.createElement('section');
+  preview.id='dm-attachment-preview';
+  preview.className='dm-attachment-preview';
+  const isImage=file.type.startsWith('image/');
+  const url=isImage?URL.createObjectURL(file):'';
+  if(url)preview.dataset.objectUrl=url;
+  preview.innerHTML=`<div class="dm-attachment-preview-main">${isImage?`<img src="${escapeAttr(url)}" alt="Prévia do arquivo">`:'<span class="dm-attachment-file-icon">▤</span>'}<div><b>${escapeHtml(file.name||'arquivo')}</b><small>${Math.max(1,Math.ceil(file.size/1024))} KB · ${escapeHtml(file.type||'arquivo')}</small></div></div><div class="dm-attachment-preview-actions"><button type="button" id="dm-attachment-cancel">cancelar</button><button type="button" id="dm-attachment-send">enviar</button></div>`;
+  const tools=$('.dm-tools');
+  body.insertBefore(preview,tools||$('#dm-form'));
+  $('#dm-attachment-cancel').onclick=clearDirectAttachmentPreview;
+  $('#dm-attachment-send').onclick=async()=>{
+    const button=$('#dm-attachment-send');if(button){button.disabled=true;button.textContent='enviando...';}
+    await sendDirectAttachment(file);
+    clearDirectAttachmentPreview();
+  };
 }
 async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDuration=0,optimisticId=null,optimisticUrl=null}={}){
   if(!recipientId||!file)return;
