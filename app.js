@@ -3942,6 +3942,18 @@ function bindDirectMessageActions(root=document){
     else toast('Essa mensagem é mais antiga. Carregue o histórico acima.');
   });
 }
+function filterChatMessages(term=''){
+  const query=String(term||'').trim().toLowerCase();
+  const bubbles=[...document.querySelectorAll('#dm-log .dm-bubble')];
+  bubbles.forEach(b=>b.classList.remove('dm-search-match'));
+  if(query.length<2)return;
+  const matches=bubbles.filter(b=>String(b.dataset.dmText||'').includes(query));
+  matches.forEach(b=>b.classList.add('dm-search-match'));
+  matches[0]?.scrollIntoView({behavior:'smooth',block:'center'});
+  const input=$('#dm-chat-search-input');
+  if(input)input.setAttribute('data-results',String(matches.length));
+}
+
 async function handleDirectMessageMutation(row){
   if(!row?.id||!state.chatWindowOpen||!state.directPeerId)return;
   const belongs=(row.sender_id===state.profile.id&&row.recipient_id===state.directPeerId)||(row.sender_id===state.directPeerId&&row.recipient_id===state.profile.id);
@@ -4465,6 +4477,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
       </div>
     </header>
     <div class="dm-window-body">
+      <div id="dm-chat-search" class="dm-chat-search hidden"><input id="dm-chat-search-input" type="search" autocomplete="off" placeholder="buscar nesta conversa"><button id="dm-chat-search-close" type="button" aria-label="Fechar busca">×</button></div>
       <div class="dm-msn-conversation">
         <aside class="dm-msn-peer">
           <div class="dm-msn-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</div>
@@ -4472,7 +4485,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
           <small>@${escapeHtml(peer.handle)}</small>
           <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span>
         </aside>
-        <div class="dm-log" id="dm-log">${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
+        <div class="dm-log" id="dm-log">${state.directHistoryHasMore?'<button id="dm-load-older" class="dm-load-older" type="button">carregar antigas</button>':''}${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
         <aside class="dm-msn-self" title="Seu perfil nesta conversa">
           <div class="dm-msn-self-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
           <b>${identityNameHtml(state.profile.id,state.profile.display_name)}</b>
@@ -4480,7 +4493,10 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
           <span class="dm-msn-presence"><i class="presence-dot ${mePresence.mode}"></i> ${mePresence.label}</span>
         </aside>
       </div>
+      <div id="dm-typing" class="dm-typing hidden">digitando...</div>
+      <div id="dm-replying-to" class="dm-replying-to hidden"></div>
       <div class="dm-tools">
+        <button id="dm-search" title="Buscar na conversa">⌕ buscar</button>
         <button id="dm-attention" title="Chamar atenção">⚡ chamar atenção</button>
         <button id="dm-attach" title="Enviar arquivo ou imagem">📎 arquivo</button>
         <input id="dm-file-input" type="file" hidden accept="image/*,audio/*,.pdf,.txt,.zip,.docx">
@@ -4510,8 +4526,15 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('#dm-emoticons').onclick=e=>{e.stopPropagation();$('#dm-emoticon-palette').classList.toggle('hidden');$('#dm-options-menu')?.classList.add('hidden');};
   $('#dm-emoticon-close').onclick=e=>{e.stopPropagation();$('#dm-emoticon-palette').classList.add('hidden');$('#dm-input')?.focus();};
   $$('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();syncDmComposerAction();});
+  $('#dm-search').onclick=()=>{const panel=$('#dm-chat-search');panel.classList.toggle('hidden');if(!panel.classList.contains('hidden'))setTimeout(()=>$('#dm-chat-search-input')?.focus(),40);};
+  $('#dm-chat-search-close').onclick=()=>{const input=$('#dm-chat-search-input');if(input)input.value='';filterChatMessages('');$('#dm-chat-search').classList.add('hidden');};
+  $('#dm-chat-search-input').oninput=e=>filterChatMessages(e.target.value);
   $('#dm-attach').onclick=()=>$('#dm-file-input').click();
   $('#dm-file-input').onchange=e=>{const file=e.target.files?.[0];if(file)sendDirectAttachment(file);};
+  $('#dm-load-older')?.addEventListener('click',loadMoreDirectHistory);
+  bindDirectMessageActions(win);
+  bindTypingIndicator();
+  renderDmReplyComposer();
   bindHoldToTalk();
   bindChatControl($('#dm-options'),()=>{ $('#dm-emoticon-palette')?.classList.add('hidden'); toggleChatOptions(); });
   $('#dm-visit-profile').onclick=()=>{setChatOptionsOpen(false);openPublicProfile(peerId);};
@@ -4700,14 +4723,18 @@ async function sendDirectMessage(e){
   if(!body||!state.directPeerId)return;
   const peerId=state.directPeerId;
   input.value='';syncDmComposerAction();
+  const replyTo=state.replyingTo?.id||null;
   const {data,error}=await supabase.from('direct_messages')
-    .insert({sender_id:state.profile.id,recipient_id:peerId,body,message_kind:'text'})
+    .insert({sender_id:state.profile.id,recipient_id:peerId,body,message_kind:'text',reply_to_id:replyTo})
     .select('*').single();
   if(error){
     input.value=body;syncDmComposerAction();
     return toast('A mensagem não atravessou o fio. Confirme que vocês ainda são amigos.');
   }
-  if(state.chatWindowOpen&&state.directPeerId===peerId)appendDirectMessage(data);
+  const hydrated=(await hydrateDirectMessages([data]))[0]||data;
+  if(state.chatWindowOpen&&state.directPeerId===peerId)appendDirectMessage(hydrated);
+  state.replyingTo=null;renderDmReplyComposer();
+  sendTypingState(false);
   dispatchPush('message',data.id);
 }
 async function sendAttention(){
@@ -4740,7 +4767,7 @@ async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDu
   const kind=file.type.startsWith('image/')?'image':file.type.startsWith('audio/')?'audio':'file';
   const body=kind==='audio'?`Mensagem de voz${voiceDuration?' · '+voiceDuration+'s':''}`:file.name;
   const {data,error}=await supabase.from('direct_messages')
-    .insert({sender_id:state.profile.id,recipient_id:recipientId,body,message_kind:kind,attachment_path:path,attachment_name:file.name,attachment_type:file.type,attachment_size:file.size})
+    .insert({sender_id:state.profile.id,recipient_id:recipientId,body,message_kind:kind,attachment_path:path,attachment_name:file.name,attachment_type:file.type,attachment_size:file.size,reply_to_id:state.replyingTo?.id||null})
     .select('*').single();
   if(error){
     await supabase.storage.from('avesso-chat').remove([path]);
@@ -4752,6 +4779,7 @@ async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDu
     if(optimisticId)appendDirectMessage(hydrated,{replaceId:optimisticId});
     else appendDirectMessage(hydrated);
   }
+  state.replyingTo=null;renderDmReplyComposer();
   dispatchPush('message',data.id);
   if(optimisticUrl)setTimeout(()=>URL.revokeObjectURL(optimisticUrl),500);
 }
