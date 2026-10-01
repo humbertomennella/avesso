@@ -2224,8 +2224,17 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       const botRows=characterReactions.filter(x=>x.metadata?.reaction===id);
       const active=rows.some(x=>x.user_id===state.profile.id);
       const total=rows.length+botRows.length;
-      return `<button class="acid-reaction ${active?'active':''}" data-react-post="${p.id}" data-reaction="${id}" aria-pressed="${active}"><span>${icon}</span>${label}${total?` <b>${total}</b>`:''}${botRows.length?'<i class="character-reaction-mark" title="ALGO reagiu">ALGO</i>':''}</button>`;
+      return `<button class="acid-reaction ${active?'active':''}" data-react-post="${p.id}" data-reaction="${id}" aria-pressed="${active}"><span>${icon}</span><em>${label}</em>${total?` <b>${total}</b>`:''}${botRows.length?'<i class="character-reaction-mark" title="ALGO reagiu">ALGO</i>':''}</button>`;
     }).join('');
+    const ownReaction=ACID_REACTIONS.find(([id])=>reactionRows.some(x=>x.reaction===id&&x.user_id===state.profile.id));
+    const reactionTotal=reactionRows.length+characterReactions.length;
+    const reactionTrigger=ownReaction
+      ? `<span>${ownReaction[1]}</span><b>${ownReaction[2]}</b>`
+      : '<span>♥</span><b>reagir</b>';
+    const reactionTray=`<div class="reaction-shell ${ownReaction?'has-reaction':''}">
+      <button type="button" class="reaction-trigger" data-reaction-toggle="${p.id}" aria-expanded="false" aria-label="Abrir reações">${reactionTrigger}${reactionTotal?`<small>${reactionTotal}</small>`:''}</button>
+      <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
+    </div>`;
     const turned=Boolean(p.reshare_post_id||p.reshare_photo_id);
     const ownerActions=p.author_id===state.profile.id?`<div class="post-owner-actions">${turned?'':'<button data-post-edit="'+p.id+'">editar</button>'}<button class="danger" data-post-delete="${p.id}">apagar</button></div>`:'';
     const turnedBadge=turned?`<div class="post-turned-badge"><span>↻ VIRADO DO AVESSO</span><b>original: @${escapeHtml(p.reshare_author_handle||'alguém')}</b><small>virado por @${escapeHtml(p.author_handle||'alguém')}</small></div>`:'';
@@ -2239,7 +2248,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea>${['youtube','spotify'].includes(p.media_kind)?`<input type="url" data-post-media-link-edit="${p.id}" value="${escapeAttr(externalMediaShareUrl(p.media_url))}" placeholder="link do YouTube ou Spotify">`:''}<div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
       ${effectiveImage?`<figure class="post-image ${effectiveGif?'post-gif':''}"><img class="post-image-open" ${p.reshare_photo_id?`data-photo-open="${p.reshare_photo_id}"`:`data-feed-image-open="${p.id}"`} src="${escapeAttr(effectiveImage)}" alt="${effectiveGif?'GIF':'Imagem'} publicado por ${escapeAttr(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
       ${feedMediaHtml(p.media_url,p.media_kind)}
-      <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
+      ${reactionTray}
       ${conversationHtml}
       <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button><button class="turn-feed-button" data-turn-post="${p.id}">↻ virar no feed</button>${p.response_count===0&&state.siteSettings?.feed_settings?.show_attention_tag!==false?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
       <div class="inline-reply hidden" data-reply-box="${p.id}"><label>RESPOSTA // fale com a pessoa, não com a métrica</label><textarea maxlength="420" placeholder="Escreva algo que valha o espaço que ocupa."></textarea><div class="reply-emoticon-row"><button type="button" data-reply-emoticons="${p.id}">☻ avessícones</button><div class="feed-emoticon-palette hidden" data-reply-emoticon-palette="${p.id}">${avessoEmoticonButtons('data-reply-emoticon')}</div></div><div><button data-reply-send="${p.id}">publicar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
@@ -2252,9 +2261,36 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
   $$('[data-reply-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-box="${b.dataset.replyCancel}"]`)?.classList.add('hidden'));
   $$('[data-reply-emoticons]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-emoticon-palette="${b.dataset.replyEmoticons}"]`)?.classList.toggle('hidden'));
   $$('[data-reply-emoticon]').forEach(b=>b.onclick=()=>{const box=b.closest('[data-reply-box]'),input=box?.querySelector('textarea');if(input){input.value+=`${input.value?' ':''}${b.dataset.replyEmoticon}`;input.focus();}});
-  $$('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
-  $$('[data-react-post]').forEach(b=>b.onclick=()=>toggleReaction(b.dataset.reactPost,b.dataset.reaction,b.classList.contains('active')));
-  $$('[data-post-edit]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postEdit}"]`)?.classList.remove('hidden'));
+  $('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
+  $('[data-reaction-toggle]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const shell=b.closest('.reaction-shell');
+    const opening=!shell?.classList.contains('open');
+    document.querySelectorAll('.reaction-shell.open').forEach(other=>{
+      if(other!==shell){
+        other.classList.remove('open');
+        other.querySelector('[data-reaction-toggle]')?.setAttribute('aria-expanded','false');
+      }
+    });
+    shell?.classList.toggle('open',opening);
+    b.setAttribute('aria-expanded',String(opening));
+  });
+  $('[data-react-post]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    b.closest('.reaction-shell')?.classList.remove('open');
+    toggleReaction(b.dataset.reactPost,b.dataset.reaction,b.classList.contains('active'));
+  });
+  if(!document.documentElement.dataset.reactionDismissBound){
+    document.documentElement.dataset.reactionDismissBound='1';
+    document.addEventListener('click',e=>{
+      if(e.target.closest('.reaction-shell'))return;
+      document.querySelectorAll('.reaction-shell.open').forEach(shell=>{
+        shell.classList.remove('open');
+        shell.querySelector('[data-reaction-toggle]')?.setAttribute('aria-expanded','false');
+      });
+    });
+  }
+  $('[data-post-edit]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postEdit}"]`)?.classList.remove('hidden'));
   $$('[data-post-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postCancel}"]`)?.classList.add('hidden'));
   $$('[data-post-save]').forEach(b=>b.onclick=()=>savePostEdit(b.dataset.postSave));
   $('[data-post-delete]').forEach(b=>b.onclick=()=>deleteOwnPost(b.dataset.postDelete));
@@ -4037,9 +4073,9 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
         </div>
       </form>
     </div>`;
-  $('#dm-minimize').onclick=toggleChatMinimize;
-  $('#dm-maximize').onclick=toggleChatMaximize;
-  $('#dm-close').onclick=()=>closeChatWindow();
+  bindChatControl($('#dm-minimize'),toggleChatMinimize);
+  bindChatControl($('#dm-maximize'),toggleChatMaximize);
+  bindChatControl($('#dm-close'),()=>closeChatWindow());
   $('#dm-restore-name').onclick=e=>{e.stopPropagation();if(state.chatWindowMinimized)toggleChatMinimize();else $('#dm-input')?.focus();};
   $('#dm-peer-avatar').onclick=()=>openPublicProfile(peerId);
   $('#dm-peer-profile-name').onclick=()=>openPublicProfile(peerId);
@@ -4067,6 +4103,24 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   installChatScrollContainment(win);
   pinChatToLatest(win);
   repairLegacyVoicePlayers(win);
+}
+function bindChatControl(button,action){
+  if(!button||typeof action!=='function')return;
+  let touchStamp=0;
+  button.onclick=null;
+  button.addEventListener('pointerup',e=>{
+    if(e.pointerType!=='touch'&&e.pointerType!=='pen')return;
+    e.preventDefault();
+    e.stopPropagation();
+    touchStamp=performance.now();
+    action();
+  },{passive:false});
+  button.addEventListener('click',e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    if(performance.now()-touchStamp<550)return;
+    action();
+  });
 }
 function pinChatToLatest(root=ensureChatWindow()){
   const log=root?.querySelector?.('#dm-log')||$('#dm-log');
