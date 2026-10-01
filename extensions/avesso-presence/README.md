@@ -1,6 +1,6 @@
 # AVESSO Presence
 
-Ponte opcional para o recurso **Ouvindo agora**.
+Ponte opcional para o recurso **Ouvindo agora** e para as observações autorizadas do **Aquele que Lê Tudo**.
 
 ## O que ela consegue detectar
 - YouTube / YouTube Music
@@ -10,7 +10,15 @@ Ponte opcional para o recurso **Ouvindo agora**.
 - TIDAL Web
 - Apple Music Web
 
-Quando uma aba suportada está reproduzindo áudio, a extensão envia título, artista, fonte e URL para a aba do AVESSO. O AVESSO só publica esse status no Supabase se o usuário tiver ativado **mostrar o que estou ouvindo**.
+A faixa tocando é reavaliada continuamente. O AVESSO recebe título, artista, fonte e URL enquanto a aba continua reproduzindo áudio, em vez de ficar preso à primeira música que o navegador viu.
+
+## Contexto de abas
+O AVESSO pode, se o usuário ativar a opção no **Meu Canto**, avisar Aquele que Lê Tudo quando houver troca de aba. A extensão envia somente:
+- domínio;
+- título visível da aba;
+- indicação de áudio ativo.
+
+Ela não lê conteúdo de formulários, mensagens privadas, câmera, microfone, histórico completo nem o conteúdo interno da página.
 
 ## Limite real
 Um site comum não pode inspecionar outras abas, o áudio global do sistema ou aplicativos nativos. Por isso a detecção automática entre abas usa esta extensão. Aplicativos nativos como Spotify Desktop exigiriam uma ponte local separada do sistema operacional.

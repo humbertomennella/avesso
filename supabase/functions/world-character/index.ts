@@ -8,7 +8,7 @@ const cors = {
   "Content-Type": "application/json",
 };
 
-const allowedTriggers = new Set(["login","post_created","image_posted","feed_attention","idle","profile","reply_created","support_sent","avatar_changed","mode_changed","tab_view","screen_action","plaza_opened","plaza_action","plaza_chat","tower_opened","tower_pulse","world_event"]);
+const allowedTriggers = new Set(["login","post_created","image_posted","feed_attention","idle","profile","reply_created","support_sent","avatar_changed","mode_changed","tab_view","screen_action","plaza_opened","plaza_action","plaza_chat","tower_opened","tower_pulse","world_event","music_changed","browser_tab_changed","aquele_observed"]);
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: cors });
@@ -101,6 +101,7 @@ Deno.serve(async (req: Request) => {
   let forcedSlug = requestedSlug;
   if (["plaza_opened","plaza_action","plaza_chat"].includes(trigger)) forcedSlug = "npc";
   if (["tower_opened","tower_pulse"].includes(trigger)) forcedSlug = "rei_engajamento";
+  if (["music_changed","browser_tab_changed","aquele_observed"].includes(trigger)) forcedSlug = "aquele_le_tudo";
   let q = admin.from("characters").select("*").eq("is_active", true);
   if (forcedSlug) q = q.eq("slug", forcedSlug);
   const { data: chars, error: charsError } = await q;
@@ -139,6 +140,23 @@ Deno.serve(async (req: Request) => {
   if (trigger === "feed_attention") context += " Existe pelo menos uma publicação pública sem resposta no feed.";
   if (trigger === "profile") context += " O usuário abriu o próprio Canto.";
   if (trigger === "login") context += " O usuário acabou de entrar na rede.";
+  if (trigger === "music_changed") {
+    const musicTitle = typeof actionMeta.music_title === "string" ? actionMeta.music_title.slice(0,180) : "";
+    const artist = typeof actionMeta.artist === "string" ? actionMeta.artist.slice(0,180) : "";
+    const sourceName = typeof actionMeta.source === "string" ? actionMeta.source.slice(0,80) : "";
+    context += ` O detector autorizado informou que a faixa tocando mudou para: "${musicTitle}"${artist ? ` por "${artist}"` : ""}${sourceName ? ` em ${sourceName}` : ""}. Comente esta faixa concreta. Não diga apenas que o usuário está ouvindo música.`;
+  }
+  if (trigger === "browser_tab_changed") {
+    const host = typeof actionMeta.host === "string" ? actionMeta.host.slice(0,120) : "";
+    const tabTitle = typeof actionMeta.tab_title === "string" ? actionMeta.tab_title.slice(0,180) : "";
+    const audible = Boolean(actionMeta.audible);
+    context += ` A ponte opcional informou somente uma troca de aba. Domínio: ${host || "desconhecido"}. Título visível da aba: "${tabTitle || "sem título"}". Áudio ativo: ${audible ? "sim" : "não"}. Reaja apenas a esses dados; não alegue ter lido o conteúdo interno da página.`;
+  }
+  if (trigger === "aquele_observed") {
+    const control = typeof actionMeta.control === "string" ? actionMeta.control.slice(0,80) : "";
+    const observedSurface = typeof actionMeta.surface === "string" ? actionMeta.surface.slice(0,40) : surface;
+    context += ` Aquele que Lê Tudo recebeu um evento real da interface: controle "${control || actionType || "ação"}" na superfície "${observedSurface}". Faça uma observação específica sobre isso, sem inventar cliques ou intenções não informadas.`;
+  }
 
   if (postId) {
     const { data: post } = await admin
@@ -275,8 +293,9 @@ Deno.serve(async (req: Request) => {
     await admin.from("plaza_messages").insert({
       user_id: null,
       character_id: character.id,
-      body: line.slice(0,280),
+      body: line.slice(0,500),
       reply_to: replyTo,
+      message_kind: "npc",
     });
   }
 
@@ -285,8 +304,13 @@ Deno.serve(async (req: Request) => {
     .update({ last_action_at: new Date().toISOString() })
     .eq("id", character.id);
 
+  const delivery = character.slug === "aquele_le_tudo" && ["music_changed","browser_tab_changed","aquele_observed"].includes(trigger)
+    ? (Math.random() < 0.24 ? "message" : "encounter")
+    : "encounter";
+
   return json({
     interaction,
+    delivery,
     character: {
       slug: character.slug,
       name: character.name,
