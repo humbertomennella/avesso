@@ -235,7 +235,7 @@ function resumeStoryTimer(){if($('#story-view-dialog')?.open)scheduleStoryAdvanc
 
 async function openStory(storyId,options={}){
   const {data:story,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').eq('id',storyId).gt('expires_at',new Date().toISOString()).maybeSingle();
-  if(error||!story)return toast('Este story expirou ou você não pode vê-lo. O tempo venceu outra vez.');
+  if(error||!story){if(options.auto)closeStoryViewer();return toast('Este story expirou ou você não pode vê-lo. O tempo venceu outra vez.');}
   if(isPeerBlocked(story.author_id))return toast('Este usuário está bloqueado. O story ficou do outro lado da porta.');
   const suppliedSequence=Array.isArray(options.sequence)?options.sequence.filter(Boolean):[];
   if(suppliedSequence.length)state.storySequence=[...new Set(suppliedSequence)];
