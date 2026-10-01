@@ -5097,3 +5097,200 @@ body:has(.dm-floating-window:not(.hidden):not(.minimized)) .online-friends-dock{
     display:none;
   }
 }
+
+
+/* AVESSO FIXPACK // AUDIO + CANTO + SIDEBAR CHAT 2026-10-01 */
+
+/* A lista de amigos online agora pertence à lateral, onde faz sentido morar. */
+@media(min-width:761px){
+  .app-nav .online-friends-dock{
+    position:absolute!important;
+    left:10px!important;
+    right:10px!important;
+    bottom:55px!important;
+    width:auto!important;
+    max-width:none!important;
+    z-index:4!important;
+    border:1px solid #30464b!important;
+    background:
+      linear-gradient(180deg,#071013f0,#040809f4),
+      url("assets/wallpapers/cidade-56k.webp") center/cover no-repeat!important;
+    box-shadow:4px 4px 0 #020405!important;
+  }
+  .app-nav .online-friends-list{
+    max-height:155px!important;
+  }
+  .app-nav .online-friends-dock.collapsed{
+    width:auto!important;
+  }
+  .app-nav .nav-logout{
+    left:10px!important;
+    right:10px!important;
+    bottom:10px!important;
+    width:calc(100% - 20px)!important;
+  }
+  body:has(.dm-floating-window:not(.hidden).minimized) .online-friends-dock,
+  body:has(.dm-floating-window:not(.hidden):not(.minimized)) .online-friends-dock{
+    right:10px!important;
+    bottom:55px!important;
+    display:block!important;
+  }
+}
+.online-friends-toggle{
+  min-height:34px;
+}
+.online-friend-item{
+  border-radius:0;
+}
+.online-friend-item:hover{
+  transform:translateX(2px);
+}
+
+/* Nova mensagem: barra minimizada pisca sem obrigar o usuário a adivinhar. */
+.dm-floating-window.incoming-pulse{
+  animation:incoming-window-pulse .62s steps(2,end) 10;
+}
+.dm-floating-window.incoming-pulse .dm-msn-titlebar{
+  animation:incoming-title-pulse .62s steps(2,end) 10;
+}
+@keyframes incoming-window-pulse{
+  0%,100%{box-shadow:12px 12px 0 #020405,0 0 0 1px #081215,0 0 8px #22d9ee20}
+  50%{box-shadow:12px 12px 0 #020405,0 0 0 2px var(--acid),0 0 28px #d8ff3e88}
+}
+@keyframes incoming-title-pulse{
+  0%,100%{filter:none}
+  50%{filter:brightness(1.65) saturate(1.5)}
+}
+
+/* Trilha deixada no Canto: perto do nome, discreta e controlável. */
+.corner-music-badge{
+  display:grid;
+  grid-template-columns:18px minmax(0,1fr) auto;
+  align-items:center;
+  gap:7px;
+  width:min(470px,100%);
+  margin:7px 0 4px;
+  padding:6px 7px;
+  border:1px solid #32464a;
+  background:#071012d5;
+  box-shadow:inset 2px 0 0 var(--cyan);
+}
+.corner-music-badge.off{
+  opacity:.62;
+  box-shadow:inset 2px 0 0 #66706f;
+}
+.corner-music-badge>span:nth-child(2){
+  min-width:0;
+}
+.corner-music-badge b,
+.corner-music-badge small{
+  display:block;
+  min-width:0;
+}
+.corner-music-badge b{
+  color:var(--cyan);
+  font:800 .47rem/1.15 var(--mono);
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.corner-music-badge small{
+  margin-top:2px;
+  color:#d4dcda;
+  font:600 .56rem/1.25 var(--mono);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.corner-music-badge button{
+  padding:5px 7px;
+  border:1px solid #405257;
+  background:#080c0e;
+  color:#aeb9b7;
+  font:700 .45rem var(--mono);
+  cursor:pointer;
+}
+.corner-music-badge button:hover{
+  border-color:var(--acid);
+  color:var(--acid);
+}
+
+/* Fallback manual do status musical. */
+.manual-now-playing{
+  margin:10px 0;
+  padding:9px;
+  border:1px dashed #33474b;
+  background:#05090bba;
+}
+.manual-now-playing>span{
+  display:block;
+  margin-bottom:6px;
+  color:#81908d;
+  font:700 .48rem var(--mono);
+}
+.manual-now-playing input{
+  margin:0;
+}
+.manual-now-playing>div{
+  display:flex;
+  gap:6px;
+  margin-top:6px;
+}
+.manual-now-playing button{
+  padding:7px 8px;
+  border:1px solid #3a4c50;
+  background:#0a1012;
+  color:#c4cecb;
+  font:700 .48rem var(--mono);
+  cursor:pointer;
+}
+.manual-now-playing #save-manual-now-playing{
+  color:var(--acid);
+  border-color:#667c24;
+}
+.manual-now-playing #stop-now-playing{
+  color:#ff847a;
+  border-color:#5a3338;
+}
+
+/* Áudio universal: WAV normalizado e fallback acessível. */
+.dm-audio-card audio{
+  display:block;
+  width:100%;
+  min-width:0;
+}
+.dm-audio-open{
+  display:inline-block;
+  margin-top:4px;
+  color:#376d77;
+  font:700 .45rem var(--mono);
+  text-decoration:none;
+}
+.dm-audio-open:hover{
+  color:#0d5968;
+  text-decoration:underline;
+}
+
+@media(max-width:760px){
+  .app-nav .online-friends-dock{
+    position:fixed!important;
+    right:8px!important;
+    left:auto!important;
+    bottom:78px!important;
+    width:min(250px,calc(100vw - 16px))!important;
+    z-index:11250!important;
+  }
+  .app-nav .online-friends-dock.collapsed{
+    width:164px!important;
+  }
+  .corner-music-badge{
+    grid-template-columns:18px minmax(0,1fr);
+  }
+  .corner-music-badge button{
+    grid-column:1/-1;
+    width:100%;
+  }
+  .manual-now-playing>div{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+}
