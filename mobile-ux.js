@@ -199,6 +199,7 @@
 
   function openNotificationCenter(){
     loadNotifications();
+    dismissBaseMoreSheet();
     const sheet=ensureNotificationCenter();
     notificationRows.forEach(x=>x.read=true);
     persistNotifications();
@@ -228,14 +229,14 @@
       search.type='button';
       search.className='mobile-notification-row mobile-ux-search-link';
       search.innerHTML='<i>⌕</i><span>BUSCAR.EXE</span>';
-      search.onclick=()=>{sheet.classList.remove('open');window.dispatchEvent(new CustomEvent('avesso:open-search'));};
+      search.onclick=()=>{dismissBaseMoreSheet();window.dispatchEvent(new CustomEvent('avesso:open-search'));};
       permission?.before(search);
 
       const now=document.createElement('button');
       now.type='button';
       now.className='mobile-notification-row mobile-ux-now-link';
       now.innerHTML='<i>◉</i><span>AGORA.EXE // ao vivo</span>';
-      now.onclick=()=>{sheet.classList.remove('open');window.dispatchEvent(new CustomEvent('avesso:open-now'));};
+      now.onclick=()=>{dismissBaseMoreSheet();window.dispatchEvent(new CustomEvent('avesso:open-now'));};
       permission?.before(now);
 
       const center=document.createElement('button');
@@ -271,7 +272,7 @@
       health.className='mobile-notification-row mobile-ux-health-link';
       health.dataset.mobileUxHealth='1';
       health.innerHTML='<i>＋</i><span>HEALTH.EXE // saúde do sistema</span>';
-      health.onclick=()=>{sheet.classList.remove('open');window.dispatchEvent(new CustomEvent('avesso:open-health'));};
+      health.onclick=()=>{dismissBaseMoreSheet();window.dispatchEvent(new CustomEvent('avesso:open-health'));};
       q('[data-mobile-notifications]',sheet)?.before(health);
     }else if(health){
       health.classList.toggle('hidden',!adminVisible);
