@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, onlineDockCollapsed:false, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -437,6 +437,89 @@ function runSocialNotificationQueue(){
   if(item.sound!==false)playUiSound(item.kind==='friend'?'friend':item.kind==='attention'?'attention':item.kind==='online'?'online':item.kind==='guestbook'?'guestbook':'message');
   setTimeout(dismiss,5000);
 }
+const NOW_PLAYING_TTL_MS=180000;
+function nowPlayingView(profile){
+  if(!profile?.listening_visible||!profile.now_playing_title||!profile.now_playing_updated_at)return null;
+  const age=Date.now()-new Date(profile.now_playing_updated_at).getTime();
+  if(!Number.isFinite(age)||age>NOW_PLAYING_TTL_MS)return null;
+  return {
+    title:String(profile.now_playing_title||'').slice(0,180),
+    artist:String(profile.now_playing_artist||'').slice(0,180),
+    source:String(profile.now_playing_source||'').slice(0,80),
+    url:String(profile.now_playing_url||'').slice(0,1000)
+  };
+}
+function nowPlayingHtml(profile,{compact=false}={}){
+  const np=nowPlayingView(profile);
+  if(!np)return'';
+  const label=np.artist?`${np.title} — ${np.artist}`:np.title;
+  const content=`<span class="now-playing-eq" aria-hidden="true"><i></i><i></i><i></i></span><span><b>♫ ouvindo agora</b><small>${escapeHtml(label)}${np.source?` · ${escapeHtml(np.source)}`:''}</small></span>`;
+  return np.url
+    ?`<a class="now-playing-status ${compact?'compact':''}" href="${escapeAttr(np.url)}" target="_blank" rel="noopener noreferrer">${content}</a>`
+    :`<div class="now-playing-status ${compact?'compact':''}">${content}</div>`;
+}
+function refreshOwnNowPlayingPreview(){
+  const host=$('#profile-now-playing-preview');
+  if(!host)return;
+  host.innerHTML=nowPlayingHtml(state.profile)||'<div class="now-playing-empty">nada detectado agora. o silêncio também tem presença.</div>';
+  const bridge=$('#listening-bridge-status');
+  if(bridge)bridge.textContent=state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // site sozinho não consegue ler outras abas ou apps';
+}
+async function saveListeningPrivacy(){
+  if(!state.profile?.id)return;
+  const visible=Boolean($('#listening-visible')?.checked);
+  const patch={listening_visible:visible,updated_at:new Date().toISOString()};
+  if(!visible){
+    Object.assign(patch,{now_playing_title:null,now_playing_artist:null,now_playing_source:null,now_playing_url:null,now_playing_updated_at:null});
+  }
+  const {data,error}=await supabase.from('profiles').update(patch).eq('id',state.profile.id).select().single();
+  if(error)return toast('A privacidade do som tropeçou no banco.');
+  state.profile=data;
+  refreshOwnNowPlayingPreview();
+  toast(visible?'“Ouvindo agora” visível. A trilha saiu do modo fantasma.':'“Ouvindo agora” oculto. Ninguém precisa saber de tudo.');
+}
+async function pushNowPlaying(payload){
+  if(!state.profile?.id||!state.profile.listening_visible)return;
+  const clean=payload&&payload.title?{
+    title:String(payload.title||'').trim().slice(0,180),
+    artist:String(payload.artist||'').trim().slice(0,180),
+    source:String(payload.source||'').trim().slice(0,80),
+    url:String(payload.url||'').trim().slice(0,1000)
+  }:null;
+  const signature=clean?JSON.stringify(clean):'';
+  if(signature===state.lastNowPlayingSignature&&state.profile.now_playing_updated_at&&Date.now()-new Date(state.profile.now_playing_updated_at).getTime()<45000)return;
+  state.lastNowPlayingSignature=signature;
+  clearTimeout(state.nowPlayingPushTimer);
+  state.nowPlayingPushTimer=setTimeout(async()=>{
+    const patch=clean?{
+      now_playing_title:clean.title,
+      now_playing_artist:clean.artist||null,
+      now_playing_source:clean.source||null,
+      now_playing_url:clean.url||null,
+      now_playing_updated_at:new Date().toISOString(),
+      updated_at:new Date().toISOString()
+    }:{
+      now_playing_title:null,now_playing_artist:null,now_playing_source:null,now_playing_url:null,now_playing_updated_at:null,updated_at:new Date().toISOString()
+    };
+    const {data,error}=await supabase.from('profiles').update(patch).eq('id',state.profile.id).select().single();
+    if(error)return;
+    state.profile=data;
+    refreshOwnNowPlayingPreview();
+    if(state.chatWindowOpen&&state.directPeerId)updateOwnListeningInChat();
+  },450);
+}
+function updateOwnListeningInChat(){
+  const host=$('#dm-self-listening');
+  if(host)host.innerHTML=nowPlayingHtml(state.profile,{compact:true});
+}
+window.addEventListener('message',event=>{
+  if(event.source!==window||event.origin!==location.origin)return;
+  if(event.data?.type!=='AVESSO_NOW_PLAYING')return;
+  state.presenceBridgeSeen=true;
+  refreshOwnNowPlayingPreview();
+  pushNowPlaying(event.data.payload||null);
+});
+
 function presenceView(profile){
   if(!profile)return{mode:'offline',label:'offline'};
   if(profile.presence_mode==='invisible')return{mode:'offline',label:'offline'};
@@ -836,10 +919,12 @@ $('#resend-confirmation').onclick=async()=>{const email=new FormData($('#auth-fo
 
 function humanError(m){const value=String(m||'');const lower=value.toLowerCase();if(lower.includes('email not confirmed'))return'Confirme seu e-mail antes de entrar. Use o link mais recente ou solicite outro na aba de cadastro.';if(lower.includes('invalid login'))return'E-mail ou senha não conferem. Se você já confirmou, use a senha do cadastro.';if(lower.includes('already registered'))return'Este e-mail já tem cadastro. Use a aba de entrar.';if(lower.includes('expired')||lower.includes('otp_expired'))return'Este link expirou ou já foi utilizado. Se já confirmou, entre com sua senha.';if(lower.includes('password'))return'A senha precisa atender aos requisitos de segurança.';return value;}
 $('#logout').onclick=()=>supabase.auth.signOut();
+$('#nav-home-link').onclick=e=>{e.preventDefault();document.querySelector('[data-app-tab="feed"]')?.click();};
+$('#nav-profile-link').onclick=()=>document.querySelector('[data-app-tab="profile"]')?.click();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await loadBlockedPeers();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.blockedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();stopCornerMusic();closeStoryViewer();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await loadBlockedPeers();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();setupOnlineFriendsDock();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearTimeout(state.nowPlayingPushTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.blockedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();stopCornerMusic();closeStoryViewer();closeChatWindow(true);document.body.classList.remove('avesso-app-active');$('#online-friends-dock')?.classList.add('hidden');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -1532,31 +1617,60 @@ async function acceptedFriendProfiles(){
     .or(`requester_id.eq.${state.profile.id},addressee_id.eq.${state.profile.id}`);
   const ids=[...new Set((rels||[]).map(r=>r.requester_id===state.profile.id?r.addressee_id:r.requester_id))];
   if(!ids.length)return[];
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen').in('id',ids);
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at').in('id',ids);
   return data||[];
 }
 async function profileById(id){
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen').eq('id',id).maybeSingle();
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at').eq('id',id).maybeSingle();
   return data||null;
 }
 function cachedPresenceEntry(profile){
   return {mode:presenceView(profile).mode,lastSeen:profile?.last_seen?new Date(profile.last_seen).getTime():0,profile};
 }
+function renderOnlineFriendsDock(){
+  const dock=$('#online-friends-dock'),list=$('#online-friends-list'),count=$('#online-friends-count');
+  if(!dock||!list||!count||!state.profile)return;
+  ageFriendPresenceCache(false);
+  const online=Object.values(state.friendPresence||{})
+    .filter(entry=>entry?.mode==='online'&&entry.profile&&!isPeerBlocked(entry.profile.id))
+    .map(entry=>entry.profile)
+    .sort((a,b)=>String(a.display_name||'').localeCompare(String(b.display_name||''),'pt-BR'));
+  count.textContent=online.length;
+  list.innerHTML=online.map(friend=>`<button class="online-friend-item" data-online-friend="${friend.id}" type="button">
+    <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
+    <span><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small>${nowPlayingView(friend)?`<em>♫ ${escapeHtml(nowPlayingView(friend).title)}</em>`:''}</span>
+    <i class="presence-dot online"></i>
+  </button>`).join('')||'<div class="online-friends-empty">0 humanos online. o modem respira em paz.</div>';
+  list.querySelectorAll('[data-online-friend]').forEach(b=>b.onclick=()=>openFriendChat(b.dataset.onlineFriend));
+  dock.classList.remove('hidden');
+  dock.classList.toggle('collapsed',state.onlineDockCollapsed);
+  $('#online-friends-toggle')?.setAttribute('aria-expanded',String(!state.onlineDockCollapsed));
+}
+function setupOnlineFriendsDock(){
+  state.onlineDockCollapsed=window.matchMedia('(max-width:760px)').matches;
+  $('#online-friends-toggle').onclick=()=>{
+    state.onlineDockCollapsed=!state.onlineDockCollapsed;
+    renderOnlineFriendsDock();
+  };
+  renderOnlineFriendsDock();
+}
 async function primeFriendPresenceCache(){
   state.friendPresence={};
   const friends=await acceptedFriendProfiles();
   friends.forEach(friend=>{state.friendPresence[friend.id]=cachedPresenceEntry(friend);});
+  renderOnlineFriendsDock();
 }
-function ageFriendPresenceCache(){
+function ageFriendPresenceCache(render=true){
   const now=Date.now();
   Object.values(state.friendPresence||{}).forEach(entry=>{
     if(entry?.mode==='online'&&entry.lastSeen&&now-entry.lastSeen>120000)entry.mode='away';
   });
+  if(render)renderOnlineFriendsDock();
 }
 function startFriendPresenceWatch(){
   clearInterval(state.presenceWatchTimer);
   ageFriendPresenceCache();
-  state.presenceWatchTimer=setInterval(ageFriendPresenceCache,30000);
+  state.presenceWatchTimer=setInterval(()=>ageFriendPresenceCache(true),30000);
 }
 function noteFriendPresence(profile){
   if(!profile?.id||!Object.prototype.hasOwnProperty.call(state.friendPresence,profile.id))return;
@@ -1564,6 +1678,8 @@ function noteFriendPresence(profile){
   const prev=state.friendPresence[profile.id];
   const next=cachedPresenceEntry(profile);
   state.friendPresence[profile.id]=next;
+  renderOnlineFriendsDock();
+  if(state.chatWindowOpen&&state.directPeerId===profile.id)updateChatPeerHeader(profile);
   if(prev?.mode!=='online'&&next.mode==='online'&&!isPeerMuted(profile.id)){
     socialNotify({
       title:`${profile.display_name||'Um amigo'} entrou no AVESSO`,
