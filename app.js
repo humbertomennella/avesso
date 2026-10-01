@@ -1226,6 +1226,7 @@ async function saveCornerMusicSettings(){
   if(input)input.value=corner_music_url||'';
   const status=$('#corner-music-status');
   if(status)status.textContent=enabled&&corner_music_url?'ATIVA // visitantes recebem a trilha ao entrar':'DESLIGADA // o silêncio venceu esta rodada';
+  const hero=$('#profile-hero-corner-music');if(hero)hero.innerHTML=cornerMusicBadgeHtml(state.profile,{owner:true});
   toast(enabled?'Trilha do Canto ativada. O player continuará invisível.':'Trilha automática desligada. O link foi preservado.');
 }
 async function clearCornerMusicSettings(){
@@ -1239,6 +1240,7 @@ async function clearCornerMusicSettings(){
   if($('#corner-music-url'))$('#corner-music-url').value='';
   if($('#corner-music-enabled'))$('#corner-music-enabled').checked=false;
   if($('#corner-music-status'))$('#corner-music-status').textContent='SEM FITA // escolha um link quando quiser';
+  const hero=$('#profile-hero-corner-music');if(hero)hero.innerHTML='';
   toast('Trilha removida do seu Canto.');
 }
 
@@ -2583,6 +2585,14 @@ function toggleChatMinimize(){
   win.classList.toggle('minimized',state.chatWindowMinimized);
   const button=$('#dm-minimize');
   if(button){button.textContent=state.chatWindowMinimized?'↥':'_';button.title=state.chatWindowMinimized?'Restaurar':'Minimizar';}
+  if(!state.chatWindowMinimized){
+    clearTimeout(state.incomingMessagePulseTimer);
+    win.classList.remove('incoming-pulse');
+    if(state.directPeerId){
+      supabase.from('direct_messages').update({read_at:new Date().toISOString()})
+        .eq('sender_id',state.directPeerId).eq('recipient_id',state.profile.id).is('read_at',null).then(()=>{});
+    }
+  }
   applyChatGeometry();
   if(!state.chatWindowMinimized)setTimeout(()=>$('#dm-input')?.focus(),80);
 }
@@ -2597,8 +2607,12 @@ function autoMinimizeChat(){
 }
 function closeChatWindow(silent=false){
   if(state.voiceRecorder||state.voicePendingStart)cancelVoiceRecording(true);
+  clearTimeout(state.incomingMessagePulseTimer);
+  state.incomingMessagePulseTimer=null;
+  const win=$('#dm-floating-window');
+  win?.querySelectorAll('.dm-voice-audio[data-voice-object-url]').forEach(audio=>{try{URL.revokeObjectURL(audio.dataset.voiceObjectUrl);}catch{}});
   state.chatWindowOpen=false;state.chatWindowMinimized=false;state.directPeerId=null;
-  const win=$('#dm-floating-window');if(win)win.classList.add('hidden');
+  if(win){win.classList.remove('incoming-pulse');win.classList.add('hidden');}
   if(!silent)toast('Conversa fechada. Nenhum “tchau” automático foi enviado.');
 }
 function triggerScreenNudge(){
