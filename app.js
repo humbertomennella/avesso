@@ -2348,11 +2348,13 @@ async function togglePhotoReaction(photoId,reaction,userId,editable){
 }
 
 function profileMediaCardHtml(row,editable=false){
+  const label=row.media_kind==='youtube'?'▶ YOUTUBE':row.media_kind==='spotify'?'♫ SPOTIFY':row.media_kind==='video'?'▶ VÍDEO':'♫ ÁUDIO';
+  const linked=['youtube','spotify'].includes(row.media_kind);
   return `<article class="profile-media-card" data-profile-media="${row.id}">
-    <div class="profile-media-head"><span>${row.media_kind==='video'?'▶ VÍDEO':'♫ ÁUDIO'}</span><small>${ago(row.created_at)}</small></div>
+    <div class="profile-media-head"><span>${label}</span><small>${ago(row.created_at)}</small></div>
     ${feedMediaHtml(row.media_url,row.media_kind,{compact:true})}
-    ${row.caption?`<p>${escapeHtml(row.caption)}</p>`:''}
-    ${editable?`<button class="profile-media-delete" data-profile-media-delete="${row.id}" data-profile-media-path="${escapeAttr(row.storage_path)}">apagar mídia</button>`:''}
+    <p data-profile-media-caption="${row.id}">${escapeHtml(row.caption||'sem legenda. silêncio também é curadoria.')}</p>
+    ${editable?`<div class="profile-media-owner-actions"><button data-profile-media-edit="${row.id}">editar</button><button class="profile-media-delete" data-profile-media-delete="${row.id}" data-profile-media-path="${escapeAttr(row.storage_path||'')}">apagar mídia</button></div><div class="profile-media-edit hidden" data-profile-media-edit-panel="${row.id}"><textarea maxlength="420">${escapeHtml(row.caption||'')}</textarea>${linked?`<input type="url" value="${escapeAttr(row.media_url||'')}" data-profile-media-link-input="${row.id}" placeholder="novo link do YouTube ou Spotify">`:''}<div><button data-profile-media-save="${row.id}">salvar</button><button data-profile-media-cancel="${row.id}">cancelar</button></div></div>`:''}
   </article>`;
 }
 async function loadProfileMedia(userId,editable=false,selector=editable?'#profile-media-list':'#public-media-list'){
@@ -2361,25 +2363,49 @@ async function loadProfileMedia(userId,editable=false,selector=editable?'#profil
   if(error){host.innerHTML='<p class="profile-media-empty">A discoteca caiu atrás do servidor.</p>';return;}
   host.innerHTML=(data||[]).map(row=>profileMediaCardHtml(row,editable)).join('')||'<p class="profile-media-empty">Nada tocando por aqui. Silêncio também é curadoria.</p>';
   host.querySelectorAll('[data-profile-media-delete]').forEach(b=>b.onclick=()=>deleteProfileMedia(b.dataset.profileMediaDelete,b.dataset.profileMediaPath));
+  host.querySelectorAll('[data-profile-media-edit]').forEach(b=>b.onclick=()=>host.querySelector(`[data-profile-media-edit-panel="${b.dataset.profileMediaEdit}"]`)?.classList.remove('hidden'));
+  host.querySelectorAll('[data-profile-media-cancel]').forEach(b=>b.onclick=()=>host.querySelector(`[data-profile-media-edit-panel="${b.dataset.profileMediaCancel}"]`)?.classList.add('hidden'));
+  host.querySelectorAll('[data-profile-media-save]').forEach(b=>b.onclick=()=>saveProfileMediaEdit(b.dataset.profileMediaSave));
 }
 async function uploadProfileMedia(){
   const file=$('#profile-media-file')?.files?.[0]||null;
-  if(!file)return toast('Escolha uma música ou vídeo primeiro.');
-  const kind=mediaKindFromFile(file);
-  if(!kind)return toast('Esse arquivo não decidiu se é música ou vídeo.');
-  if(file.size>mediaSizeLimit(kind))return toast(`${kind==='video'?'Vídeo':'Áudio'} acima de ${mediaSizeLabel(kind)}.`);
+  const external=parseExternalMediaLink($('#profile-media-link')?.value||'');
+  if($('#profile-media-link')?.value.trim()&&!external)return toast('Use um link válido do YouTube ou Spotify.');
+  if(!file&&!external)return toast('Escolha um arquivo ou cole um link do YouTube/Spotify.');
+  if(file&&external)return toast('Escolha arquivo ou link. Os dois juntos viram burocracia.');
   const caption=String($('#profile-media-caption')?.value||'').trim().slice(0,420);
-  const ext=(file.name.split('.').pop()||(kind==='video'?'mp4':'mp3')).replace(/[^a-z0-9]/gi,'').toLowerCase();
-  const path=`${state.profile.id}/profile/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  let kind=external?.kind||mediaKindFromFile(file),media_url=external?.url||null,path=null;
+  if(!kind)return toast('Esse arquivo não decidiu se é música ou vídeo.');
+  if(file&&file.size>mediaSizeLimit(kind))return toast(`${kind==='video'?'Vídeo':'Áudio'} acima de ${mediaSizeLabel(kind)}.`);
   const btn=$('#profile-media-upload');if(btn){btn.disabled=true;btn.textContent='enviando...';}
-  const {error:uploadError}=await supabase.storage.from('avesso-media').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
-  if(uploadError){if(btn){btn.disabled=false;btn.textContent='publicar no Canto';}return toast('A mídia ficou presa no cabo. Tente novamente.');}
-  const media_url=publicMediaUrl(path);
+  if(file){
+    const ext=(file.name.split('.').pop()||(kind==='video'?'mp4':'mp3')).replace(/[^a-z0-9]/gi,'').toLowerCase();
+    path=`${state.profile.id}/profile/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const {error:uploadError}=await supabase.storage.from('avesso-media').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
+    if(uploadError){if(btn){btn.disabled=false;btn.textContent='publicar no Canto';}return toast('A mídia ficou presa no cabo. Tente novamente.');}
+    media_url=publicMediaUrl(path);
+  }
   const {error}=await supabase.from('profile_media').insert({user_id:state.profile.id,media_url,storage_path:path,media_kind:kind,caption});
   if(btn){btn.disabled=false;btn.textContent='publicar no Canto';}
-  if(error){await supabase.storage.from('avesso-media').remove([path]);return toast('O arquivo chegou, mas o Canto fingiu que não conhece.');}
-  $('#profile-media-file').value='';$('#profile-media-caption').value='';
-  toast(kind==='video'?'Vídeo publicado no seu Canto.':'Áudio publicado no seu Canto.');
+  if(error){if(path)await supabase.storage.from('avesso-media').remove([path]);return toast('A mídia chegou, mas o Canto fingiu que não conhece.');}
+  $('#profile-media-file').value='';$('#profile-media-caption').value='';if($('#profile-media-link'))$('#profile-media-link').value='';
+  toast(kind==='youtube'?'YouTube incorporado ao seu Canto.':kind==='spotify'?'Spotify incorporado ao seu Canto.':kind==='video'?'Vídeo publicado no seu Canto.':'Áudio publicado no seu Canto.');
+  loadProfileMedia(state.profile.id,true,'#profile-media-list');
+}
+async function saveProfileMediaEdit(id){
+  const panel=document.querySelector(`[data-profile-media-edit-panel="${CSS.escape(id)}"]`);
+  if(!panel)return;
+  const caption=String(panel.querySelector('textarea')?.value||'').trim().slice(0,420);
+  const linkInput=panel.querySelector('[data-profile-media-link-input]');
+  const patch={caption};
+  if(linkInput){
+    const parsed=parseExternalMediaLink(linkInput.value);
+    if(!parsed)return toast('O novo link precisa ser do YouTube ou Spotify.');
+    patch.media_url=parsed.url;patch.media_kind=parsed.kind;
+  }
+  const {error}=await supabase.from('profile_media').update(patch).eq('id',id).eq('user_id',state.profile.id);
+  if(error)return toast('A edição não foi salva.');
+  toast('Mídia editada. O passado digital aceitou revisão.');
   loadProfileMedia(state.profile.id,true,'#profile-media-list');
 }
 async function deleteProfileMedia(id,path){
@@ -2410,7 +2436,7 @@ async function renderProfile(){
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
     <section class="profile-album-control"><span class="section-code">ÁLBUM // FOTOS QUE VOCÊ DECIDIU NÃO APAGAR</span><h2>Seu álbum</h2><p>Poste imagens no seu Canto. Reações existem, mas continuam sem virar olimpíada social.</p><div class="album-upload-row"><input id="album-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><input id="album-caption" maxlength="180" placeholder="legenda opcional. autocontrole também."><button id="album-upload">adicionar foto</button></div><div id="profile-album" class="profile-album-grid"><p>carregando memórias...</p></div></section>
-    <section class="profile-media-control"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Sua fita, seu clipe, seu problema</h2><p>Publique música ou vídeo diretamente no seu Canto. Sem autoplay, porque ainda resta alguma civilização.</p><div class="profile-media-upload"><input id="profile-media-file" type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/wav,audio/webm,video/mp4,video/webm,video/quicktime"><input id="profile-media-caption" maxlength="420" placeholder="legenda opcional. contexto não machuca."><button id="profile-media-upload">publicar no Canto</button></div><div id="profile-media-list" class="profile-media-grid"><p>rebobinando...</p></div></section>
+    <section class="profile-media-control"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Sua fita, seu clipe, seu problema</h2><p>Envie um arquivo ou cole um link do YouTube/Spotify. Sem autoplay, porque ainda resta alguma civilização.</p><div class="profile-media-upload"><input id="profile-media-file" type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/wav,audio/webm,video/mp4,video/webm,video/quicktime"><input id="profile-media-link" type="url" inputmode="url" placeholder="link do YouTube ou Spotify"><input id="profile-media-caption" maxlength="420" placeholder="legenda opcional. contexto não machuca."><button id="profile-media-upload">publicar no Canto</button></div><div id="profile-media-list" class="profile-media-grid"><p>rebobinando...</p></div></section>
     <section class="guestbook-section guestbook-own"><span class="section-code">RECADOS // DEIXARAM ISSO AQUI</span><h2>Recados no seu Canto</h2><p>Amigos podem deixar texto, links, emojis e imagens. Você continua com a sofisticada tecnologia chamada “apagar”.</p><div id="profile-guestbook" class="guestbook-list"><p>procurando bilhetes na porta...</p></div></section>
     <section class="friends-control"><span class="section-code">PESSOAS // AMIGOS</span><h2>Lista de pessoas que você aceitou voluntariamente</h2><div id="friends-panel"><p>carregando relações humanas...</p></div></section>
     <section class="blocked-control"><span class="section-code">CONTROLE // BLOQUEADOS</span><h2>Porta fechada também é interface</h2><p>Bloquear encerra amizade e impede novas mensagens. Desbloquear não cria amizade de volta, porque nem botão deveria ter esse poder.</p><div id="blocked-panel"><p>consultando bloqueios...</p></div></section>
