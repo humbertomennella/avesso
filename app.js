@@ -55,7 +55,17 @@ const STORY_REACTIONS=[
   ['quatro_zero_quatro','404','isso merece um 404']
 ];
 function avessoEmoticonButtons(attribute='data-emoticon-value'){
-  return AVESSO_EMOTICONS.map(value=>`<button type="button" ${attribute}="${escapeAttr(value)}" title="inserir ${escapeAttr(value)}">${escapeHtml(value)}</button>`).join('');
+  const native=AVESSO_EMOTICONS.map(value=>`<button type="button" ${attribute}="${escapeAttr(value)}" title="inserir ${escapeAttr(value)}">${escapeHtml(value)}</button>`).join('');
+  const custom=(state.customEmoticons||[]).map(item=>`<button type="button" class="custom-emoticon-choice" ${attribute}="${escapeAttr(item.token)}" title="${escapeAttr(item.name)}"><img src="${escapeAttr(item.url)}" alt="${escapeAttr(item.token)}"></button>`).join('');
+  return native+custom;
+}
+function renderEmoticonText(value=''){
+  let html=escapeHtml(value);
+  for(const item of state.customEmoticons||[]){
+    const token=escapeHtml(item.token);
+    html=html.split(token).join('<img class="inline-custom-emoticon" src="'+escapeAttr(item.url)+'" alt="'+escapeAttr(item.token)+'" title="'+escapeAttr(item.name)+'">');
+  }
+  return html;
 }
 function setupFeedEmoticons(){
   const palette=$('#post-emoticon-palette');
@@ -93,7 +103,7 @@ function chatThemeClass(theme=state.profile?.chat_theme||'bbs_cyan'){
 function chatWallpaperCss(slug=state.profile?.chat_wallpaper||'none'){
   return CHAT_WALLPAPERS.some(x=>x[0]===slug)&&slug!=='none'?`url("${wallpaperUrl(slug)}")`:'none';
 }
-function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.webp`;}
+function wallpaperUrl(slug){const custom=state.customAssetBySlug?.['wallpaper:'+slug];return custom?adminAssetPublicUrl(custom.storage_path):`assets/wallpapers/${slug||'cidade-56k'}.webp`;}
 function applyAppWallpaper(){
   const useProfileWallpaper=state.tab==='profile';
   const slug=(useProfileWallpaper?state.profile?.profile_wallpaper:state.profile?.app_wallpaper)||'cidade-56k';
@@ -3171,7 +3181,7 @@ function dmMessageHtml(m){
     :m.message_kind==='audio'
       ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio class="dm-voice-audio" data-voice-type="${escapeAttr(m.attachment_type||'')}" controls preload="metadata"><source src="${escapeAttr(m.attachment_url)}" type="${escapeAttr(m.attachment_type||'audio/wav')}">Seu navegador recusou este áudio.</audio><a class="dm-audio-open" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener">abrir áudio</a></div>`
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
-  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${escapeHtml(m.body)}</p>`:'');
+  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${renderEmoticonText(m.body)}</p>`:'');
   return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}</small></article>`;
 }
 async function handleDirectMessageMutation(row){
