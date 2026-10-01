@@ -65,6 +65,7 @@ Deno.serve(async (req: Request) => {
   const actionType = typeof body.action_type === "string" ? body.action_type.slice(0,80) : null;
   const surface = typeof body.surface === "string" ? body.surface.slice(0,40) : "app";
   const actionMeta = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
+  const feedReviewTrigger = ["post_created","image_posted","reply_created"].includes(trigger);
 
   const { data: prefs } = await admin
     .from("user_world_preferences")
@@ -87,7 +88,7 @@ Deno.serve(async (req: Request) => {
     return json({ skipped: true, reason: "world_paused" });
   }
 
-  const bypassCooldown = ["post_created","image_posted","reply_created","support_sent","avatar_changed","mode_changed","plaza_opened","plaza_action","plaza_chat","tower_opened","tower_pulse"].includes(trigger);
+  const bypassCooldown = ["support_sent","avatar_changed","mode_changed","plaza_opened","plaza_action","plaza_chat","tower_opened","tower_pulse"].includes(trigger);
   if (!bypassCooldown) {
     const { data: recent } = await admin
       .from("character_interactions")
@@ -99,6 +100,7 @@ Deno.serve(async (req: Request) => {
   }
 
   let forcedSlug = requestedSlug;
+  if (feedReviewTrigger) forcedSlug = "algo";
   if (["plaza_opened","plaza_action","plaza_chat"].includes(trigger)) forcedSlug = "npc";
   if (["tower_opened","tower_pulse"].includes(trigger)) forcedSlug = "rei_engajamento";
   if (["music_changed","browser_tab_changed","aquele_observed"].includes(trigger)) forcedSlug = "aquele_le_tudo";
@@ -114,6 +116,17 @@ Deno.serve(async (req: Request) => {
 
   const character: any = forcedSlug ? eligible[0] : pickWeighted(eligible);
   if (!character) return json({ skipped: true, reason: "no_eligible_character" });
+
+  if (feedReviewTrigger && character.slug === "algo") {
+    const { data: recentAlgo } = await admin
+      .from("character_interactions")
+      .select("created_at")
+      .eq("character_id", character.id)
+      .not("post_id", "is", null)
+      .gte("created_at", new Date(Date.now() - 7 * 60 * 1000).toISOString())
+      .limit(1);
+    if (recentAlgo?.length) return json({ skipped: true, reason: "algo_feed_cooldown" });
+  }
 
   const { data: brain } = await admin
     .from("character_ai_profiles")
@@ -132,11 +145,13 @@ Deno.serve(async (req: Request) => {
     context += ` O usuário acabou de escrever publicamente na Praça: "${plazaMessage}". Responda de forma natural, curta e contextual. Você pode usar o nome público ocasionalmente.`;
   }
   if (trigger === "tower_opened" || trigger === "tower_pulse") context += " A cena acontece na Torre do Engajamento. Você é o Rei do Engajamento e deve produzir propaganda, aviso, campanha, pitch, desafio ou comentário corporativo ácido.";
-  if (trigger === "image_posted") context += " O usuário acabou de publicar uma imagem.";
+  if (trigger === "image_posted") context += " O usuário publicou uma mídia visual. Você NÃO recebeu os pixels dessa mídia, então não descreva nem invente o que aparece nela.";
   if (trigger === "support_sent") context += " O usuário acabou de enviar um gesto de apoio privado.";
   if (trigger === "avatar_changed") context += " O usuário acabou de trocar o avatar pixelado.";
   if (trigger === "mode_changed") context += " O usuário alterou o nível de interferência do Mundo do AVESSO.";
   let publicPost = false;
+  let feedReviewText = "";
+  let feedReviewHasImage = false;
   if (trigger === "feed_attention") context += " Existe pelo menos uma publicação pública sem resposta no feed.";
   if (trigger === "profile") context += " O usuário abriu o próprio Canto.";
   if (trigger === "login") context += " O usuário acabou de entrar na rede.";
@@ -167,8 +182,11 @@ Deno.serve(async (req: Request) => {
 
     if (post?.visibility === "publico") {
       publicPost = true;
-      if (post.author_id === userId && trigger === "post_created") {
-        context += ` O usuário publicou publicamente: "${String(post.body).slice(0,280)}".`;
+      feedReviewHasImage = Boolean(post.image_url);
+      if (post.author_id === userId && ["post_created","image_posted"].includes(trigger)) {
+        feedReviewText = String(post.body || "").trim().slice(0,280);
+        context += ` O usuário publicou publicamente: "${feedReviewText}".`;
+        if (feedReviewHasImage) context += " Existe mídia visual anexada, mas você não recebeu seu conteúdo visual. Não descreva a imagem.";
       } else if (trigger === "reply_created") {
         context += ` O usuário respondeu a uma publicação pública cujo texto é: "${String(post.body).slice(0,220)}".`;
         const { data: latestReply } = await admin
@@ -179,7 +197,10 @@ Deno.serve(async (req: Request) => {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (latestReply?.body) context += ` A resposta pública do usuário foi: "${String(latestReply.body).slice(0,220)}".`;
+        if (latestReply?.body) {
+          feedReviewText = String(latestReply.body).trim().slice(0,220);
+          context += ` A resposta pública do usuário foi: "${feedReviewText}".`;
+        }
       }
     } else if (post && post.author_id === userId && post.visibility !== "publico") {
       context += " O usuário publicou uma mensagem privada. Não cite nem tente inferir seu conteúdo.";
@@ -219,12 +240,74 @@ Deno.serve(async (req: Request) => {
 
   let line = "";
   let source = "curated";
+  let interactionKind = "comment";
+  let reactionId: string | null = null;
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   const model = brain?.model || Deno.env.get("OPENAI_MODEL") || "gpt-5.6-luna";
   const instructions = brain?.system_prompt || character.system_prompt;
   const outputCharLimit = Math.max(120, Math.min(600, Number(brain?.max_output_chars || 420)));
 
-  if (apiKey && character.ai_enabled && brain?.ai_enabled !== false) {
+  if (feedReviewTrigger && character.slug === "algo") {
+    const normalized = feedReviewText.toLowerCase().replace(/\s+/g, " ").trim();
+    const lowSignal = !normalized || normalized.length < 5 || /^(teste|test|oi|ola|olá|e la vamos nos|e lá vamos nós|imagem publicada no avesso\.?|gif publicado no avesso\.?|vídeo publicado no avesso\.?|video publicado no avesso\.?)$/i.test(normalized);
+    if (!publicPost || lowSignal) return json({ skipped: true, reason: "algo_low_context" });
+    if (!apiKey || !character.ai_enabled || brain?.ai_enabled === false) return json({ skipped: true, reason: "algo_ai_unavailable" });
+    try {
+      const decisionPrompt = context + "\n\nVocê está decidindo se ALGO deve interferir em uma publicação do feed." +
+        "\nO padrão é SILÊNCIO. Intervenha só quando houver contexto concreto suficiente." +
+        "\nResponda em EXATAMENTE um destes formatos: SKIP | REACT:<id> | COMMENT:<frase>." +
+        "\nIDs de reação: infelizmente_gostei, isso_prestou, salvaria_disquete, modem_aprovou, humano_detectado, li_me_arrependi, infelizmente_concordo, pane_mas_gostei." +
+        "\nPrefira REACT quando um reconhecimento simples basta. Use COMMENT somente se houver algo específico no texto e a frase acrescentar humor ou contexto real." +
+        "\nUse SKIP para testes, frases vagas, boilerplate do sistema, mídia sem descrição suficiente ou quando a intervenção parecer forçada." +
+        "\nNunca descreva conteúdo de imagem que você não recebeu. Não invente intenção do usuário.";
+      const decisionResponse = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          store: false,
+          reasoning: { effort: "low" },
+          max_output_tokens: 180,
+          instructions,
+          input: decisionPrompt,
+        }),
+      });
+      if (!decisionResponse.ok) return json({ skipped: true, reason: "algo_ai_error" });
+      const decisionData = await decisionResponse.json();
+      const decision = extractOutputText(decisionData).trim();
+      if (/^SKIP\b/i.test(decision)) return json({ skipped: true, reason: "algo_chose_silence" });
+      const react = decision.match(/^REACT:([a-z_]+)\s*$/i);
+      const allowedReactions = new Set(["infelizmente_gostei","isso_prestou","salvaria_disquete","modem_aprovou","humano_detectado","li_me_arrependi","infelizmente_concordo","pane_mas_gostei"]);
+      const reactionLabels: Record<string,string> = {
+        infelizmente_gostei:"infelizmente gostei",
+        isso_prestou:"isso prestou",
+        salvaria_disquete:"salvaria em disquete",
+        modem_aprovou:"meu modem aprovou",
+        humano_detectado:"humano detectado",
+        li_me_arrependi:"li e me arrependi",
+        infelizmente_concordo:"infelizmente eu concordo",
+        pane_mas_gostei:"deu pane, mas gostei",
+      };
+      if (react && allowedReactions.has(react[1])) {
+        reactionId = react[1];
+        interactionKind = "reaction";
+        line = reactionLabels[reactionId] || "reagiu";
+        source = "ai";
+      } else {
+        const comment = decision.match(/^COMMENT:\s*(.+)$/is);
+        if (!comment?.[1]) return json({ skipped: true, reason: "algo_invalid_decision" });
+        line = comment[1].replace(/^["“]|["”]$/g, "").trim().slice(0, outputCharLimit);
+        if (!line) return json({ skipped: true, reason: "algo_empty_comment" });
+        interactionKind = "comment";
+        source = "ai";
+      }
+    } catch (e) {
+      console.error("ALGO decision failed", e);
+      return json({ skipped: true, reason: "algo_ai_failed" });
+    }
+  }
+
+  if (!feedReviewTrigger && apiKey && character.ai_enabled && brain?.ai_enabled !== false) {
     try {
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
@@ -253,7 +336,7 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  if (!line) {
+  if (!line && !feedReviewTrigger) {
     const contexts = [trigger, trigger === "login" ? "feed_default" : null, character.slug === "alem" ? "rare" : null, "idle"].filter(Boolean);
     const { data: fallback } = await admin
       .from("character_dialogues")
@@ -281,7 +364,7 @@ Deno.serve(async (req: Request) => {
       source,
       visibility,
       expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-      metadata: { model: source === "ai" ? model : null },
+      metadata: { model: source === "ai" ? model : null, interaction_kind: interactionKind, reaction: reactionId },
     })
     .select("id,body,source,visibility,created_at")
     .single();
