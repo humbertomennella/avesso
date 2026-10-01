@@ -446,7 +446,6 @@ async function publishStory(){
     clearStoryPreview();
     state.storyCapturedFile=null;
     $('#story-create-dialog')?.close();
-    const durationHours=Math.min(24,Math.max(1,Number(state.siteSettings?.story_config?.duration_hours)||24));
     toast(mediaType==='video'?`Vídeo no story. Ele tem ${durationHours}h antes do esquecimento institucional.`:`Story publicado. O relógio de ${durationHours}h já está julgando.`);
     trackAction('story_posted','stories',{visibility,media_type:mediaType||'text'});
     await loadStoriesStrip();
