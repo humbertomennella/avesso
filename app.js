@@ -439,9 +439,12 @@ function runSocialNotificationQueue(){
 }
 const NOW_PLAYING_TTL_MS=180000;
 function nowPlayingView(profile){
-  if(!profile?.listening_visible||!profile.now_playing_title||!profile.now_playing_updated_at)return null;
-  const age=Date.now()-new Date(profile.now_playing_updated_at).getTime();
-  if(!Number.isFinite(age)||age>NOW_PLAYING_TTL_MS)return null;
+  if(!profile?.listening_visible||!profile.now_playing_title)return null;
+  if(!profile.now_playing_manual){
+    if(!profile.now_playing_updated_at)return null;
+    const age=Date.now()-new Date(profile.now_playing_updated_at).getTime();
+    if(!Number.isFinite(age)||age>NOW_PLAYING_TTL_MS)return null;
+  }
   return {
     title:String(profile.now_playing_title||'').slice(0,180),
     artist:String(profile.now_playing_artist||'').slice(0,180),
@@ -470,7 +473,7 @@ async function saveListeningPrivacy(){
   const visible=Boolean($('#listening-visible')?.checked);
   const patch={listening_visible:visible,updated_at:new Date().toISOString()};
   if(!visible){
-    Object.assign(patch,{now_playing_title:null,now_playing_artist:null,now_playing_source:null,now_playing_url:null,now_playing_updated_at:null});
+    Object.assign(patch,{now_playing_title:null,now_playing_artist:null,now_playing_source:null,now_playing_url:null,now_playing_updated_at:null,now_playing_manual:false});
   }
   const {data,error}=await supabase.from('profiles').update(patch).eq('id',state.profile.id).select().single();
   if(error)return toast('A privacidade do som tropeçou no banco.');
@@ -498,9 +501,10 @@ async function pushNowPlaying(payload){
       now_playing_source:clean.source||null,
       now_playing_url:clean.url||null,
       now_playing_updated_at:new Date().toISOString(),
+      now_playing_manual:false,
       updated_at:new Date().toISOString()
     }:{
-      now_playing_title:null,now_playing_artist:null,now_playing_source:null,now_playing_url:null,now_playing_updated_at:null,updated_at:new Date().toISOString()
+      now_playing_title:null,now_playing_artist:null,now_playing_source:null,now_playing_url:null,now_playing_updated_at:null,now_playing_manual:false,updated_at:new Date().toISOString()
     };
     const {data,error}=await supabase.from('profiles').update(patch).eq('id',state.profile.id).select().single();
     if(error)return;
@@ -508,6 +512,49 @@ async function pushNowPlaying(payload){
     refreshOwnNowPlayingPreview();
     if(state.chatWindowOpen&&state.directPeerId)updateOwnListeningInChat();
   },450);
+}
+async function saveManualNowPlaying(){
+  const input=$('#manual-now-playing-url');
+  const raw=String(input?.value||'').trim();
+  const parsed=parseExternalMediaLink(raw);
+  if(!parsed)return toast('Cole um link válido do YouTube ou Spotify.');
+  const metadata=await resolveMediaMetadata(parsed.canonical||raw);
+  const title=metadata?.title||`${parsed.provider||'música'} sem título detectado`;
+  const patch={
+    listening_visible:true,
+    now_playing_title:title,
+    now_playing_artist:metadata?.author||null,
+    now_playing_source:metadata?.provider||parsed.provider||null,
+    now_playing_url:parsed.canonical||raw,
+    now_playing_updated_at:new Date().toISOString(),
+    now_playing_manual:true,
+    updated_at:new Date().toISOString()
+  };
+  const {data,error}=await supabase.from('profiles').update(patch).eq('id',state.profile.id).select().single();
+  if(error)return toast('O status musical caiu no meio do caminho.');
+  state.profile=data;
+  if($('#listening-visible'))$('#listening-visible').checked=true;
+  refreshOwnNowPlayingPreview();
+  toast('Ouvindo agora atualizado. Até o detector acordar, este link manda.');
+}
+async function stopNowPlayingStatus(){
+  if(!state.profile?.id)return;
+  const {data,error}=await supabase.from('profiles').update({
+    now_playing_title:null,
+    now_playing_artist:null,
+    now_playing_source:null,
+    now_playing_url:null,
+    now_playing_updated_at:null,
+    now_playing_manual:false,
+    updated_at:new Date().toISOString()
+  }).eq('id',state.profile.id).select().single();
+  if(error)return toast('Nem parar de ouvir deveria ser tão burocrático.');
+  state.profile=data;
+  state.lastNowPlayingSignature='';
+  if($('#manual-now-playing-url'))$('#manual-now-playing-url').value='';
+  refreshOwnNowPlayingPreview();
+  updateOwnListeningInChat();
+  toast('Status musical encerrado.');
 }
 function updateOwnListeningInChat(){
   const host=$('#dm-self-listening');
@@ -1677,11 +1724,11 @@ async function acceptedFriendProfiles(){
     .or(`requester_id.eq.${state.profile.id},addressee_id.eq.${state.profile.id}`);
   const ids=[...new Set((rels||[]).map(r=>r.requester_id===state.profile.id?r.addressee_id:r.requester_id))];
   if(!ids.length)return[];
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at').in('id',ids);
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual').in('id',ids);
   return data||[];
 }
 async function profileById(id){
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at').eq('id',id).maybeSingle();
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual').eq('id',id).maybeSingle();
   return data||null;
 }
 function cachedPresenceEntry(profile){
@@ -2794,7 +2841,7 @@ async function renderProfile(){
     </section>
     <div class="profile-settings-grid">
       <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Mensagem de status<input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Aparecer como<select id="profile-presence"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
-      <section class="profile-settings-card listening-privacy-card"><span class="section-code">PRIVACIDADE // OUVINDO AGORA</span><h3>Seu player não precisa virar testemunha</h3><label class="listening-privacy-switch"><input id="listening-visible" type="checkbox" ${state.profile.listening_visible?'checked':''}><span><b>mostrar o que estou ouvindo</b><small>aparece no Meu Canto e nas conversas enquanto estiver recente</small></span></label><div id="profile-now-playing-preview" class="profile-now-playing-preview">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty">nada detectado agora. o silêncio também tem presença.</div>'}</div><button id="save-listening-privacy" type="button">salvar privacidade</button><small id="listening-bridge-status">${state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // site sozinho não consegue ler outras abas ou apps'}</small><em>Detecção automática de outras abas/aplicativos exige o AVESSO Presence. Navegadores não entregam esse dado a sites comuns, porque às vezes a privacidade ainda vence.</em></section>
+      <section class="profile-settings-card listening-privacy-card"><span class="section-code">PRIVACIDADE // OUVINDO AGORA</span><h3>Seu player não precisa virar testemunha</h3><label class="listening-privacy-switch"><input id="listening-visible" type="checkbox" ${state.profile.listening_visible?'checked':''}><span><b>mostrar o que estou ouvindo</b><small>aparece no Meu Canto e nas conversas enquanto estiver recente</small></span></label><div id="profile-now-playing-preview" class="profile-now-playing-preview">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty">nada detectado agora. o silêncio também tem presença.</div>'}</div><div class="manual-now-playing"><span>SEM PONTE? // COLE O QUE ESTÁ TOCANDO</span><input id="manual-now-playing-url" type="url" inputmode="url" autocomplete="off" placeholder="YouTube ou Spotify"><div><button id="save-manual-now-playing" type="button">usar este link</button><button id="stop-now-playing" type="button">parar de ouvir</button></div></div><button id="save-listening-privacy" type="button">salvar privacidade</button><small id="listening-bridge-status">${state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // use o link manual ou o AVESSO Presence'}</small><em>A detecção automática de outras abas exige o AVESSO Presence. Sem ele, o link manual funciona no desktop e no celular. Navegadores comuns não deixam um site bisbilhotar o resto do aparelho. Uma rara decisão sensata.</em></section>
       <section class="profile-settings-card security-card"><span class="section-code">CONTA // SEGURANÇA</span><p><b>E-mail</b><br>${escapeHtml(state.session?.user?.email||'')}</p><label>Nova senha<input id="profile-password" type="password" minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password"></label><button id="change-password">alterar senha</button><small>Seu @ continua estável para links. Seu nome exibido pode trocar de personalidade quantas vezes quiser.</small></section>
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
@@ -2820,6 +2867,8 @@ async function renderProfile(){
   $('#profile-story-create').onclick=openStoryCreate;
   $('#save-profile-settings').onclick=saveProfileSettings;
   $('#save-listening-privacy').onclick=saveListeningPrivacy;
+  $('#save-manual-now-playing').onclick=saveManualNowPlaying;
+  $('#stop-now-playing').onclick=stopNowPlayingStatus;
   $('#change-password').onclick=changePassword;
   $('#profile-presence').value=state.profile.presence_mode||'online';
   $('#profile-presence').onchange=e=>setPresenceMode(e.target.value);
@@ -2949,7 +2998,7 @@ async function openPublicProfile(userId){
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   applyAppTabLayout();$('#feed-status').classList.add('hidden');
   const [profileRes,friendship]=await Promise.all([
-    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen,corner_music_url,corner_music_enabled,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at').eq('id',userId).maybeSingle(),
+    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen,corner_music_url,corner_music_enabled,corner_music_title,corner_music_provider,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual').eq('id',userId).maybeSingle(),
     getFriendshipWith(userId)
   ]);
   if(state.tab!=='public_profile'||state.publicProfileId!==userId)return;
