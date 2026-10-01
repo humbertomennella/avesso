@@ -2540,7 +2540,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
   $$('[data-post-delete]').forEach(b=>b.onclick=()=>deleteOwnPost(b.dataset.postDelete));
   $$('[data-turn-post]').forEach(b=>b.onclick=()=>turnPostToFeed(b.dataset.turnPost));
   $$('[data-photo-open]').forEach(img=>img.onclick=()=>openAlbumPhotoViewer(img.dataset.photoOpen));
-  $('[data-feed-image-open]').forEach(img=>img.onclick=()=>openFeedImageViewer(img.dataset.feedImageOpen));
+  $$('[data-feed-image-open]').forEach(img=>img.onclick=()=>openFeedImageViewer(img.dataset.feedImageOpen));
   if(state.feedHasMore){
     const more=document.createElement('button');
     more.id='feed-load-more';
@@ -4804,7 +4804,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   const showListening=$('#dm-show-listening');if(showListening)showListening.onchange=e=>saveChatListeningVisibility(e.target.checked);
   const saveStatus=$('#dm-save-status');if(saveStatus)saveStatus.onclick=saveQuickChatStatus;
   $$('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
-  $('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
+  $$('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
   prepareChatOptionsMenu();
   installChatDesktopWindowing();
   window.postMessage({type:'AVESSO_PRESENCE_REQUEST'},location.origin);
