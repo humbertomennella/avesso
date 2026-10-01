@@ -2514,6 +2514,426 @@ function adminAuditRow(row){
   return '<div class="admin-audit-row"><b>'+escapeHtml(labels[row.action]||row.action||'ação')+'</b><span>'+escapeHtml(row.target_type||'sistema')+(row.target_id?' · '+escapeHtml(String(row.target_id).slice(0,12)):'')+'</span><time>'+ago(row.created_at)+'</time></div>';
 }
 
+
+const STAFF_SECTION_META={
+  overview:['◫','Visão geral'],
+  reports:['⚑','Denúncias'],
+  users:['◎','Usuários & conteúdo'],
+  monitor:['⌁','Monitor 24h'],
+  plaza:['⌂','Praça'],
+  chat:['↔','Chat Staff'],
+  team:['♜','Equipe'],
+  appearance:['▣','Aparência & layout'],
+  pages:['▤','Páginas & login'],
+  assets:['▧','Assets & mídia'],
+  badges:['✦','Emblemas'],
+  inhabitants:['◉','Habitantes & IA'],
+  database:['⌘','Banco de dados'],
+  world:['◇','Mundo do AVESSO'],
+  audit:['≡','Auditoria']
+};
+function staffSectionsForRole(role=state.staffRole){
+  const common=['overview','reports','users','monitor','plaza','chat'];
+  if(role==='moderator')return common;
+  if(role==='senior_admin')return [...common,'team','audit'];
+  return [...common,'team','appearance','pages','assets','badges','inhabitants','database','world','audit'];
+}
+function staffSectionButton(id){
+  const meta=STAFF_SECTION_META[id]||['·',id];
+  return '<button class="'+(state.staffSection===id?'active':'')+'" data-staff-section="'+id+'"><span>'+meta[0]+'</span><b>'+escapeHtml(meta[1])+'</b></button>';
+}
+function staffUserMap(snapshot=state.staffSnapshot||{}){
+  return Object.fromEntries((snapshot.users||[]).map(x=>[x.id,x]));
+}
+function staffPeopleOptions(selected='',{includeEmpty=true,minRank=10}={}){
+  const staff=(state.staffSnapshot?.staff||[]).filter(x=>staffRankValue(x.role)>=minRank);
+  return (includeEmpty?'<option value="">sem responsável</option>':'')+
+    staff.map(x=>'<option value="'+escapeAttr(x.user_id)+'" '+(x.user_id===selected?'selected':'')+'>'+escapeHtml(x.display_name||x.handle)+' · '+escapeHtml(staffRoleLabel(x.role))+'</option>').join('');
+}
+function staffRoleChip(role=''){
+  if(!role)return '<span class="staff-role-chip user">usuário</span>';
+  return '<span class="staff-role-chip '+escapeAttr(role)+'">'+escapeHtml(staffRoleLabel(role))+'</span>';
+}
+function staffStatusOptions(current='aberto'){
+  const values=[['aberto','aberto'],['em_analise','em análise'],['encaminhado','encaminhado'],['resolvido','resolvido'],['descartado','descartado'],['arquivado','arquivado']];
+  return values.map(([value,label])=>'<option value="'+value+'" '+(current===value?'selected':'')+'>'+label+'</option>').join('');
+}
+function staffPriorityOptions(current='normal'){
+  return ['baixa','normal','alta','critica'].map(v=>'<option value="'+v+'" '+(current===v?'selected':'')+'>'+v+'</option>').join('');
+}
+function staffHitStatusOptions(current='novo'){
+  const values=[['novo','novo'],['revisando','revisando'],['encaminhado','encaminhado'],['ignorado','ignorado'],['acao_tomada','ação tomada']];
+  return values.map(([v,l])=>'<option value="'+v+'" '+(current===v?'selected':'')+'>'+l+'</option>').join('');
+}
+function staffDashboardHero(){
+  const role=staffRoleLabel(state.staffRole);
+  const crown=state.staffRole==='owner'?adminCrownHtml('staff-dashboard-crown'):'';
+  return '<header class="staff-dashboard-hero"><div><span class="section-code">AVESSO.STAFF // '+escapeHtml(role.toUpperCase())+'</span>'+
+    '<h1>Dashboard '+crown+'</h1><p>Ferramentas de moderação, operação e configuração separadas por responsabilidade. Poder sem organização é só um acidente com permissões.</p></div>'+
+    '<button id="staff-dashboard-refresh" type="button">↻ atualizar</button></header>';
+}
+function staffDashboardStats(snapshot){
+  const c=snapshot.counts||{};
+  const cards=[
+    ['habitantes',c.users??0,'contas'],
+    ['online',c.online??0,'agora'],
+    ['denúncias',c.reports_open??0,'em fluxo'],
+    ['sinais 24h',c.hits_open??0,'para revisar'],
+    ['banidos',c.banned??0,'ativos'],
+    ['staff',c.staff??0,'pessoas']
+  ];
+  return '<div class="staff-stat-grid">'+cards.map(([a,b,c])=>'<article><span>'+a+'</span><strong>'+escapeHtml(String(b))+'</strong><small>'+c+'</small></article>').join('')+'</div>';
+}
+function renderStaffOverview(snapshot){
+  const reports=(snapshot.reports||[]).filter(x=>['aberto','em_analise','encaminhado'].includes(x.status)).slice(0,6);
+  const hits=(snapshot.hits||[]).filter(x=>['novo','revisando','encaminhado'].includes(x.status)).slice(0,6);
+  const reportRows=reports.map(x=>'<button class="staff-mini-row" data-staff-jump="reports"><span class="staff-priority '+escapeAttr(x.priority||'normal')+'">'+escapeHtml(x.priority||'normal')+'</span><b>'+escapeHtml(x.reason||'denúncia')+'</b><small>'+escapeHtml(x.reported_handle?'@'+x.reported_handle:(x.post_id?'post '+String(x.post_id).slice(0,8):'conteúdo'))+' · '+ago(x.created_at)+'</small></button>').join('')||'<p class="staff-empty">Nenhuma denúncia pendente.</p>';
+  const hitRows=hits.map(x=>'<button class="staff-mini-row" data-staff-jump="monitor"><span class="staff-priority '+escapeAttr(x.severity||'media')+'">'+escapeHtml(x.severity||'media')+'</span><b>'+escapeHtml(x.matched_term||'termo')+'</b><small>'+escapeHtml(x.source_type||'conteúdo')+' · '+escapeHtml(x.user_handle?'@'+x.user_handle:'sem perfil')+'</small></button>').join('')||'<p class="staff-empty">Nenhum sinal pendente.</p>';
+  return staffDashboardStats(snapshot)+
+    '<div class="staff-two-col"><section class="staff-card"><header><span class="section-code">DENÚNCIAS // AGORA</span><h2>Fila que precisa de gente</h2></header>'+reportRows+'</section>'+
+    '<section class="staff-card"><header><span class="section-code">MONITOR // 24H</span><h2>Sinais automáticos</h2></header>'+hitRows+'</section></div>'+
+    '<section class="staff-card staff-privacy-note"><b>PRIVACIDADE</b><p>O monitor cobre conteúdo público e perfis. Mensagens privadas entre usuários não entram nesta dashboard. Moderação não precisa virar leitura de correspondência.</p></section>';
+}
+function renderStaffReports(snapshot){
+  const reports=snapshot.reports||[];
+  const cards=reports.map(r=>{
+    const target=r.reported_handle?'@'+r.reported_handle:(r.post_id?'post '+String(r.post_id).slice(0,12):'conteúdo');
+    return '<article class="staff-report-card" data-report-card="'+r.id+'"><header><div><span class="staff-priority '+escapeAttr(r.priority||'normal')+'">'+escapeHtml(r.priority||'normal')+'</span><b>'+escapeHtml(r.reason||'denúncia')+'</b><small>por '+escapeHtml(r.reporter_handle?'@'+r.reporter_handle:'usuário')+' · '+ago(r.created_at)+'</small></div><strong>'+escapeHtml(target)+'</strong></header>'+
+      '<p>'+escapeHtml(r.details||'sem detalhes')+'</p>'+
+      '<div class="staff-report-grid"><label>Status<select data-report-field="status">'+staffStatusOptions(r.status)+'</select></label><label>Prioridade<select data-report-field="priority">'+staffPriorityOptions(r.priority)+'</select></label>'+
+      '<label class="wide">Responsável<select data-report-field="assigned_to">'+staffPeopleOptions(r.assigned_to||'')+'</select></label>'+
+      '<label class="wide">Notas internas<textarea data-report-field="staff_notes" maxlength="3000">'+escapeHtml(r.staff_notes||'')+'</textarea></label>'+
+      '<label class="wide">Resolução<textarea data-report-field="resolution" maxlength="2000">'+escapeHtml(r.resolution||'')+'</textarea></label></div>'+
+      '<footer><span>'+(r.assigned_handle?'com @'+escapeHtml(r.assigned_handle):'ainda sem responsável')+'</span><div><button data-report-claim="'+r.id+'">assumir</button><button class="primary" data-report-save="'+r.id+'">salvar / encaminhar</button></div></footer></article>';
+  }).join('')||'<p class="staff-empty">Nenhuma denúncia. Humanos em manutenção preventiva.</p>';
+  return '<section class="staff-card"><header class="staff-section-head"><div><span class="section-code">DENÚNCIAS // FILA DISTRIBUÍDA</span><h2>Receber, assumir e encaminhar</h2><p>Moderadores podem encaminhar para outro moderador, Administrador-Senior ou Administrador Geral.</p></div><b>'+reports.length+'</b></header><div class="staff-report-list">'+cards+'</div></section>';
+}
+async function loadStaffPublicContent(){
+  const [postsRes,photosRes,storiesRes]=await Promise.all([
+    supabase.from('feed_attention').select('*').order('created_at',{ascending:false}).limit(40),
+    supabase.from('profile_photos').select('id,user_id,storage_path,caption,created_at').order('created_at',{ascending:false}).limit(40),
+    supabase.from('stories').select('id,author_id,body,image_path,media_type,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(40)
+  ]);
+  const photos=photosRes.data||[],stories=storiesRes.data||[];
+  const ids=[...new Set([...photos.map(x=>x.user_id),...stories.map(x=>x.author_id)].filter(Boolean))];
+  let profiles={};
+  if(ids.length){
+    const {data}=await supabase.from('profiles').select('id,handle,display_name,avatar_url').in('id',ids);
+    profiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));
+  }
+  state.staffPublicContent={
+    posts:postsRes.data||[],
+    photos:photos.map(x=>({...x,author:profiles[x.user_id]||{}})),
+    stories:stories.map(x=>({...x,author:profiles[x.author_id]||{}}))
+  };
+}
+function staffBanLabel(user){
+  if(!user.banned)return'ativo';
+  if(!user.suspended_until)return'ban permanente';
+  return'ban até '+new Date(user.suspended_until).toLocaleString('pt-BR');
+}
+function renderStaffUsers(snapshot){
+  const users=snapshot.users||[];
+  const canManageRoles=state.staffRank>=20;
+  const userRows=users.map(u=>{
+    const targetRank=staffRankValue(u.staff_role);
+    const canBan=u.id!==state.profile.id&&targetRank<state.staffRank;
+    return '<article class="staff-user-row '+(u.banned?'banned':'')+'"><button class="staff-user-main" data-profile-id="'+u.id+'"><span class="mini-avatar">'+avatarHtml(u.avatar_url,u.display_name||'?')+'</span><span><b class="identity-name" data-identity-profile-id="'+u.id+'">'+escapeHtml(u.display_name||'sem nome')+'</b><small>@'+escapeHtml(u.handle||'...')+' · '+escapeHtml(u.status_message||'sem status')+'</small></span></button>'+
+      '<div class="staff-user-state">'+staffRoleChip(u.staff_role)+'<em>'+escapeHtml(staffBanLabel(u))+'</em></div>'+
+      '<div class="staff-user-actions"><button data-staff-notify-user="'+u.id+'">notificar</button>'+(canBan?(u.banned?'<button class="restore" data-staff-unban="'+u.id+'">reativar</button>':'<button class="danger" data-staff-ban="'+u.id+'">banir</button>'):'')+
+      (canManageRoles&&u.id!==state.profile.id?'<button data-staff-team-jump="'+u.id+'">cargo</button>':'')+'</div></article>';
+  }).join('');
+  const content=state.staffPublicContent||{posts:[],photos:[],stories:[]};
+  const postCards=(content.posts||[]).map(p=>'<article class="staff-content-row"><div><b>@'+escapeHtml(p.author_handle||'...')+'</b><small>'+ago(p.created_at)+'</small><p>'+escapeHtml(p.body||'')+'</p></div><button class="danger" data-staff-delete-kind="post" data-staff-delete-id="'+p.id+'">apagar</button></article>').join('')||'<p class="staff-empty">Carregando publicações...</p>';
+  const photoCards=(content.photos||[]).map(p=>'<article class="staff-media-row"><img src="'+escapeAttr(publicAlbumUrl(p.storage_path))+'" alt=""><div><b>@'+escapeHtml(p.author?.handle||'...')+'</b><p>'+escapeHtml(p.caption||'sem legenda')+'</p></div><button class="danger" data-staff-delete-kind="photo" data-staff-delete-id="'+p.id+'">apagar</button></article>').join('')||'<p class="staff-empty">Carregando fotos...</p>';
+  const storyCards=(content.stories||[]).map(p=>'<article class="staff-content-row"><div><b>@'+escapeHtml(p.author?.handle||'...')+'</b><small>'+ago(p.created_at)+'</small><p>'+escapeHtml(p.body||'[story com mídia]')+'</p></div><button class="danger" data-staff-delete-kind="story" data-staff-delete-id="'+p.id+'">apagar</button></article>').join('')||'<p class="staff-empty">Carregando stories...</p>';
+  return '<section class="staff-card"><header class="staff-section-head"><div><span class="section-code">USUÁRIOS // MODERAÇÃO</span><h2>Perfis, bans e notificações</h2></div><b>'+users.length+'</b></header><div class="staff-user-list">'+userRows+'</div></section>'+
+    '<section class="staff-card"><header><span class="section-code">CONTEÚDO PÚBLICO // MODERAÇÃO</span><h2>Posts, fotos e stories</h2></header><div class="staff-content-tabs"><div><h3>Publicações</h3>'+postCards+'</div><div><h3>Fotos</h3>'+photoCards+'</div><div><h3>Stories</h3>'+storyCards+'</div></div></section>';
+}
+function renderStaffMonitor(snapshot){
+  const terms=snapshot.terms||[],hits=snapshot.hits||[];
+  const termRows=terms.map(t=>'<article class="staff-term-row"><div><b>'+escapeHtml(t.term)+'</b><small>'+escapeHtml(t.category)+' · '+escapeHtml(t.severity)+'</small></div><span class="'+(t.enabled?'on':'off')+'">'+(t.enabled?'ATIVO':'PAUSADO')+'</span><button data-term-edit="'+t.id+'">editar</button></article>').join('')||'<p class="staff-empty">Nenhum termo configurado.</p>';
+  const hitRows=hits.map(h=>'<article class="staff-hit-card '+escapeAttr(h.severity||'media')+'"><header><div><b>'+escapeHtml(h.matched_term||'termo')+'</b><small>'+escapeHtml(h.category||'outro')+' · '+escapeHtml(h.source_type||'conteúdo')+' · '+ago(h.created_at)+'</small></div><span>'+escapeHtml(h.severity||'media')+'</span></header><blockquote>'+escapeHtml(h.excerpt||'')+'</blockquote><footer><button data-profile-id="'+escapeAttr(h.user_id||'')+'">'+escapeHtml(h.user_handle?'@'+h.user_handle:'perfil indisponível')+'</button><select data-hit-status="'+h.id+'">'+staffHitStatusOptions(h.status)+'</select><select data-hit-assignee="'+h.id+'">'+staffPeopleOptions(h.assigned_to||'')+'</select><button class="primary" data-hit-save="'+h.id+'">salvar</button></footer></article>').join('')||'<p class="staff-empty">Nenhum sinal. O monitor continua acordado mesmo assim.</p>';
+  return '<div class="staff-two-col monitor-grid"><section class="staff-card"><header><span class="section-code">WATCHLIST // 24H</span><h2>Termos monitorados</h2><p>O servidor registra correspondências em conteúdo público mesmo com ninguém conectado. Correspondência é sinal para revisão, não sentença automática.</p></header>'+
+    '<form id="staff-term-form" class="staff-term-form"><input id="staff-term-id" type="hidden"><label>termo ou frase<input id="staff-term-text" maxlength="160" required></label><label>categoria<input id="staff-term-category" maxlength="60" value="outro"></label><label>gravidade<select id="staff-term-severity"><option>baixa</option><option selected>media</option><option>alta</option><option>critica</option></select></label><label class="check"><input id="staff-term-enabled" type="checkbox" checked> ativo</label><label class="wide">nota<input id="staff-term-notes" maxlength="500"></label><button class="primary" type="submit">salvar termo</button></form><div class="staff-term-list">'+termRows+'</div></section>'+
+    '<section class="staff-card"><header><span class="section-code">SINAIS // CONTEXTO ANTES DE AÇÃO</span><h2>Ocorrências</h2></header><div class="staff-hit-list">'+hitRows+'</div></section></div>';
+}
+function renderStaffPlaza(snapshot){
+  const rows=(snapshot.plaza||[]).map(m=>'<article class="staff-plaza-row"><button data-profile-id="'+m.user_id+'"><b class="identity-name" data-identity-profile-id="'+m.user_id+'">'+escapeHtml(m.display_name||m.handle||'usuário')+'</b><small>@'+escapeHtml(m.handle||'...')+' · '+ago(m.created_at)+'</small></button><p>'+escapeHtml(m.body||'')+'</p><button class="danger" data-staff-delete-kind="plaza" data-staff-delete-id="'+m.id+'">apagar</button></article>').join('')||'<p class="staff-empty">Praça quieta. Provavelmente temporário.</p>';
+  return '<section class="staff-card"><header class="staff-section-head"><div><span class="section-code">PRAÇA // PÚBLICO</span><h2>Monitor de conversa pública</h2><p>Somente a Praça pública. Conversas privadas entre usuários continuam fora da Staff.</p></div></header><div class="staff-plaza-list">'+rows+'</div></section>';
+}
+async function loadStaffChat(scope=state.staffChatScope||'all'){
+  if(!state.isAdmin)return;
+  state.staffChatScope=scope;
+  const {data,error}=await supabase.from('staff_messages').select('id,sender_id,scope,body,created_at').eq('scope',scope).order('created_at',{ascending:false}).limit(80);
+  if(error)return;
+  const rows=[...(data||[])].reverse();
+  const staff=Object.fromEntries((state.staffSnapshot?.staff||[]).map(x=>[x.user_id,x]));
+  const host=$('#staff-chat-log');if(!host)return;
+  host.innerHTML=rows.map(m=>{const p=staff[m.sender_id]||{};return '<article class="staff-chat-message '+(m.sender_id===state.profile.id?'mine':'')+'"><header><b class="identity-name" data-identity-profile-id="'+m.sender_id+'">'+escapeHtml(p.display_name||p.handle||'staff')+'</b><small>'+escapeHtml(staffRoleLabel(p.role))+' · '+ago(m.created_at)+'</small></header><p>'+escapeHtml(m.body)+'</p></article>';}).join('')||'<p class="staff-empty">Canal vazio. A Staff descobriu o silêncio.</p>';
+  host.scrollTop=host.scrollHeight;
+  decorateIdentityNodes(host);
+}
+function startStaffChatRealtime(){
+  if(state.staffChannel){supabase.removeChannel(state.staffChannel);state.staffChannel=null;}
+  if(!state.isAdmin)return;
+  state.staffChannel=supabase.channel('avesso-staff-chat-'+state.profile.id+'-'+Date.now())
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_messages'},payload=>{
+      if(state.tab==='admin'&&state.staffSection==='chat'&&payload.new?.scope===state.staffChatScope)loadStaffChat(state.staffChatScope);
+    }).subscribe();
+}
+function renderStaffChat(){
+  const scopes=[['all','todos']];
+  if(['moderator','owner'].includes(state.staffRole))scopes.push(['moderators','moderadores']);
+  if(['senior_admin','owner'].includes(state.staffRole))scopes.push(['senior','administrador-senior']);
+  if(!scopes.some(x=>x[0]===state.staffChatScope))state.staffChatScope='all';
+  return '<section class="staff-card staff-chat-card"><header><span class="section-code">STAFF.MSG // INTERNO</span><h2>Chat da equipe</h2><p>Canais separados por cargo. Não aparece para usuários comuns.</p></header><div class="staff-chat-scopes">'+scopes.map(([id,label])=>'<button class="'+(state.staffChatScope===id?'active':'')+'" data-staff-chat-scope="'+id+'">'+label+'</button>').join('')+'</div><div id="staff-chat-log" class="staff-chat-log"><p class="staff-empty">carregando...</p></div><form id="staff-chat-form"><textarea id="staff-chat-input" maxlength="1600" placeholder="mensagem interna..."></textarea><button class="primary" type="submit">enviar</button></form></section>';
+}
+function renderStaffTeam(snapshot){
+  const staff=snapshot.staff||[];
+  const warnings=snapshot.warnings||[];
+  const rows=staff.map(person=>{
+    const rank=staffRankValue(person.role),canManage=person.user_id!==state.profile.id&&rank<state.staffRank;
+    let roleControl=staffRoleChip(person.role);
+    if(canManage){
+      const allowed=state.staffRole==='owner'
+        ?[['none','usuário'],['moderator','Moderador'],['senior_admin','Administrador-Senior']]
+        :[['none','usuário'],['moderator','Moderador']];
+      roleControl='<select data-staff-role-user="'+person.user_id+'">'+allowed.map(([v,l])=>'<option value="'+v+'" '+((person.role||'none')===v?'selected':'')+'>'+l+'</option>').join('')+'</select>';
+    }
+    return '<article class="staff-team-row"><span class="mini-avatar">'+avatarHtml(person.avatar_url,person.display_name||'?')+'</span><div><b class="identity-name" data-identity-profile-id="'+person.user_id+'">'+escapeHtml(person.display_name||person.handle)+'</b><small>@'+escapeHtml(person.handle||'...')+' · '+person.warnings+' advertência(s)</small></div>'+roleControl+(canManage?'<button data-staff-warning="'+person.user_id+'">advertir</button>':'')+'</article>';
+  }).join('');
+  const warningRows=warnings.map(w=>'<article class="staff-warning-row"><b>@'+escapeHtml(w.staff_handle||'staff')+'</b><p>'+escapeHtml(w.reason)+'</p><small>por @'+escapeHtml(w.issuer_handle||'...')+' · '+ago(w.created_at)+'</small></article>').join('')||'<p class="staff-empty">Nenhuma advertência ativa.</p>';
+  return '<div class="staff-two-col"><section class="staff-card"><header><span class="section-code">EQUIPE // HIERARQUIA</span><h2>Moderadores e administradores</h2></header><div class="staff-team-list">'+rows+'</div></section><section class="staff-card"><header><span class="section-code">ADVERTÊNCIAS // INTERNO</span><h2>Histórico recente</h2></header>'+warningRows+'</section></div>';
+}
+function ownerAppearanceSection(snapshot){
+  const site=snapshot.site||state.siteSettings||{},feed=site.feed_config||{},story=site.story_config||{},layout=site.layout_config||{};
+  const colors=[['bg','fundo',site.color_bg||'#090b0c'],['panel','painel',site.color_panel||'#111517'],['panel2','painel 2',site.color_panel2||'#191f21'],['ink','texto',site.color_ink||'#f5f3e8'],['muted','apagado',site.color_muted||'#8e9999'],['line','linhas',site.color_line||'#293235'],['acid','ácido',site.color_acid||'#d8ff3e'],['cyan','ciano',site.color_cyan||'#22d9ee'],['coral','coral',site.color_coral||'#ff5c4d'],['violet','violeta',site.color_violet||'#9b7cff']];
+  return '<section class="staff-card owner-master-card"><header><span class="section-code">OWNER // APARÊNCIA GLOBAL</span><h2>Tema, estilo e layout</h2></header>'+
+    '<div class="owner-copy-grid"><label>nome da rede<input id="admin-site-name" maxlength="40" value="'+escapeAttr(site.site_name||'AVESSO')+'"></label><label>tagline<input id="admin-site-tagline" maxlength="120" value="'+escapeAttr(site.tagline||'menos palco, mais presença')+'"></label><label class="wide">aviso global<textarea id="admin-announcement" maxlength="240">'+escapeHtml(site.announcement||'')+'</textarea></label></div>'+
+    '<div class="admin-presets"><span>PRESETS</span><button data-admin-preset="avesso">AVESSO</button><button data-admin-preset="phosphor">Fósforo</button><button data-admin-preset="cyan">Ciano</button><button data-admin-preset="magenta">Magenta CRT</button></div>'+
+    '<div class="owner-color-grid">'+colors.map(([k,l,v])=>'<label><span>'+l+'</span><input id="admin-color-'+k+'" data-admin-color-var="--'+k+'" type="color" value="'+escapeAttr(v)+'"></label>').join('')+'</div>'+
+    '<label class="owner-css-editor">CSS GLOBAL<textarea id="admin-custom-css" spellcheck="false">'+escapeHtml(site.custom_css||'')+'</textarea><small>CSS é global. JavaScript e HTML arbitrários não são executados por este campo.</small></label><button id="admin-site-save" class="primary">salvar aparência global</button></section>'+
+    '<section class="staff-card"><header><span class="section-code">EXPERIÊNCIA // FEED + STORIES + LAYOUT</span><h2>Comportamento global</h2></header><form id="owner-experience-form" class="owner-experience-grid">'+
+    '<label>posts carregados<input id="owner-feed-page-size" type="number" min="10" max="60" value="'+escapeAttr(feed.page_size??40)+'"></label>'+
+    '<label class="check"><input id="owner-feed-stories" type="checkbox" '+(feed.show_stories!==false?'checked':'')+'> mostrar stories no feed</label>'+
+    '<label class="check"><input id="owner-feed-tower" type="checkbox" '+(feed.show_tower!==false?'checked':'')+'> mostrar Torre</label>'+
+    '<label>duração story (h)<input id="owner-story-hours" type="number" min="1" max="24" value="'+escapeAttr(story.duration_hours??24)+'"></label>'+
+    '<label>vídeo máximo (s)<input id="owner-story-video" type="number" min="5" max="30" value="'+escapeAttr(story.max_video_seconds??15)+'"></label>'+
+    '<label class="check"><input id="owner-story-camera" type="checkbox" '+(story.camera_enabled!==false?'checked':'')+'> câmera habilitada</label>'+
+    '<label>visibilidade padrão<select id="owner-story-visibility"><option value="publico" '+(story.default_visibility!=='amigos'?'selected':'')+'>público</option><option value="amigos" '+(story.default_visibility==='amigos'?'selected':'')+'>amigos</option></select></label>'+
+    '<label>densidade<select id="owner-layout-density"><option value="compact" '+(layout.density!=='comfortable'?'selected':'')+'>compacta</option><option value="comfortable" '+(layout.density==='comfortable'?'selected':'')+'>confortável</option></select></label>'+
+    '<label>largura do feed<select id="owner-layout-width"><option value="narrow" '+(layout.feed_width==='narrow'?'selected':'')+'>estreito</option><option value="normal" '+(!['narrow','wide'].includes(layout.feed_width)?'selected':'')+'>normal</option><option value="wide" '+(layout.feed_width==='wide'?'selected':'')+'>amplo</option></select></label>'+
+    '<label>barra lateral<select id="owner-layout-sidebar"><option value="fixed" '+(layout.sidebar_mode!=='compact'?'selected':'')+'>fixa</option><option value="compact" '+(layout.sidebar_mode==='compact'?'selected':'')+'>compacta</option></select></label>'+
+    '<button class="primary wide" type="submit">salvar experiência global</button></form></section>';
+}
+function ownerPagesSection(snapshot){
+  const blocks=snapshot.cms||[];
+  const rows=blocks.map(b=>'<article class="cms-block-row" data-cms-row="'+b.id+'"><div><b>'+escapeHtml(b.page_slug)+' / '+escapeHtml(b.block_key)+'</b><small>'+escapeHtml(b.kind)+' · '+(b.enabled?'ativo':'oculto')+'</small></div><textarea data-cms-value="'+b.id+'" maxlength="20000">'+escapeHtml(b.value||'')+'</textarea><button data-cms-save="'+b.id+'" data-page="'+escapeAttr(b.page_slug)+'" data-key="'+escapeAttr(b.block_key)+'" data-kind="'+escapeAttr(b.kind)+'">salvar</button></article>').join('');
+  return '<section class="staff-card"><header><span class="section-code">CMS // PÁGINAS</span><h2>Página inicial, registro/login e blocos</h2><p>Os blocos abaixo são persistidos no banco. A página inicial e o modal de registro/login já consomem esses valores.</p></header><div class="cms-block-list">'+rows+'</div>'+
+    '<form id="cms-new-form" class="cms-new-form"><h3>Novo bloco</h3><label>página<input id="cms-new-page" value="home"></label><label>chave<input id="cms-new-key" placeholder="secao.chave"></label><label>tipo<select id="cms-new-kind"><option>text</option><option>image</option><option>toggle</option><option>json</option></select></label><label class="wide">valor<textarea id="cms-new-value" maxlength="20000"></textarea></label><button class="primary" type="submit">adicionar / substituir</button></form></section>';
+}
+function ownerAssetsSection(snapshot){
+  const assets=snapshot.assets||[];
+  const rows=assets.map(a=>'<article class="owner-asset-row"><div class="asset-preview">'+(a.storage_path?'<img src="'+escapeAttr(assetPublicUrl(a.storage_path))+'" alt="">':'')+'</div><div><b>'+escapeHtml(a.name)+'</b><small>'+escapeHtml(a.kind)+' · '+escapeHtml(a.slug)+(a.token?' · '+escapeHtml(a.token):'')+'</small></div><span>'+(a.active?'ATIVO':'OCULTO')+'</span></article>').join('')||'<p class="staff-empty">Nenhum asset enviado.</p>';
+  return '<section class="staff-card"><header><span class="section-code">ASSETS // ARQUIVOS DO OWNER</span><h2>Wallpapers, avatares, emoticons e imagens</h2><p>PNG, JPG, WEBP, GIF ou SVG até 10 MB. Upload vai para o bucket público <code>avesso-assets</code>.</p></header>'+
+    '<form id="owner-asset-form" class="owner-upload-form"><label>tipo<select id="owner-asset-kind"><option value="wallpaper">wallpaper</option><option value="avatar">avatar</option><option value="emoticon">emoticon</option><option value="character">habitante</option><option value="landing">landing/login</option><option value="other">outro</option></select></label><label>nome<input id="owner-asset-name" maxlength="80"></label><label>slug<input id="owner-asset-slug" maxlength="60" placeholder="meu-asset"></label><label>token do emoticon<input id="owner-asset-token" maxlength="40" placeholder=":meu_emote:"></label><label class="wide">arquivo<input id="owner-asset-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" required></label><button class="primary" type="submit">enviar ao banco</button></form><div class="owner-asset-list">'+rows+'</div></section>';
+}
+function ownerBadgesSection(snapshot){
+  const badges=snapshot.badges||[],users=snapshot.users||[];
+  const rows=badges.map(b=>'<article class="owner-badge-row"><img src="'+escapeAttr(assetPublicUrl(b.image_path))+'" alt=""><div><b>'+escapeHtml(b.name)+'</b><small>:'+escapeHtml(b.slug)+' · '+escapeHtml(b.description||'')+'</small></div></article>').join('')||'<p class="staff-empty">Nenhum emblema criado.</p>';
+  return '<div class="staff-two-col"><section class="staff-card"><header><span class="section-code">EMBLEMAS // CATÁLOGO</span><h2>Criar por arquivo</h2></header><form id="owner-badge-form" class="owner-upload-form"><label>nome<input id="owner-badge-name" maxlength="60"></label><label>slug<input id="owner-badge-slug" maxlength="50" placeholder="veterano"></label><label class="wide">descrição<input id="owner-badge-description" maxlength="300"></label><label class="wide">imagem<input id="owner-badge-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" required></label><button class="primary" type="submit">criar emblema</button></form><div class="owner-badge-list">'+rows+'</div></section>'+
+    '<section class="staff-card"><header><span class="section-code">EMBLEMAS // USUÁRIOS</span><h2>Conceder ou retirar</h2></header><form id="owner-badge-grant-form" class="owner-badge-grant"><label>usuário<select id="owner-badge-user">'+users.map(u=>'<option value="'+u.id+'">@'+escapeHtml(u.handle)+'</option>').join('')+'</select></label><label>emblema<select id="owner-badge-id">'+badges.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></label><div><button class="primary" type="submit" data-grant="1">conceder</button><button type="button" id="owner-badge-revoke">retirar</button></div></form></section></div>';
+}
+function ownerInhabitantsSection(snapshot){
+  const rows=(snapshot.characters||[]).map(entry=>{
+    const c=entry.character||{},ai=entry.ai||{},dialogs=entry.dialogues||[];
+    return '<article class="owner-character-card" data-character-card="'+c.id+'"><header><div class="character-admin-avatar">'+(characterImage(c)?'<img src="'+escapeAttr(characterImage(c))+'" alt="">':'')+'</div><div><b>'+escapeHtml(c.name||c.slug)+'</b><small>'+escapeHtml(c.slug||'')+' · '+(c.is_active?'ATIVO':'INATIVO')+'</small></div><label class="check"><input data-char-active type="checkbox" '+(c.is_active?'checked':'')+'> ativo</label></header>'+
+      '<div class="owner-character-grid"><label>nome<input data-char-name value="'+escapeAttr(c.name||'')+'"></label><label>função<input data-char-role value="'+escapeAttr(c.role||'')+'"></label><label>cor<input data-char-color type="color" value="'+escapeAttr(c.accent_color||'#d8ff3e')+'"></label><label>raridade<input data-char-rarity type="number" min="1" max="1000" value="'+escapeAttr(c.rarity??50)+'"></label><label class="wide">bio<textarea data-char-bio>'+escapeHtml(c.bio||'')+'</textarea></label><label class="wide">personalidade<textarea data-char-personality>'+escapeHtml(c.personality||'')+'</textarea></label><label class="wide">system prompt<textarea data-char-prompt>'+escapeHtml(c.system_prompt||'')+'</textarea></label><label>URL/imagem<input data-char-avatar value="'+escapeAttr(c.avatar_url||c.image_path||'')+'"></label><label>local<input data-char-location value="'+escapeAttr(c.home_location||'')+'"></label><label class="check"><input data-char-ai type="checkbox" '+(c.ai_enabled?'checked':'')+'> IA ligada</label></div><button class="primary" data-char-save="'+c.id+'">salvar habitante</button>'+
+      '<details class="owner-ai-panel"><summary>IA avançada</summary><div class="owner-character-grid"><label>modelo<input data-ai-model value="'+escapeAttr(ai.model||'')+'"></label><label>máx. caracteres<input data-ai-max type="number" min="80" max="1200" value="'+escapeAttr(ai.max_output_chars??420)+'"></label><label class="wide">resumo da persona<textarea data-ai-persona>'+escapeHtml(ai.persona_summary||'')+'</textarea></label><label class="wide">prompt da IA<textarea data-ai-prompt>'+escapeHtml(ai.system_prompt||'')+'</textarea></label></div><button data-ai-save="'+c.id+'">salvar IA</button></details>'+
+      '<details class="owner-dialogue-panel"><summary>Frases roteirizadas ('+dialogs.length+')</summary><div class="owner-dialogue-list">'+dialogs.map(d=>'<div><code>'+escapeHtml(d.context)+'</code><span>'+escapeHtml(d.body)+'</span><small>peso '+d.weight+(d.enabled?' · ativo':' · pausado')+'</small></div>').join('')+'</div><form data-dialogue-form="'+c.id+'"><input data-dialogue-context placeholder="contexto" required><textarea data-dialogue-body maxlength="420" placeholder="frase" required></textarea><input data-dialogue-weight type="number" min="1" max="100" value="10"><button type="submit">adicionar frase</button></form></details></article>';
+  }).join('');
+  return '<section class="staff-card"><header><span class="section-code">HABITANTES // PERSONALIDADE + IA + FRASES</span><h2>Mundo editável</h2></header><form id="owner-character-create" class="owner-character-create"><input id="new-char-slug" placeholder="slug" required><input id="new-char-name" placeholder="nome" required><input id="new-char-role" placeholder="função" required><button class="primary" type="submit">novo habitante</button></form><div class="owner-character-list">'+rows+'</div></section>';
+}
+function ownerDatabaseSection(){
+  const tables=['profiles','posts','reports','moderation_hits','characters','asset_catalog','badges','site_content_blocks','admin_audit_log'];
+  return '<section class="staff-card"><header><span class="section-code">DATABASE // OWNER SAFE MODE</span><h2>Explorador do banco</h2><p>Consulta direta às tabelas permitidas. SQL arbitrário e chave service-role não são expostos no navegador, porque isso seria entregar a sala-cofre junto com o crachá.</p></header><div class="owner-db-toolbar"><select id="owner-db-table">'+tables.map(t=>'<option>'+t+'</option>').join('')+'</select><input id="owner-db-limit" type="number" min="1" max="100" value="50"><button id="owner-db-load" class="primary">consultar</button></div><pre id="owner-db-output">selecione uma tabela.</pre></section>';
+}
+function ownerWorldSection(){
+  const w=state.world.settings||{};
+  return '<section class="staff-card"><header><span class="section-code">MUNDO // OWNER</span><h2>Controles globais dos habitantes</h2></header><label class="staff-switch"><input id="admin-world-events" type="checkbox" '+(w.world_events_enabled?'checked':'')+'><span><b>eventos do mundo</b><small>habilita eventos globais</small></span></label><label class="staff-switch"><input id="admin-world-interventions" type="checkbox" '+(w.world_interventions_enabled?'checked':'')+'><span><b>interferências visuais</b><small>permite intervenções do Mundo</small></span></label><label class="wide">mensagem do sistema<textarea id="admin-world-message" maxlength="240">'+escapeHtml(w.message||'')+'</textarea></label><button id="admin-world-save" class="primary">salvar Mundo</button></section>';
+}
+function renderStaffAudit(snapshot){
+  const rows=(snapshot.audit||[]).map(a=>'<article class="staff-audit-row"><b>'+escapeHtml(a.action||'ação')+'</b><span>'+escapeHtml(a.target_type||'sistema')+' · '+escapeHtml(String(a.target_id||'').slice(0,20))+'</span><time>'+ago(a.created_at)+'</time></article>').join('')||'<p class="staff-empty">Nenhum registro disponível para seu cargo.</p>';
+  return '<section class="staff-card"><header><span class="section-code">AUDITORIA // STAFF</span><h2>Registro administrativo</h2></header><div class="staff-audit-list">'+rows+'</div></section>';
+}
+async function staffSaveReport(reportId,claimSelf=false){
+  const card=document.querySelector('[data-report-card="'+CSS.escape(reportId)+'"]');
+  if(!card)return;
+  const get=name=>card.querySelector('[data-report-field="'+name+'"]');
+  const assigned=claimSelf?state.profile.id:(get('assigned_to')?.value||null);
+  const status=claimSelf?'em_analise':(get('status')?.value||'aberto');
+  const {error}=await supabase.rpc('staff_update_report',{
+    p_report_id:reportId,p_status:status,p_assigned_to:assigned,
+    p_priority:get('priority')?.value||null,p_staff_notes:get('staff_notes')?.value||null,p_resolution:get('resolution')?.value||null
+  });
+  if(error)return toast('A denúncia recusou a atualização.');
+  toast(claimSelf?'Denúncia assumida.':'Denúncia atualizada.');
+  renderAdminDashboard();
+}
+function ensureStaffUserDialog(){
+  let d=$('#staff-user-action-dialog');if(d)return d;
+  d=document.createElement('dialog');d.id='staff-user-action-dialog';d.className='staff-action-dialog';
+  d.innerHTML='<form id="staff-user-action-form"><button type="button" class="dialog-close" id="staff-action-close">×</button><span class="section-code" id="staff-action-code">STAFF</span><h2 id="staff-action-title">Ação</h2><div id="staff-action-fields"></div><div class="staff-action-buttons"><button type="button" id="staff-action-cancel">cancelar</button><button class="primary" type="submit">confirmar</button></div></form>';
+  document.body.appendChild(d);$('#staff-action-close').onclick=()=>d.close();$('#staff-action-cancel').onclick=()=>d.close();return d;
+}
+function openStaffBanDialog(userId){
+  const d=ensureStaffUserDialog(),u=staffUserMap()[userId]||{};
+  d.dataset.mode='ban';d.dataset.userId=userId;
+  $('#staff-action-code').textContent='MODERAÇÃO // BAN';
+  $('#staff-action-title').textContent='Banir @'+(u.handle||'usuário');
+  $('#staff-action-fields').innerHTML='<label>motivo<textarea id="staff-ban-reason" maxlength="500" required></textarea></label><label>duração<select id="staff-ban-duration"><option value="1">1 hora</option><option value="24">24 horas</option><option value="168">7 dias</option><option value="720">30 dias</option><option value="permanent">permanente</option></select></label>';
+  $('#staff-user-action-form').onsubmit=submitStaffUserAction;if(!d.open)d.showModal();
+}
+function openStaffNotifyDialog(userId){
+  const d=ensureStaffUserDialog(),u=staffUserMap()[userId]||{};
+  d.dataset.mode='notify';d.dataset.userId=userId;
+  $('#staff-action-code').textContent='STAFF // NOTIFICAÇÃO DIRETA';
+  $('#staff-action-title').textContent='Notificar @'+(u.handle||'usuário');
+  $('#staff-action-fields').innerHTML='<label>título<input id="staff-notify-title" maxlength="100" value="Mensagem da Staff"></label><label>gravidade<select id="staff-notify-severity"><option value="info">informação</option><option value="warning">advertência</option><option value="critical">crítica</option></select></label><label>mensagem<textarea id="staff-notify-body" maxlength="600" required></textarea></label>';
+  $('#staff-user-action-form').onsubmit=submitStaffUserAction;if(!d.open)d.showModal();
+}
+async function submitStaffUserAction(e){
+  e.preventDefault();const d=$('#staff-user-action-dialog'),mode=d.dataset.mode,userId=d.dataset.userId;if(!userId)return;
+  let result;
+  if(mode==='ban'){
+    const reason=String($('#staff-ban-reason')?.value||'').trim(),duration=$('#staff-ban-duration')?.value||'24';
+    if(reason.length<2)return toast('Informe o motivo.');
+    const until=duration==='permanent'?null:new Date(Date.now()+Number(duration)*3600000).toISOString();
+    result=await supabase.rpc('staff_set_user_ban',{p_user_id:userId,p_banned:true,p_reason:reason,p_until:until});
+  }else{
+    const title=String($('#staff-notify-title')?.value||'').trim(),body=String($('#staff-notify-body')?.value||'').trim(),severity=$('#staff-notify-severity')?.value||'info';
+    if(title.length<2||body.length<2)return toast('Título e mensagem são obrigatórios.');
+    result=await supabase.rpc('staff_notify_user',{p_user_id:userId,p_title:title,p_body:body,p_severity:severity});
+  }
+  if(result.error)return toast(mode==='ban'?'O ban não foi aplicado.':'A notificação não foi enviada.');
+  d.close();toast(mode==='ban'?'Ban aplicado e registrado.':'Notificação enviada diretamente.');renderAdminDashboard();
+}
+async function staffUnban(userId){
+  const {error}=await supabase.rpc('staff_set_user_ban',{p_user_id:userId,p_banned:false,p_reason:'',p_until:null});
+  if(error)return toast('Não foi possível reativar o usuário.');toast('Usuário reativado.');renderAdminDashboard();
+}
+async function staffDeleteContent(kind,id){
+  if(!confirm('Remover este conteúdo público? A ação ficará na auditoria.'))return;
+  const {error}=await supabase.rpc('staff_delete_public_content',{p_kind:kind,p_id:id});
+  if(error)return toast('A Staff não conseguiu remover esse conteúdo.');
+  toast('Conteúdo removido.');await loadStaffPublicContent();renderAdminDashboard();
+}
+async function staffSaveTerm(e){
+  e.preventDefault();
+  const id=$('#staff-term-id')?.value||null,term=String($('#staff-term-text')?.value||'').trim();
+  const {error}=await supabase.rpc('staff_upsert_moderation_term',{p_id:id||null,p_term:term,p_category:$('#staff-term-category')?.value||'outro',p_severity:$('#staff-term-severity')?.value||'media',p_enabled:Boolean($('#staff-term-enabled')?.checked),p_notes:$('#staff-term-notes')?.value||''});
+  if(error)return toast('O termo não foi salvo.');
+  toast('Watchlist atualizada. O servidor não dorme, invejável.');renderAdminDashboard();
+}
+function staffEditTerm(id){
+  const t=(state.staffSnapshot?.terms||[]).find(x=>x.id===id);if(!t)return;
+  $('#staff-term-id').value=t.id;$('#staff-term-text').value=t.term;$('#staff-term-category').value=t.category;$('#staff-term-severity').value=t.severity;$('#staff-term-enabled').checked=t.enabled;$('#staff-term-notes').value=t.notes||'';$('#staff-term-text').focus();
+}
+async function staffSaveHit(id){
+  const status=document.querySelector('[data-hit-status="'+id+'"]')?.value||'novo',assigned=document.querySelector('[data-hit-assignee="'+id+'"]')?.value||null;
+  const {error}=await supabase.rpc('staff_update_moderation_hit',{p_hit_id:Number(id),p_status:status,p_assigned_to:assigned});
+  if(error)return toast('O sinal não foi atualizado.');toast('Sinal atualizado.');renderAdminDashboard();
+}
+async function staffSendChat(e){
+  e.preventDefault();const input=$('#staff-chat-input'),body=String(input?.value||'').trim();if(!body)return;
+  const {error}=await supabase.from('staff_messages').insert({sender_id:state.profile.id,scope:state.staffChatScope||'all',body});
+  if(error)return toast('A mensagem interna não foi enviada.');
+  input.value='';loadStaffChat(state.staffChatScope);
+}
+async function staffSetRole(userId,role){
+  const {error}=await supabase.rpc('staff_set_role',{p_user_id:userId,p_role:role});
+  if(error)return toast('Seu cargo não permite essa alteração.');
+  toast('Cargo atualizado.');await loadAdminAccess();renderAdminDashboard();
+}
+async function staffWarn(userId){
+  const reason=prompt('Motivo da advertência ao membro da Staff:','')||'';if(reason.trim().length<2)return;
+  const {error}=await supabase.rpc('staff_warn_staff',{p_user_id:userId,p_reason:reason.trim()});
+  if(error)return toast('Não foi possível aplicar a advertência.');toast('Advertência registrada.');renderAdminDashboard();
+}
+async function saveOwnerExperience(e){
+  e.preventDefault();
+  const feed={page_size:Number($('#owner-feed-page-size').value),show_stories:$('#owner-feed-stories').checked,show_tower:$('#owner-feed-tower').checked};
+  const stories={duration_hours:Number($('#owner-story-hours').value),camera_enabled:$('#owner-story-camera').checked,max_video_seconds:Number($('#owner-story-video').value),default_visibility:$('#owner-story-visibility').value};
+  const layout={density:$('#owner-layout-density').value,feed_width:$('#owner-layout-width').value,sidebar_mode:$('#owner-layout-sidebar').value};
+  const {data,error}=await supabase.rpc('owner_update_experience_settings',{p_feed_config:feed,p_story_config:stories,p_layout_config:layout});
+  if(error)return toast('As configurações de experiência não foram salvas.');
+  state.siteSettings=data;applySiteSettings(data);toast('Feed, stories e layout atualizados globalmente.');renderAdminDashboard();
+}
+async function saveCmsBlock(page,key,kind,value){
+  const {error}=await supabase.rpc('owner_save_cms_block',{p_page_slug:page,p_block_key:key,p_kind:kind,p_value:value,p_enabled:true,p_sort_order:100});
+  if(error)return toast('O bloco CMS não foi salvo.');
+  await loadPublicExperience();toast('Página atualizada globalmente.');renderAdminDashboard();
+}
+async function ownerUploadToAssets(file,folder){
+  if(!file)return null;
+  if(file.size>10*1024*1024)throw new Error('file_too_large');
+  const safe=safeFileName(file.name),path=state.profile.id+'/'+folder+'/'+Date.now()+'-'+crypto.randomUUID()+'-'+safe;
+  const {error}=await supabase.storage.from('avesso-assets').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
+  if(error)throw error;return path;
+}
+async function submitOwnerAsset(e){
+  e.preventDefault();const file=$('#owner-asset-file')?.files?.[0];if(!file)return;
+  const kind=$('#owner-asset-kind').value,name=String($('#owner-asset-name').value||file.name).trim(),slug=String($('#owner-asset-slug').value||name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9_-]+/g,'-').replace(/^-|-$/g,'').slice(0,60),token=String($('#owner-asset-token').value||'').trim()||null;
+  try{
+    const storage=await ownerUploadToAssets(file,kind);
+    const {error}=await supabase.rpc('owner_upsert_asset',{p_id:null,p_kind:kind,p_slug:slug,p_name:name,p_storage_path:storage,p_token:token,p_metadata:{},p_active:true});
+    if(error)throw error;
+    await loadPublicExperience();toast('Asset enviado e registrado.');renderAdminDashboard();
+  }catch(err){console.error(err);toast('O asset não foi salvo. Verifique arquivo e slug.');}
+}
+async function submitOwnerBadge(e){
+  e.preventDefault();const file=$('#owner-badge-file')?.files?.[0];if(!file)return;
+  const name=String($('#owner-badge-name').value||'').trim(),slug=String($('#owner-badge-slug').value||name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9_-]+/g,'-').replace(/^-|-$/g,'').slice(0,50);
+  try{
+    const storage=await ownerUploadToAssets(file,'badges');
+    const {error}=await supabase.rpc('owner_upsert_badge',{p_id:null,p_slug:slug,p_name:name,p_description:$('#owner-badge-description').value||'',p_image_path:storage,p_active:true});
+    if(error)throw error;
+    await loadPublicExperience();toast('Emblema criado.');renderAdminDashboard();
+  }catch(err){console.error(err);toast('O emblema não foi criado.');}
+}
+async function ownerToggleBadge(grant){
+  const user=$('#owner-badge-user')?.value,badge=$('#owner-badge-id')?.value;if(!user||!badge)return;
+  const {error}=await supabase.rpc('owner_grant_badge',{p_user_id:user,p_badge_id:badge,p_grant:grant});
+  if(error)return toast('O emblema não foi alterado.');await loadPublicExperience();toast(grant?'Emblema concedido.':'Emblema retirado.');renderAdminDashboard();
+}
+async function ownerSaveCharacter(id){
+  const card=document.querySelector('[data-character-card="'+id+'"]');if(!card)return;
+  const patch={name:card.querySelector('[data-char-name]').value,role:card.querySelector('[data-char-role]').value,bio:card.querySelector('[data-char-bio]').value,personality:card.querySelector('[data-char-personality]').value,system_prompt:card.querySelector('[data-char-prompt]').value,accent_color:card.querySelector('[data-char-color]').value,avatar_url:card.querySelector('[data-char-avatar]').value,home_location:card.querySelector('[data-char-location]').value,rarity:Number(card.querySelector('[data-char-rarity]').value),ai_enabled:card.querySelector('[data-char-ai]').checked,is_active:card.querySelector('[data-char-active]').checked};
+  const {error}=await supabase.rpc('owner_update_character',{p_character_id:id,p_patch:patch});
+  if(error)return toast('O habitante resistiu à reprogramação.');toast('Habitante atualizado.');await loadWorldState();renderAdminDashboard();
+}
+async function ownerSaveCharacterAi(id){
+  const card=document.querySelector('[data-character-card="'+id+'"]');if(!card)return;
+  const current=(state.staffSnapshot?.characters||[]).find(x=>x.character?.id===id)?.ai||{};
+  const {error}=await supabase.rpc('owner_upsert_character_ai',{p_character_id:id,p_model:card.querySelector('[data-ai-model]').value||'gpt-5.6',p_persona_summary:card.querySelector('[data-ai-persona]').value||'',p_system_prompt:card.querySelector('[data-ai-prompt]').value||'',p_behavior_rules:current.behavior_rules||{},p_voice_rules:current.voice_rules||{},p_max_output_chars:Number(card.querySelector('[data-ai-max]').value)||420,p_ai_enabled:card.querySelector('[data-char-ai]').checked});
+  if(error)return toast('A configuração da IA não foi salva.');toast('IA do habitante atualizada.');renderAdminDashboard();
+}
+async function ownerCreateCharacter(e){
+  e.preventDefault();const {error}=await supabase.rpc('owner_create_character',{p_slug:$('#new-char-slug').value,p_name:$('#new-char-name').value,p_role:$('#new-char-role').value,p_bio:'',p_accent_color:'#d8ff3e'});
+  if(error)return toast('Não foi possível criar o habitante. Verifique o slug.');toast('Novo habitante criado.');await loadWorldState();renderAdminDashboard();
+}
+async function ownerAddDialogue(e){
+  e.preventDefault();const form=e.currentTarget,id=form.dataset.dialogueForm;
+  const {error}=await supabase.rpc('owner_save_character_dialogue',{p_id:null,p_character_id:id,p_context:form.querySelector('[data-dialogue-context]').value,p_body:form.querySelector('[data-dialogue-body]').value,p_weight:Number(form.querySelector('[data-dialogue-weight]').value)||10,p_enabled:true});
+  if(error)return toast('A frase não foi salva.');toast('Frase adicionada.');await loadWorldState();renderAdminDashboard();
+}
+async function ownerLoadDb(){
+  const table=$('#owner-db-table')?.value,limit=Number($('#owner-db-limit')?.value)||50,out=$('#owner-db-output');if(!out)return;
+  out.textContent='consultando...';
+  const {data,error}=await supabase.rpc('owner_db_table_rows',{p_table:table,p_limit:limit});
+  out.textContent=error?'ERRO // '+error.message:JSON.stringify(data,null,2);
+}
 async function renderAdminDashboard(){
   if(state.tab!=='admin')return;
   if(!state.isAdmin){await goToFeedHome();return;}
