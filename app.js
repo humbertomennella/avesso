@@ -3873,6 +3873,7 @@ async function refreshDirectMessageBubble(messageId){
   if(old){
     old.outerHTML=dmMessageHtml(row);
     repairLegacyVoicePlayers(log);
+    bindDirectMessageActions(log);
   }
 }
 function dmMessageHtml(m){
@@ -3882,12 +3883,64 @@ function dmMessageHtml(m){
   if(m.message_kind==='deleted'||m.deleted_at)return `<article class="dm-bubble ${mine?'mine':'theirs'} deleted" data-dm-id="${messageId}"><p class="dm-message-deleted">◌ mensagem apagada</p><small class="dm-message-time">${ago(m.created_at)}</small></article>`;
   const voiceDuration=m.message_kind==='audio'?String(m.body||'').match(/(\d+)s/)?.[1]:null;
   const attachment=m.attachment_url?(m.message_kind==='image'
-    ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}" loading="eager" decoding="async"></a>`
+    ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}" loading="lazy" decoding="async"></a>`
     :m.message_kind==='audio'
       ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio class="dm-voice-audio" data-voice-type="${escapeAttr(m.attachment_type||'')}" controls preload="metadata"><source src="${escapeAttr(m.attachment_url)}" type="${escapeAttr(m.attachment_type||'audio/wav')}">Seu navegador recusou este áudio.</audio><a class="dm-audio-open" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener">abrir áudio</a></div>`
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
-  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${renderEmoticonText(m.body)}</p>`:'');
-  return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}</small></article>`;
+  const bodyText=String(m.body||'');
+  const bodyHtml=m.message_kind==='audio'?'':(bodyText&&(!m.attachment_path||bodyText!==m.attachment_name)?`<p class="dm-message-body">${renderEmoticonText(bodyText)}</p>`:'');
+  const reply=m.reply_to;
+  const replyHtml=reply?`<button type="button" class="dm-reply-preview" data-dm-jump="${escapeAttr(reply.id)}"><span>↩ resposta</span><b>${reply.deleted_at?'mensagem apagada':escapeHtml(String(reply.body||reply.message_kind||'mensagem').slice(0,90))}</b></button>`:'';
+  const grouped={};
+  (m.reactions||[]).forEach(r=>{const key=String(r.reaction||'');if(key)(grouped[key]??=[]).push(r);});
+  const reactionSummary=Object.entries(grouped).map(([reaction,rows])=>`<button type="button" class="dm-reaction-chip ${rows.some(r=>r.user_id===state.profile.id)?'active':''}" data-dm-react="${messageId}" data-reaction="${escapeAttr(reaction)}">${escapeHtml(reaction)} <b>${rows.length}</b></button>`).join('');
+  const receipt=mine?(m.read_at?'✓✓ lida':'✓ enviada'):'';
+  const edited=m.edited_at?' · editada':'';
+  const actions=`<div class="dm-bubble-actions"><button type="button" data-dm-reply="${messageId}" title="Responder">↩</button><button type="button" data-dm-react-menu="${messageId}" title="Reagir">☺</button></div><div class="dm-quick-reactions hidden" data-dm-react-palette="${messageId}">${['♥','😂','👀','⚡','✓','🙃'].map(r=>`<button type="button" data-dm-react="${messageId}" data-reaction="${r}">${r}</button>`).join('')}</div>`;
+  return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}" data-dm-text="${escapeAttr(bodyText.toLowerCase())}">${actions}${replyHtml}${bodyHtml}${attachment}${reactionSummary?`<div class="dm-reaction-summary">${reactionSummary}</div>`:''}<small class="dm-message-time">${ago(m.created_at)}${edited}${receipt?` · ${receipt}`:''}</small></article>`;
+}
+function renderDmReplyComposer(){
+  let host=$('#dm-replying-to');
+  if(!host)return;
+  if(!state.replyingTo){host.classList.add('hidden');host.innerHTML='';return;}
+  host.classList.remove('hidden');
+  host.innerHTML=`<div><span>↩ respondendo</span><b>${escapeHtml(String(state.replyingTo.body||state.replyingTo.message_kind||'mensagem').slice(0,120))}</b></div><button type="button" id="dm-cancel-reply" aria-label="Cancelar resposta">×</button>`;
+  $('#dm-cancel-reply').onclick=()=>{state.replyingTo=null;renderDmReplyComposer();};
+}
+async function toggleDirectMessageReaction(messageId,reaction){
+  if(!messageId||!reaction)return;
+  const {data:existing}=await supabase.from('direct_message_reactions').select('reaction').eq('message_id',messageId).eq('user_id',state.profile.id).maybeSingle();
+  const result=existing?.reaction===reaction
+    ?await supabase.from('direct_message_reactions').delete().eq('message_id',messageId).eq('user_id',state.profile.id)
+    :await supabase.from('direct_message_reactions').upsert({message_id:messageId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'message_id,user_id'});
+  if(result.error)return toast('A reação não atravessou a conversa.');
+  refreshDirectMessageBubble(messageId);
+}
+function bindDirectMessageActions(root=document){
+  root.querySelectorAll?.('[data-dm-reply]').forEach(button=>{
+    button.onclick=async e=>{
+      e.stopPropagation();
+      const row=await directMessageForRefresh(button.dataset.dmReply);
+      if(!row)return;
+      state.replyingTo=row;
+      renderDmReplyComposer();
+      $('#dm-input')?.focus();
+    };
+  });
+  root.querySelectorAll?.('[data-dm-react-menu]').forEach(button=>button.onclick=e=>{
+    e.stopPropagation();
+    root.querySelectorAll?.('.dm-quick-reactions').forEach(x=>{if(x.dataset.dmReactPalette!==button.dataset.dmReactMenu)x.classList.add('hidden');});
+    root.querySelector?.(`[data-dm-react-palette="${CSS.escape(button.dataset.dmReactMenu)}"]`)?.classList.toggle('hidden');
+  });
+  root.querySelectorAll?.('[data-dm-react]').forEach(button=>button.onclick=e=>{
+    e.stopPropagation();
+    toggleDirectMessageReaction(button.dataset.dmReact,button.dataset.reaction);
+  });
+  root.querySelectorAll?.('[data-dm-jump]').forEach(button=>button.onclick=()=>{
+    const target=root.querySelector?.(`[data-dm-id="${CSS.escape(button.dataset.dmJump)}"]`);
+    if(target){target.scrollIntoView({behavior:'smooth',block:'center'});target.classList.add('dm-highlight');setTimeout(()=>target.classList.remove('dm-highlight'),1200);}
+    else toast('Essa mensagem é mais antiga. Carregue o histórico acima.');
+  });
 }
 async function handleDirectMessageMutation(row){
   if(!row?.id||!state.chatWindowOpen||!state.directPeerId)return;
