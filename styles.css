@@ -3931,3 +3931,296 @@ html.msn-screen-nudge body{
     max-width:88%!important;
   }
 }
+
+
+/* AVESSO LINKS + EDITING + OVERFLOW 2026-10-01 */
+
+/* Texto humano também inclui quem descobre a tecla F e se recusa a soltá-la. */
+.post-card,
+.post-card > *,
+.post-body,
+.conversation-item,
+.conversation-item > div,
+.conversation-item p,
+.profile-media-card,
+.profile-media-card > p,
+.album-photo,
+.album-photo-meta,
+.album-photo-meta p,
+.story-comment p,
+.guestbook-entry,
+.guestbook-entry p{
+  min-width:0;
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.post-card{overflow:hidden}
+.post-route{
+  min-width:0;
+  flex-wrap:wrap;
+}
+.post-meta{
+  white-space:nowrap;
+}
+.post-body{
+  white-space:pre-wrap;
+  line-height:1.55;
+}
+
+/* Link de YouTube / Spotify no compositor */
+.media-composer{
+  flex-wrap:wrap!important;
+}
+.media-link-row{
+  flex:1 1 100%;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:5px 9px;
+  align-items:center;
+  padding:8px 9px;
+  border:1px dashed #344246;
+  background:#0b0f10;
+}
+.media-link-row>span{
+  color:var(--cyan);
+  font:800 .55rem var(--mono);
+}
+.media-link-row input{
+  min-width:0;
+  width:100%;
+  margin:0!important;
+  padding:8px 9px!important;
+  background:#080b0c!important;
+  color:#eef2eb!important;
+  border:1px solid #354247!important;
+  font:.72rem var(--sans)!important;
+}
+.media-link-row small{
+  grid-column:2;
+  color:#748180;
+  font:500 .50rem/1.4 var(--mono);
+}
+
+/* Players externos */
+.post-embed iframe{
+  display:block;
+  width:100%;
+  max-width:100%;
+  border:0;
+  background:#050708;
+}
+.post-youtube .embed-frame{
+  position:relative;
+  width:100%;
+  aspect-ratio:16/9;
+  background:#000;
+  overflow:hidden;
+}
+.post-youtube .embed-frame iframe{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+}
+.post-spotify iframe{
+  min-height:352px;
+  border-radius:8px;
+}
+.post-spotify iframe[src*="/track/"],
+.post-spotify iframe[src*="/episode/"]{
+  min-height:152px;
+  height:152px;
+}
+.post-media.compact.post-spotify iframe{
+  min-height:232px;
+}
+.post-media.compact.post-spotify iframe[src*="/track/"],
+.post-media.compact.post-spotify iframe[src*="/episode/"]{
+  min-height:152px;
+}
+
+/* Edição das publicações */
+.post-owner-actions{
+  display:flex;
+  gap:5px;
+  margin-left:auto;
+}
+.post-owner-actions button{
+  border-color:#3b474a!important;
+}
+.post-owner-actions .danger{
+  color:#ff8178!important;
+  border-color:#66363a!important;
+}
+.post-edit-panel{
+  margin:10px 0 12px;
+  padding:9px;
+  border:1px solid #3b494d;
+  background:#090d0f;
+}
+.post-edit-panel textarea{
+  width:100%;
+  min-height:92px;
+  resize:vertical;
+  margin:0;
+  background:#06090a;
+  color:#e8ede8;
+  border:1px solid #354247;
+  padding:9px;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.post-edit-panel>div{
+  display:flex;
+  justify-content:flex-end;
+  gap:6px;
+  margin-top:7px;
+}
+.post-edit-panel button{
+  border:1px solid #3b494d;
+  background:#101719;
+  color:#dbe3df;
+  padding:6px 9px;
+  font:700 .53rem var(--mono);
+  cursor:pointer;
+}
+.post-edit-panel button:first-child{
+  border-color:var(--acid);
+  color:var(--acid);
+}
+
+/* Álbum: editar sem abrir um formulário do século passado em outra página */
+.album-owner-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:5px;
+  margin-top:7px;
+}
+.album-owner-actions button{
+  padding:6px;
+  background:#0a0e10;
+  border:1px solid #354247;
+  color:#9eaaa7;
+  font:600 .49rem var(--mono);
+  cursor:pointer;
+}
+.album-owner-actions .album-delete{
+  margin:0;
+  color:#ff7a6f;
+  border-color:#552d31;
+}
+.album-caption-edit{
+  margin-top:6px;
+  padding:7px;
+  border:1px dashed #354247;
+  background:#090d0f;
+}
+.album-caption-edit input{
+  width:100%;
+  margin:0!important;
+  min-width:0;
+}
+.album-caption-edit>div{
+  display:flex;
+  gap:5px;
+  justify-content:flex-end;
+  margin-top:5px;
+}
+.album-caption-edit button{
+  padding:5px 7px;
+  border:1px solid #354247;
+  background:#111719;
+  color:#dce4e1;
+  font:600 .47rem var(--mono);
+}
+
+/* Meu Canto: arquivo ou link, sem obrigar upload quando já existe a internet. */
+.profile-media-upload{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr) auto!important;
+}
+.profile-media-owner-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:5px;
+  margin-top:8px;
+}
+.profile-media-owner-actions button{
+  padding:6px;
+  border:1px solid #354247;
+  background:#0b1012;
+  color:#a8b2af;
+  font:600 .50rem var(--mono);
+  cursor:pointer;
+}
+.profile-media-owner-actions .profile-media-delete{
+  margin:0;
+  color:#ff7a6f;
+  border-color:#552d31;
+}
+.profile-media-edit{
+  margin-top:7px;
+  padding:8px;
+  border:1px dashed #354247;
+  background:#090d0f;
+}
+.profile-media-edit textarea,
+.profile-media-edit input{
+  width:100%;
+  min-width:0;
+  margin:0 0 6px!important;
+  background:#06090a;
+  color:#e7ece7;
+  border:1px solid #354247;
+  padding:8px;
+}
+.profile-media-edit textarea{min-height:72px;resize:vertical}
+.profile-media-edit>div{
+  display:flex;
+  justify-content:flex-end;
+  gap:5px;
+}
+.profile-media-edit button{
+  border:1px solid #354247;
+  background:#111719;
+  color:#dce4e1;
+  padding:5px 8px;
+  font:600 .48rem var(--mono);
+}
+
+/* Minimizado significa canto inferior da tela, não uma janela anã perdida no mapa. */
+@media(min-width:761px) and (pointer:fine){
+  .dm-floating-window.desktop-windowed.minimized{
+    left:auto!important;
+    top:auto!important;
+    right:16px!important;
+    bottom:16px!important;
+    width:min(320px,calc(100vw - 24px))!important;
+    height:58px!important;
+    min-height:58px!important;
+    max-height:58px!important;
+    overflow:hidden!important;
+    box-shadow:7px 7px 0 #020405,0 0 24px #22d9ee18!important;
+  }
+}
+
+/* As bolhas também não podem atravessar a parede com uma palavra infinita. */
+.dm-bubble,
+.dm-bubble p,
+.dm-attention-event{
+  min-width:0!important;
+  overflow-wrap:anywhere!important;
+  word-break:break-word!important;
+}
+
+@media(max-width:760px){
+  .media-link-row{grid-template-columns:1fr}
+  .media-link-row small{grid-column:1}
+  .profile-media-upload{grid-template-columns:1fr!important}
+  .post-owner-actions{
+    width:100%;
+    margin-left:0;
+  }
+  .post-actions{flex-wrap:wrap}
+  .post-owner-actions button{flex:1}
+}
