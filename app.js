@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -862,6 +862,47 @@ $('#post-image').addEventListener('change',e=>{
   trackAction('image_selected','composer',{type:file.type,size:file.size});
 });
 $('#remove-image').onclick=()=>{state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');};
+$('#post-media').addEventListener('change',e=>{
+  const file=e.target.files?.[0]||null;
+  const preview=$('#media-preview');
+  if(!file){state.postMediaFile=null;preview.classList.add('hidden');return;}
+  const kind=mediaKindFromFile(file);
+  if(!kind){e.target.value='';state.postMediaFile=null;return toast('Use um arquivo de áudio ou vídeo compatível. GIF continua sendo imagem, por mais que tente.');}
+  if(file.size>mediaSizeLimit(kind)){e.target.value='';state.postMediaFile=null;return toast(`${kind==='video'?'Vídeo':'Áudio'} acima de ${mediaSizeLabel(kind)}. O servidor também tem limites emocionais.`);}
+  state.postMediaFile=file;
+  $('#media-preview-icon').textContent=kind==='video'?'▶':'♫';
+  $('#media-preview-name').textContent=file.name;
+  $('#media-preview-kind').textContent=`${kind==='video'?'vídeo':'música/áudio'} · ${Math.max(.1,file.size/1024/1024).toFixed(1)} MB`;
+  preview.classList.remove('hidden');
+  trackAction('media_selected','composer',{type:file.type,size:file.size,kind});
+});
+$('#remove-media').onclick=()=>{state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');};
+function mediaKindFromFile(file){
+  if(!file?.type)return null;
+  if(file.type.startsWith('audio/'))return'audio';
+  if(file.type.startsWith('video/'))return'video';
+  return null;
+}
+function mediaSizeLimit(kind){return kind==='video'?50*1024*1024:20*1024*1024;}
+function mediaSizeLabel(kind){return kind==='video'?'50 MB':'20 MB';}
+function publicMediaUrl(path){return supabase.storage.from('avesso-media').getPublicUrl(path).data.publicUrl;}
+function feedMediaHtml(url,kind,{compact=false}={}){
+  if(!url||!['audio','video'].includes(kind))return'';
+  if(kind==='audio')return `<figure class="post-media post-audio ${compact?'compact':''}"><div class="post-media-label">♫ ÁUDIO // dê play por sua conta</div><audio controls preload="metadata" src="${escapeAttr(url)}"></audio></figure>`;
+  return `<figure class="post-media post-video ${compact?'compact':''}"><div class="post-media-label">▶ VÍDEO // movimento detectado</div><video controls playsinline preload="metadata" src="${escapeAttr(url)}"></video></figure>`;
+}
+async function uploadPostMedia(){
+  const file=state.postMediaFile;if(!file)return{url:null,kind:null};
+  const kind=mediaKindFromFile(file);
+  if(!kind)throw new Error('unsupported media');
+  if(file.size>mediaSizeLimit(kind))throw new Error('media too large');
+  const ext=(file.name.split('.').pop()|| (kind==='video'?'mp4':'mp3')).replace(/[^a-z0-9]/gi,'').toLowerCase();
+  const path=`${state.profile.id}/feed/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const {error}=await supabase.storage.from('avesso-media').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
+  if(error)throw error;
+  return{url:publicMediaUrl(path),kind};
+}
+
 async function uploadPostImage(){
   if(!state.postImageFile)return null;
   const ext=(state.postImageFile.name.split('.').pop()||'webp').replace(/[^a-z0-9]/gi,'').toLowerCase();
@@ -874,24 +915,36 @@ $('#publish-post').onclick=async()=>{
   const body=$('#post-body').value.trim();
   const directed=$('#post-target').value==='person';
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
-  if(directed&&$('#post-visibility').value==='privado'&&state.postImageFile)return toast('Imagem privada ainda não entra aqui. Não vou colocar arquivo íntimo em bucket público só porque seria mais rápido.');
-  if(body.length<3&&!state.postImageFile)return toast('Dê ao menos uma frase ou uma imagem. Telepatia ainda não foi integrada.');
+  if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||state.postMediaFile))return toast('Imagem, música e vídeo privados ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
+  if(body.length<3&&!state.postImageFile&&!state.postMediaFile)return toast('Dê ao menos uma frase, imagem, música ou vídeo. Telepatia ainda não foi integrada.');
   $('#publish-post').disabled=true;
-  let image_url=null;
-  try{ image_url=await uploadPostImage(); }catch(e){$('#publish-post').disabled=false;return toast('A imagem tropeçou no upload. Tente novamente.');}
+  let image_url=null,media_url=null,media_kind=null;
+  try{
+    image_url=await uploadPostImage();
+    const media=await uploadPostMedia();
+    media_url=media.url;media_kind=media.kind;
+  }catch(e){
+    $('#publish-post').disabled=false;
+    console.error('media upload failed',e);
+    return toast('A mídia tropeçou no upload. A internet fingiu que era 1998 de novo.');
+  }
   const {data:createdPost,error}=await supabase.from('posts').insert({
     author_id:state.profile.id,
     recipient_id:directed?state.recipient.id:null,
-    body:body||'Imagem publicada no AVESSO.',
+    body:body||(media_kind==='video'?'Vídeo publicado no AVESSO.':media_kind==='audio'?'Áudio publicado no AVESSO.':'Imagem publicada no AVESSO.'),
     image_url,
+    media_url,
+    media_kind,
     visibility:directed?$('#post-visibility').value:'publico'
   }).select('id').single();
   $('#publish-post').disabled=false;
   if(error)return toast('Não foi possível publicar. Tente novamente.');
   $('#post-body').value='';$('#recipient-search').value='';$('#char-count').textContent='420';state.recipient=null;
   state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');
-  toast(image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.'));
-  trackAction(image_url?'image_posted':'post_created','composer',{directed});
+  state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');
+  const mediaLabel=media_kind==='video'?'Vídeo entregue ao feed.':media_kind==='audio'?'Áudio entregue ao feed.':image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
+  toast(mediaLabel);
+  trackAction(media_kind?`${media_kind}_posted`:image_url?'image_posted':'post_created','composer',{directed,media_kind});
   if(isFeedTab())loadFeed();
   loadImpact();
   if(createdPost?.id)setTimeout(()=>askWorldCharacter(image_url?'image_posted':'post_created',{post_id:createdPost.id,action_type:image_url?'image_posted':'post_created',surface:'feed'}),500);
@@ -999,6 +1052,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       <p class="post-body">${escapeHtml(p.body)}</p>
       ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
+      ${feedMediaHtml(p.media_url,p.media_kind)}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
       ${conversationHtml}
       <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
@@ -1527,6 +1581,140 @@ async function toggleVoiceRecording(){
     toast('Não consegui abrir o microfone. A tecnologia continua com senso de humor.');
   }
 }
+const CHAT_GEOMETRY_KEY='avesso.chat.geometry.v2';
+function chatDesktopEnabled(){
+  return window.matchMedia('(min-width: 761px) and (pointer:fine)').matches;
+}
+function defaultChatGeometry(){
+  const width=Math.min(560,Math.max(360,window.innerWidth-44));
+  const height=Math.min(680,Math.max(320,window.innerHeight-70));
+  return {left:Math.max(8,window.innerWidth-width-22),top:Math.max(8,window.innerHeight-height-18),width,height};
+}
+function clampChatGeometry(geometry={}){
+  const gap=6;
+  const minWidth=Math.min(340,Math.max(300,window.innerWidth-gap*2));
+  const minHeight=Math.min(300,Math.max(240,window.innerHeight-gap*2));
+  const maxWidth=Math.max(minWidth,window.innerWidth-gap*2);
+  const maxHeight=Math.max(minHeight,window.innerHeight-gap*2);
+  const width=Math.min(maxWidth,Math.max(minWidth,Number(geometry.width)||560));
+  const height=Math.min(maxHeight,Math.max(minHeight,Number(geometry.height)||650));
+  const left=Math.min(window.innerWidth-width-gap,Math.max(gap,Number(geometry.left)||gap));
+  const top=Math.min(window.innerHeight-height-gap,Math.max(gap,Number(geometry.top)||gap));
+  return {left,top,width,height};
+}
+function loadChatGeometry(){
+  if(state.chatGeometry)return state.chatGeometry;
+  try{
+    const saved=JSON.parse(localStorage.getItem(CHAT_GEOMETRY_KEY)||'null');
+    state.chatGeometry=clampChatGeometry(saved||defaultChatGeometry());
+  }catch{state.chatGeometry=clampChatGeometry(defaultChatGeometry());}
+  return state.chatGeometry;
+}
+function saveChatGeometry(){
+  if(!state.chatGeometry)return;
+  try{localStorage.setItem(CHAT_GEOMETRY_KEY,JSON.stringify(state.chatGeometry));}catch{}
+}
+function applyChatGeometry(){
+  const win=$('#dm-floating-window');if(!win)return;
+  if(!chatDesktopEnabled()){
+    ['left','top','right','bottom','width','height'].forEach(prop=>win.style.removeProperty(prop));
+    win.classList.remove('maximized','desktop-windowed');
+    return;
+  }
+  win.classList.add('desktop-windowed');
+  if(state.chatMaximized){
+    win.classList.add('maximized');
+    Object.assign(win.style,{left:'6px',top:'6px',right:'auto',bottom:'auto',width:'calc(100vw - 12px)',height:state.chatWindowMinimized?'38px':'calc(100vh - 12px)'});
+    return;
+  }
+  win.classList.remove('maximized');
+  const g=loadChatGeometry();
+  Object.assign(win.style,{left:`${g.left}px`,top:`${g.top}px`,right:'auto',bottom:'auto',width:`${g.width}px`,height:state.chatWindowMinimized?'38px':`${g.height}px`});
+}
+function toggleChatMaximize(){
+  if(!state.chatWindowOpen||!chatDesktopEnabled())return;
+  if(state.chatWindowMinimized){state.chatWindowMinimized=false;ensureChatWindow().classList.remove('minimized');}
+  state.chatMaximized=!state.chatMaximized;
+  const button=$('#dm-maximize');
+  if(button){button.textContent=state.chatMaximized?'❐':'□';button.title=state.chatMaximized?'Restaurar tamanho':'Maximizar';}
+  applyChatGeometry();
+}
+function ensureChatResizeHandles(win){
+  if(!chatDesktopEnabled())return;
+  ['n','e','s','w','ne','nw','se','sw'].forEach(dir=>{
+    if(win.querySelector(`[data-chat-resize="${dir}"]`))return;
+    const handle=document.createElement('span');
+    handle.className=`dm-resize-handle dm-resize-${dir}`;
+    handle.dataset.chatResize=dir;
+    handle.setAttribute('aria-hidden','true');
+    win.appendChild(handle);
+  });
+}
+function startChatPointerAction(event,mode){
+  if(!chatDesktopEnabled()||event.button!==0)return;
+  if(state.chatMaximized)return;
+  if(mode!=='move'&&state.chatWindowMinimized)return;
+  const win=ensureChatWindow();
+  const rect=win.getBoundingClientRect();
+  const start={x:event.clientX,y:event.clientY,left:rect.left,top:rect.top,width:rect.width,height:state.chatWindowMinimized?loadChatGeometry().height:rect.height};
+  const minW=Math.min(340,Math.max(300,window.innerWidth-12));
+  const minH=Math.min(300,Math.max(240,window.innerHeight-12));
+  document.documentElement.classList.add('dm-window-interacting');
+  event.preventDefault();
+  const move=ev=>{
+    const dx=ev.clientX-start.x,dy=ev.clientY-start.y;
+    let left=start.left,top=start.top,width=start.width,height=start.height;
+    if(mode==='move'){
+      left=start.left+dx;top=start.top+dy;
+    }else{
+      if(mode.includes('e'))width=start.width+dx;
+      if(mode.includes('s'))height=start.height+dy;
+      if(mode.includes('w')){width=start.width-dx;left=start.left+dx;}
+      if(mode.includes('n')){height=start.height-dy;top=start.top+dy;}
+      if(width<minW){if(mode.includes('w'))left-=minW-width;width=minW;}
+      if(height<minH){if(mode.includes('n'))top-=minH-height;height=minH;}
+    }
+    const maxW=window.innerWidth-12,maxH=window.innerHeight-12;
+    if(width>maxW){if(mode.includes('w'))left-=maxW-width;width=maxW;}
+    if(height>maxH){if(mode.includes('n'))top-=maxH-height;height=maxH;}
+    left=Math.max(6,Math.min(left,window.innerWidth-width-6));
+    top=Math.max(6,Math.min(top,window.innerHeight-(state.chatWindowMinimized?38:height)-6));
+    state.chatGeometry={left,top,width,height};
+    Object.assign(win.style,{left:`${left}px`,top:`${top}px`,right:'auto',bottom:'auto',width:`${width}px`,height:state.chatWindowMinimized?'38px':`${height}px`});
+  };
+  const up=()=>{
+    window.removeEventListener('pointermove',move);
+    window.removeEventListener('pointerup',up);
+    document.documentElement.classList.remove('dm-window-interacting');
+    state.chatGeometry=clampChatGeometry(state.chatGeometry||start);
+    saveChatGeometry();
+    applyChatGeometry();
+  };
+  window.addEventListener('pointermove',move);
+  window.addEventListener('pointerup',up,{once:true});
+}
+function installChatDesktopWindowing(){
+  const win=ensureChatWindow();
+  if(!chatDesktopEnabled()){applyChatGeometry();return;}
+  ensureChatResizeHandles(win);
+  const head=$('#dm-floating-head');
+  if(head){
+    head.onpointerdown=e=>{
+      if(e.target.closest('button,.dm-window-controls,.dm-options-menu'))return;
+      startChatPointerAction(e,'move');
+    };
+    head.ondblclick=e=>{
+      if(e.target.closest('button,.dm-window-controls,.dm-options-menu'))return;
+      toggleChatMaximize();
+    };
+  }
+  win.querySelectorAll('[data-chat-resize]').forEach(handle=>{
+    handle.onpointerdown=e=>{e.stopPropagation();startChatPointerAction(e,handle.dataset.chatResize);};
+  });
+  applyChatGeometry();
+}
+window.addEventListener('resize',()=>{if(state.chatWindowOpen)applyChatGeometry();});
+
 function ensureChatWindow(){
   let win=$('#dm-floating-window');
   if(!win){win=document.createElement('section');win.id='dm-floating-window';win.className='dm-floating-window hidden';document.body.appendChild(win);}
@@ -1551,7 +1739,7 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
       <span class="dm-msn-appmark">▓ AVESSO.MSG</span>
       <button id="dm-restore-name" class="dm-title-peer" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}</button>
       <span class="dm-msn-era">56K // 2026</span>
-      <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'□':'_'}</button><button id="dm-close" title="Fechar">×</button></div>
+      <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'□':'_'}</button><button id="dm-maximize" title="${state.chatMaximized?'Restaurar tamanho':'Maximizar'}">${state.chatMaximized?'❐':'□'}</button><button id="dm-close" title="Fechar">×</button></div>
     </div>
     <header class="dm-floating-head">
       <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
@@ -1594,6 +1782,7 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
       <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem... ou grave voz no celular sem fingir que 2006 tinha tudo."><button>Enviar</button></form>
     </div>`;
   $('#dm-minimize').onclick=toggleChatMinimize;
+  $('#dm-maximize').onclick=toggleChatMaximize;
   $('#dm-close').onclick=()=>closeChatWindow();
   $('#dm-restore-name').onclick=e=>{e.stopPropagation();if(state.chatWindowMinimized)toggleChatMinimize();else $('#dm-input')?.focus();};
   $('#dm-peer-avatar').onclick=()=>openPublicProfile(peerId);
@@ -1612,7 +1801,7 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
   $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
   $$('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
   $$('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
-  $('#dm-floating-head').ondblclick=e=>{if(e.target.closest('.dm-window-controls,.dm-kebab,.dm-options-menu'))return;toggleChatMinimize();};
+  installChatDesktopWindowing();
   syncVoiceRecordingUI();
   const log=$('#dm-log');if(log)log.scrollTop=log.scrollHeight;
 }
@@ -1622,6 +1811,7 @@ async function refreshChatWindow(){
   await openChatWindow(state.directPeerId,{keepMinimized:true});
   state.chatWindowMinimized=minimized;
   ensureChatWindow().classList.toggle('minimized',minimized);
+  applyChatGeometry();
 }
 function toggleChatMinimize(){
   if(!state.chatWindowOpen)return;
@@ -1630,6 +1820,7 @@ function toggleChatMinimize(){
   win.classList.toggle('minimized',state.chatWindowMinimized);
   const button=$('#dm-minimize');
   if(button){button.textContent=state.chatWindowMinimized?'□':'_';button.title=state.chatWindowMinimized?'Restaurar':'Minimizar';}
+  applyChatGeometry();
   if(!state.chatWindowMinimized)setTimeout(()=>$('#dm-input')?.focus(),80);
 }
 function closeChatWindow(silent=false){
@@ -1867,6 +2058,49 @@ async function togglePhotoReaction(photoId,reaction,userId,editable){
   loadAlbum(userId,editable);
 }
 
+function profileMediaCardHtml(row,editable=false){
+  return `<article class="profile-media-card" data-profile-media="${row.id}">
+    <div class="profile-media-head"><span>${row.media_kind==='video'?'▶ VÍDEO':'♫ ÁUDIO'}</span><small>${ago(row.created_at)}</small></div>
+    ${feedMediaHtml(row.media_url,row.media_kind,{compact:true})}
+    ${row.caption?`<p>${escapeHtml(row.caption)}</p>`:''}
+    ${editable?`<button class="profile-media-delete" data-profile-media-delete="${row.id}" data-profile-media-path="${escapeAttr(row.storage_path)}">apagar mídia</button>`:''}
+  </article>`;
+}
+async function loadProfileMedia(userId,editable=false,selector=editable?'#profile-media-list':'#public-media-list'){
+  const host=$(selector);if(!host||!userId)return;
+  const {data,error}=await supabase.from('profile_media').select('id,user_id,media_url,storage_path,media_kind,caption,created_at').eq('user_id',userId).order('created_at',{ascending:false}).limit(36);
+  if(error){host.innerHTML='<p class="profile-media-empty">A discoteca caiu atrás do servidor.</p>';return;}
+  host.innerHTML=(data||[]).map(row=>profileMediaCardHtml(row,editable)).join('')||'<p class="profile-media-empty">Nada tocando por aqui. Silêncio também é curadoria.</p>';
+  host.querySelectorAll('[data-profile-media-delete]').forEach(b=>b.onclick=()=>deleteProfileMedia(b.dataset.profileMediaDelete,b.dataset.profileMediaPath));
+}
+async function uploadProfileMedia(){
+  const file=$('#profile-media-file')?.files?.[0]||null;
+  if(!file)return toast('Escolha uma música ou vídeo primeiro.');
+  const kind=mediaKindFromFile(file);
+  if(!kind)return toast('Esse arquivo não decidiu se é música ou vídeo.');
+  if(file.size>mediaSizeLimit(kind))return toast(`${kind==='video'?'Vídeo':'Áudio'} acima de ${mediaSizeLabel(kind)}.`);
+  const caption=String($('#profile-media-caption')?.value||'').trim().slice(0,420);
+  const ext=(file.name.split('.').pop()||(kind==='video'?'mp4':'mp3')).replace(/[^a-z0-9]/gi,'').toLowerCase();
+  const path=`${state.profile.id}/profile/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const btn=$('#profile-media-upload');if(btn){btn.disabled=true;btn.textContent='enviando...';}
+  const {error:uploadError}=await supabase.storage.from('avesso-media').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
+  if(uploadError){if(btn){btn.disabled=false;btn.textContent='publicar no Canto';}return toast('A mídia ficou presa no cabo. Tente novamente.');}
+  const media_url=publicMediaUrl(path);
+  const {error}=await supabase.from('profile_media').insert({user_id:state.profile.id,media_url,storage_path:path,media_kind:kind,caption});
+  if(btn){btn.disabled=false;btn.textContent='publicar no Canto';}
+  if(error){await supabase.storage.from('avesso-media').remove([path]);return toast('O arquivo chegou, mas o Canto fingiu que não conhece.');}
+  $('#profile-media-file').value='';$('#profile-media-caption').value='';
+  toast(kind==='video'?'Vídeo publicado no seu Canto.':'Áudio publicado no seu Canto.');
+  loadProfileMedia(state.profile.id,true,'#profile-media-list');
+}
+async function deleteProfileMedia(id,path){
+  if(!id||!confirm('Apagar esta mídia do seu Canto?'))return;
+  const {error}=await supabase.from('profile_media').delete().eq('id',id).eq('user_id',state.profile.id);
+  if(error)return toast('A mídia se recusou a sair do palco.');
+  if(path)await supabase.storage.from('avesso-media').remove([path]);
+  loadProfileMedia(state.profile.id,true,'#profile-media-list');
+}
+
 async function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
@@ -1887,6 +2121,7 @@ async function renderProfile(){
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
     <section class="profile-album-control"><span class="section-code">ÁLBUM // FOTOS QUE VOCÊ DECIDIU NÃO APAGAR</span><h2>Seu álbum</h2><p>Poste imagens no seu Canto. Reações existem, mas continuam sem virar olimpíada social.</p><div class="album-upload-row"><input id="album-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><input id="album-caption" maxlength="180" placeholder="legenda opcional. autocontrole também."><button id="album-upload">adicionar foto</button></div><div id="profile-album" class="profile-album-grid"><p>carregando memórias...</p></div></section>
+    <section class="profile-media-control"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Sua fita, seu clipe, seu problema</h2><p>Publique música ou vídeo diretamente no seu Canto. Sem autoplay, porque ainda resta alguma civilização.</p><div class="profile-media-upload"><input id="profile-media-file" type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/wav,audio/webm,video/mp4,video/webm,video/quicktime"><input id="profile-media-caption" maxlength="420" placeholder="legenda opcional. contexto não machuca."><button id="profile-media-upload">publicar no Canto</button></div><div id="profile-media-list" class="profile-media-grid"><p>rebobinando...</p></div></section>
     <section class="guestbook-section guestbook-own"><span class="section-code">RECADOS // DEIXARAM ISSO AQUI</span><h2>Recados no seu Canto</h2><p>Amigos podem deixar texto, links, emojis e imagens. Você continua com a sofisticada tecnologia chamada “apagar”.</p><div id="profile-guestbook" class="guestbook-list"><p>procurando bilhetes na porta...</p></div></section>
     <section class="friends-control"><span class="section-code">PESSOAS // AMIGOS</span><h2>Lista de pessoas que você aceitou voluntariamente</h2><div id="friends-panel"><p>carregando relações humanas...</p></div></section>
     <section class="blocked-control"><span class="section-code">CONTROLE // BLOQUEADOS</span><h2>Porta fechada também é interface</h2><p>Bloquear encerra amizade e impede novas mensagens. Desbloquear não cria amizade de volta, porque nem botão deveria ter esse poder.</p><div id="blocked-panel"><p>consultando bloqueios...</p></div></section>
@@ -1909,6 +2144,7 @@ async function renderProfile(){
   $('#profile-presence').value=state.profile.presence_mode||'online';
   $('#profile-presence').onchange=e=>setPresenceMode(e.target.value);
   $('#album-upload').onclick=uploadAlbumPhoto;
+  $('#profile-media-upload').onclick=uploadProfileMedia;
   $('#choose-profile-wallpaper').onclick=()=>openWallpaperDialog('profile');
   $('#choose-app-wallpaper').onclick=()=>openWallpaperDialog('app');
   document.querySelectorAll('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
@@ -1917,6 +2153,7 @@ async function renderProfile(){
   loadBlockedPanel();
   loadProfileStories(state.profile.id,'#profile-story-list');
   loadAlbum(state.profile.id,true);
+  loadProfileMedia(state.profile.id,true,'#profile-media-list');
   loadGuestbook(state.profile.id,'#profile-guestbook');
   algoSay('profile');
   setTimeout(()=>maybeWorldCharacter('profile',{surface:'profile'},.12,180000),900);
@@ -2052,6 +2289,7 @@ async function openPublicProfile(userId){
       <div id="public-guestbook-list" class="guestbook-list"><p>carregando recados...</p></div>
     </section>
     <section class="public-album"><h2>Álbum de ${escapeHtml(p.display_name)}</h2><div id="public-album" class="profile-album-grid"><p>abrindo gavetas...</p></div></section>
+    <section class="public-media"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>O que ${escapeHtml(p.display_name)} deixou tocando</h2><div id="public-media-list" class="profile-media-grid"><p>procurando fitas...</p></div></section>
   </section>`;
   $('#back-from-profile').onclick=()=>document.querySelector('[data-app-tab="feed"]')?.click();
   $('[data-add-friend]')?.addEventListener('click',e=>requestFriend(e.currentTarget.dataset.addFriend));
@@ -2061,6 +2299,7 @@ async function openPublicProfile(userId){
   $('#guestbook-submit')?.addEventListener('click',()=>sendGuestbookEntry(userId));
   loadGuestbook(userId,'#public-guestbook-list');
   loadAlbum(userId,false);
+  loadProfileMedia(userId,false,'#public-media-list');
   loadProfileStories(userId,'#public-story-list');
 }
 function bindProfileLinks(){ /* links usam delegação global */ }
@@ -2099,6 +2338,11 @@ function subscribeRealtime(){
       if(payload.new?.status==='active')toast(`EVENTO DO MUNDO // ${payload.new.title}`);
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'post_reactions'},()=>{if(isFeedTab())loadFeed();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'profile_media'},payload=>{
+      const row=payload.new?.user_id?payload.new:(payload.old||{});
+      if(state.tab==='profile'&&row.user_id===state.profile?.id)loadProfileMedia(state.profile.id,true,'#profile-media-list');
+      if(state.tab==='public_profile'&&row.user_id===state.publicProfileId)loadProfileMedia(state.publicProfileId,false,'#public-media-list');
+    })
     .on('postgres_changes',{event:'*',schema:'public',table:'guestbook_entries'},payload=>{
       const row=payload.new?.profile_id?payload.new:(payload.old||{});
       if(state.tab==='profile'&&row.profile_id===state.profile?.id)loadGuestbook(state.profile.id,'#profile-guestbook');
