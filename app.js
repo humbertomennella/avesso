@@ -313,6 +313,7 @@ function renderStoryMediaPreview(file){
   box.classList.remove('hidden');
 }
 async function openStoryCamera(){
+  if(state.siteSettings?.story_config?.camera_enabled===false)return toast('A câmera dos Stories está desabilitada pela configuração global.');
   if(!navigator.mediaDevices?.getUserMedia)return toast('Este navegador não liberou câmera para o AVESSO.');
   stopStoryCamera();
   const constraints={
@@ -396,8 +397,9 @@ function toggleStoryRecording(){
   state.storyCameraRecording=true;
   const button=$('#story-camera-record');
   if(button){button.classList.add('recording');button.textContent='■ parar gravação';}
-  const status=$('#story-camera-status');if(status)status.textContent='REC // máximo 15 segundos';
-  state.storyRecordStopTimer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();},15000);
+  const maxSeconds=Math.min(30,Math.max(5,Number(state.siteSettings?.story_config?.max_video_seconds)||15));
+  const status=$('#story-camera-status');if(status)status.textContent='REC // máximo '+maxSeconds+' segundos';
+  state.storyRecordStopTimer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();},maxSeconds*1000);
 }
 function openStoryCreate(){
   const dialog=$('#story-create-dialog');if(!dialog)return;
@@ -407,7 +409,8 @@ function openStoryCreate(){
   $('#story-create-message').textContent='';
   $('#story-body').value='';
   $('#story-image').value='';
-  $('#story-visibility').value='publico';
+  $('#story-visibility').value=state.siteSettings?.story_config?.default_visibility==='amigos'?'amigos':'publico';
+  const cameraButton=$('#story-camera-open');if(cameraButton)cameraButton.disabled=state.siteSettings?.story_config?.camera_enabled===false;
   if(!dialog.open)dialog.showModal();
   setTimeout(()=>$('#story-body')?.focus(),40);
 }
@@ -427,7 +430,9 @@ async function publishStory(){
   const btn=$('#story-publish');if(btn){btn.disabled=true;btn.textContent='subindo para a internet...';}
   let created=null,mediaPath=null;
   try{
-    const ins=await supabase.from('stories').insert({author_id:state.profile.id,body,visibility,media_type:mediaType}).select().single();
+    const durationHours=Math.min(24,Math.max(1,Number(state.siteSettings?.story_config?.duration_hours)||24));
+    const expires_at=new Date(Date.now()+durationHours*3600000).toISOString();
+    const ins=await supabase.from('stories').insert({author_id:state.profile.id,body,visibility,media_type:mediaType,expires_at}).select().single();
     if(ins.error)throw ins.error;
     created=ins.data;
     if(file){
@@ -441,7 +446,8 @@ async function publishStory(){
     clearStoryPreview();
     state.storyCapturedFile=null;
     $('#story-create-dialog')?.close();
-    toast(mediaType==='video'?'Vídeo no story. Ele tem 24 horas antes do esquecimento institucional.':'Story publicado. O relógio de 24h já está julgando.');
+    const durationHours=Math.min(24,Math.max(1,Number(state.siteSettings?.story_config?.duration_hours)||24));
+    toast(mediaType==='video'?`Vídeo no story. Ele tem ${durationHours}h antes do esquecimento institucional.`:`Story publicado. O relógio de ${durationHours}h já está julgando.`);
     trackAction('story_posted','stories',{visibility,media_type:mediaType||'text'});
     await loadStoriesStrip();
     if(state.tab==='profile')loadProfileStories(state.profile.id,'#profile-story-list');
@@ -449,10 +455,10 @@ async function publishStory(){
     if(mediaPath)await supabase.storage.from('avesso-stories').remove([mediaPath]);
     if(created?.id)await supabase.from('stories').delete().eq('id',created.id);
     console.error('story publish',err);
-    toast('O story caiu antes de completar 24 horas.');
+    toast('O story caiu antes de completar o tempo configurado.');
   }finally{
     state.storyBusy=false;
-    if(btn){btn.disabled=false;btn.textContent='publicar por 24h';}
+    if(btn){const hours=Math.min(24,Math.max(1,Number(state.siteSettings?.story_config?.duration_hours)||24));btn.disabled=false;btn.textContent=`publicar por ${hours}h`;}
   }
 }
 
@@ -1560,7 +1566,7 @@ $('#story-image').onchange=e=>{
   renderStoryMediaPreview(file);
 };
 $$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
-function setAuthMode(mode){ state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
+function setAuthMode(mode){ state.mode=mode; $('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); const custom=Object.fromEntries((state.cmsBlocks||[]).filter(x=>x.page_slug==='auth'&&x.enabled).map(x=>[x.block_key,x.value])); $('#auth-submit').textContent=mode==='login'?(custom.login_button||'entrar'):(custom.signup_button||'criar meu canto'); $('#auth-message').textContent=''; }
 
 $('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);const email=f.get('email');const password=f.get('password');$('#auth-submit').disabled=true;$('#auth-message').textContent='conversando com os computadores...';let result;if(state.mode==='signup'){const handle=String(f.get('handle')||'').toLowerCase();const display_name=String(f.get('display_name')||'').trim().slice(0,80);if(!display_name){result={error:{message:'Escolha um nome exibido. Vale símbolo, emoji, drama e decisões questionáveis.'}}}else if(!/^[a-z0-9_]{3,24}$/.test(handle)){result={error:{message:'Seu @ precisa ter 3–24 letras minúsculas, números ou _.'}}}else{result=await supabase.auth.signUp({email,password,options:{data:{handle,display_name},emailRedirectTo:SITE_URL}});}}else result=await supabase.auth.signInWithPassword({email,password});$('#auth-submit').disabled=false;if(result.error){$('#auth-message').textContent=humanError(result.error.message);return}if(state.mode==='signup'&&!result.data.session){$('#auth-message').textContent='Confira seu e-mail e use o link mais recente. Se já confirmou a conta, abra a aba de entrar e use sua senha.';$('#resend-confirmation').classList.remove('hidden');return}$('#auth-dialog').close();toast('Você entrou. Tente não estragar tudo.');});
 
@@ -2147,7 +2153,8 @@ async function loadFeed(){
   if(requestedTab==='quiet')query=query.eq('response_count',0);
   if(requestedTab==='sent')query=query.eq('author_id',state.profile.id);
 
-  const {data,error}=await query.order('created_at',{ascending:false}).limit(40);
+  const feedLimit=Math.min(60,Math.max(10,Number(state.siteSettings?.feed_config?.page_size)||40));
+  const {data,error}=await query.order('created_at',{ascending:false}).limit(feedLimit);
 
   // O usuário pode ter mudado de página enquanto o banco respondia.
   if(viewVersion!==state.viewVersion||state.tab!==requestedTab||!isFeedTab())return;
