@@ -482,10 +482,10 @@ async function openStory(storyId,options={}){
     return `<button class="story-reaction ${active?'active':''}" data-story-react="${id}"><span>${icon}</span>${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`;
   }).join('');
   const a=authorRes.data||{},canDelete=story.author_id===state.profile.id;
-  const commentsHtml=comments.map(row=>{const p=commentProfiles[row.user_id]||{};return `<article class="story-comment"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${escapeHtml(p.display_name||'alguém')}</b><small>@${escapeHtml(p.handle||'...')} · ${ago(row.created_at)}</small><p>${escapeHtml(row.body)}</p></div></article>`;}).join('')||'<p class="story-empty">Sem comentários. O silêncio também expira.</p>';
+  const commentsHtml=comments.map(row=>{const p=commentProfiles[row.user_id]||{};return `<article class="story-comment"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b data-staff-name data-profile-id="${row.user_id}">${identityNameHtml(row.user_id,p.display_name||'alguém')}</b><small>@${escapeHtml(p.handle||'...')} · ${ago(row.created_at)}</small><p>${escapeHtml(row.body)}</p></div></article>`;}).join('')||'<p class="story-empty">Sem comentários. O silêncio também expira.</p>';
   const host=$('#story-view-content');
   host.innerHTML=`<article class="story-view-card">
-    <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${escapeHtml(a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
+    <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b data-staff-name data-profile-id="${story.author_id}">${identityNameHtml(story.author_id,a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
     <div class="story-stage ${image_url?'has-image':''} ${storyIsVideo?'has-video':''}" style="${image_url&&!storyIsVideo?`--story-image:url('${escapeAttr(image_url)}')`:''}">${image_url?(storyIsVideo?`<video class="story-video" src="${escapeAttr(image_url)}" controls playsinline preload="metadata"></video>`:`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||'usuário')}" decoding="async" fetchpriority="high">`):''}${story.body?`<p>${escapeHtml(story.body)}</p>`:''}</div>
     <div class="story-reactions">${reactionHtml}</div>
     <section class="story-comments"><h3>respostas // sem plateia</h3><div class="story-comment-list">${commentsHtml}</div><div class="story-comment-compose"><textarea id="story-comment-body" maxlength="420" placeholder="responda antes que isso desapareça..."></textarea><div><button id="story-comment-emoticons" type="button">☻ avessícones</button><button id="story-comment-send" type="button">responder</button></div><div id="story-comment-palette" class="feed-emoticon-palette hidden">${avessoEmoticonButtons('data-story-comment-emoticon')}</div></div></section>
@@ -1568,7 +1568,7 @@ async function enterApp(){
   await loadAdminAccess();
   await loadIdentityMetadata();
   await loadOwnModeration();
-  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):'');
+  $('#nav-name').innerHTML=identityNameHtml(data.id,data.display_name,{badges:true});
   $('#nav-handle').textContent='@'+data.handle;
   renderNavAvatar();
   applyAppWallpaper();
@@ -3783,10 +3783,10 @@ function updateChatPeerHeader(peer){
   const muted=isPeerMuted(peer.id);
   const title=$('#dm-restore-name');
   if(title){
-    title.innerHTML=`<i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}`;
+    title.innerHTML=`<i class="presence-dot ${p.mode}"></i>${identityNameHtml(peer.id,peer.display_name,{badges:false})}${muted?' · 🔇':''}`;
     title.title=`Abrir conversa com ${peer.display_name}`;
   }
-  const name=$('#dm-peer-profile-name');if(name)name.textContent=peer.display_name;
+  const name=$('#dm-peer-profile-name');if(name)name.innerHTML=identityNameHtml(peer.id,peer.display_name,{badges:true});
   const status=$('#dm-peer-status');
   if(status){
     status.textContent=peer.status_message||'';
@@ -4534,7 +4534,7 @@ async function loadFriendPanel(){
   const incoming=list.filter(r=>r.status==='pending'&&r.addressee_id===state.profile.id);
   const outgoing=list.filter(r=>r.status==='pending'&&r.requester_id===state.profile.id);
   const accepted=list.filter(r=>r.status==='accepted');
-  const card=(p,extra='')=>`<div class="friend-row"><button class="friend-avatar" data-profile-id="${p.id}">${avatarHtml(p.avatar_url,p.display_name)}</button><div><button class="user-link" data-profile-id="${p.id}">${escapeHtml(p.display_name)}</button><small>@${escapeHtml(p.handle)} ${p.status_message?'· '+escapeHtml(p.status_message):''}</small></div>${extra}</div>`;
+  const card=(p,extra='')=>`<div class="friend-row"><button class="friend-avatar" data-profile-id="${p.id}">${avatarHtml(p.avatar_url,p.display_name)}</button><div><button class="user-link" data-staff-name data-profile-id="${p.id}">${identityNameHtml(p.id,p.display_name)}</button><small>@${escapeHtml(p.handle)} ${p.status_message?'· '+escapeHtml(p.status_message):''}</small></div>${extra}</div>`;
   host.innerHTML=`
     <div class="friend-section"><h3>Pedidos recebidos <b>${incoming.length}</b></h3>${incoming.map(r=>{const p=profiles[r.requester_id];return p?card(p,`<div class="friend-actions"><button data-friend-accept="${r.id}">aceitar</button><button data-friend-decline="${r.id}">recusar</button></div>`):''}).join('')||'<p>Ninguém batendo na porta. Paz temporária.</p>'}</div>
     <div class="friend-section"><h3>Amigos <b>${accepted.length}</b></h3>${accepted.map(r=>{const id=r.requester_id===state.profile.id?r.addressee_id:r.requester_id;const p=profiles[id];return p?card(p,`<div class="friend-actions"><button data-friend-chat="${id}">mensagem</button><button data-friend-remove="${r.id}">remover</button></div>`):''}).join('')||'<p>Lista vazia. O MSN também começou assim.</p>'}</div>
@@ -4582,7 +4582,7 @@ async function saveProfileSettings(){
   if(error)return toast('O perfil resistiu à mudança. Tente novamente.');
   state.profile=data;
   await supabase.auth.updateUser({data:{display_name}}).catch(()=>{});
-  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):''); renderNavAvatar();
+  $('#nav-name').innerHTML=identityNameHtml(data.id,data.display_name,{badges:true}); renderNavAvatar();
   toast('Seu Canto foi atualizado. Identidade salva sem pedir aprovação do algoritmo.');
   renderProfile();
 }
@@ -5056,7 +5056,7 @@ async function loadGuestbook(profileId,selector='#public-guestbook-list'){
     return `<article class="guestbook-card" data-recado-id="${entry.id}">
       <header>
         <button class="guestbook-avatar" data-profile-id="${entry.author_id}">${avatarHtml(author.avatar_url,author.display_name||'?')}</button>
-        <div><button class="user-link" data-profile-id="${entry.author_id}">${escapeHtml(author.display_name||'alguém')}</button><small>@${escapeHtml(author.handle||'...')} · ${ago(entry.created_at)}</small></div>
+        <div><button class="user-link" data-staff-name data-profile-id="${entry.author_id}">${identityNameHtml(entry.author_id,author.display_name||'alguém')}</button><small>@${escapeHtml(author.handle||'...')} · ${ago(entry.created_at)}</small></div>
         ${canDelete?`<button class="guestbook-delete" data-recado-delete="${entry.id}" data-recado-image="${escapeAttr(entry.image_path||'')}" title="Apagar recado">×</button>`:''}
       </header>
       ${entry.body?`<p>${richText(entry.body)}</p>`:''}
