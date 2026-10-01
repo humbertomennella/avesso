@@ -648,7 +648,7 @@ async function notifyStoryEvent(row){
   if(!row||row.recipient_id!==state.profile?.id)return;
   const actor=await profileById(row.actor_id);
   const label=row.kind==='comment'?'respondeu ao seu story':`reagiu ao seu story: ${STORY_REACTIONS.find(x=>x[0]===row.reaction)?.[2]||'reação'}`;
-  socialNotify({title:'STORY.EXE',body:`${actor?.display_name||'Alguém'} ${label}.`,avatar:actor?.avatar_url||'',kind:'story',action:()=>openStory(row.story_id)});
+  socialNotify({title:'STORY.EXE',body:`${actor?.display_name||'Alguém'} ${label}.`,avatar:actor?.avatar_url||'',kind:'story',target:{type:'story',id:row.story_id},action:()=>openStory(row.story_id)});
   await supabase.from('story_notifications').update({read_at:new Date().toISOString()}).eq('id',row.id).eq('recipient_id',state.profile.id);
 }
 
@@ -795,12 +795,12 @@ async function browserNotify({title='AVESSO',body='',avatar='',kind='message',ac
     setTimeout(()=>n.close(),9000);
   }catch{}
 }
-function socialNotify({title='AVESSO',body='',avatar='',kind='message',action=null,sound=true}={}){
-  const item={title,body,avatar,kind,action,sound};
+function socialNotify({title='AVESSO',body='',avatar='',kind='message',action=null,sound=true,target=null}={}){
+  const item={title,body,avatar,kind,action,sound,target};
   state.socialNotificationQueue.push(item);
   if(state.socialNotificationQueue.length>6)state.socialNotificationQueue.shift();
   try{
-    window.dispatchEvent(new CustomEvent('avesso:notification',{detail:{kind,title,body}}));
+    window.dispatchEvent(new CustomEvent('avesso:notification',{detail:{kind,title,body,avatar,target,createdAt:Date.now()}}));
     if(typeof navigator.setAppBadge==='function')navigator.setAppBadge(1).catch(()=>{});
   }catch{}
   browserNotify(item);
@@ -3614,6 +3614,7 @@ async function receiveIncomingDirectMessage(m,{source='realtime'}={}){
       avatar:sender?.avatar_url||'',
       kind:attention?'attention':'message',
       sound:!attention,
+      target:{type:'chat',id:m.sender_id},
       action:()=>openFriendChat(m.sender_id)
     });
   }
@@ -3622,8 +3623,9 @@ async function receiveIncomingDirectMessage(m,{source='realtime'}={}){
   if(attention&&!muted){
     await receiveAttention(m.sender_id,m);
   }else if(sameChat){
-    const hydrated=await hydrateDirectMessage(m);
+    const hydrated=(await hydrateDirectMessages([m]))[0]||m;
     appendDirectMessage(hydrated);
+    bindDirectMessageActions($('#dm-log'));
     if(state.chatWindowMinimized){
       pulseIncomingChat();
     }else if(!document.hidden&&document.hasFocus()){
@@ -3670,9 +3672,20 @@ async function notifyPendingFriendRequests(){
     body:`${who?.display_name||'Alguém'} quer entrar na sua lista${extra}. A diplomacia digital exige um clique.`,
     avatar:who?.avatar_url||'',
     kind:'friend',
+    target:{type:'profile',id:newest.requester_id},
     action:()=>openPublicProfile(newest.requester_id)
   });
 }
+window.addEventListener('avesso:open-target',event=>{
+  const target=event.detail?.target||event.detail||{};
+  if(!target?.type||!target?.id)return;
+  if(target.type==='chat')openFriendChat(target.id);
+  else if(target.type==='profile')openPublicProfile(target.id);
+  else if(target.type==='post')openFeedPostFromNotification(target.id);
+  else if(target.type==='story')openStory(target.id);
+  else if(target.type==='photo')openAlbumPhotoViewer(target.id);
+});
+
 async function openFeedPostFromNotification(postId){
   document.querySelector('[data-app-tab="feed"]')?.click();
   setTimeout(()=>document.querySelector(`[data-post-card="${CSS.escape(String(postId))}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),520);
@@ -3691,6 +3704,7 @@ async function notifyPostInteraction(row,kind){
     :`${actor?.display_name||'Alguém'} respondeu: ${String(row.body||'').slice(0,90)}`;
   socialNotify({
     title,body,avatar:actor?.avatar_url||'',kind:'interaction',
+    target:{type:'post',id:postId},
     action:()=>openFeedPostFromNotification(postId)
   });
 }
@@ -3708,7 +3722,8 @@ async function notifyPhotoInteraction(row,kind){
       ?`${actor?.display_name||'Alguém'} reagiu a uma foto do seu Canto.`
       :`${actor?.display_name||'Alguém'} comentou: ${String(row.body||'').slice(0,90)}`,
     avatar:actor?.avatar_url||'',
-    kind:'interaction',
+    kind:'photo',
+    target:{type:'photo',id:photoId},
     action:()=>openAlbumPhotoViewer(photoId)
   });
 }
@@ -3753,6 +3768,10 @@ function startDirectRealtime(){
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>receiveIncomingDirectMessage(payload.new||{}, {source:'realtime'}))
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`sender_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
+    .on('postgres_changes',{event:'*',schema:'public',table:'direct_message_reactions'},payload=>{
+      const messageId=payload.new?.message_id||payload.old?.message_id;
+      if(messageId&&state.chatWindowOpen)refreshDirectMessageBubble(messageId);
+    })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'friendships'},async payload=>{
       const f=payload.new||{};
       if(f.addressee_id!==me||f.status!=='pending')return;
@@ -4680,6 +4699,8 @@ function closeChatWindow(silent=false){
   state.incomingMessagePulseTimer=null;
   const win=$('#dm-floating-window');
   win?.querySelectorAll('.dm-voice-audio[data-voice-object-url]').forEach(audio=>{try{URL.revokeObjectURL(audio.dataset.voiceObjectUrl);}catch{}});
+  sendTypingState(false);
+  clearTimeout(state.typingTimer);state.typingTimer=null;state.typingPeerId=null;state.replyingTo=null;
   state.chatWindowOpen=false;state.chatWindowMinimized=false;state.directPeerId=null;
   if(win){win.classList.remove('incoming-pulse');win.classList.add('hidden');}
   if(!silent)toast('Conversa fechada. Nenhum “tchau” automático foi enviado.');
