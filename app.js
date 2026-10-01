@@ -4996,15 +4996,30 @@ async function sendDirectMessage(e){
   }
   input.value='';syncDmComposerAction();
   const replyTo=state.replyingTo?.id||null;
+  const optimisticId='local-'+crypto.randomUUID();
+  const optimistic={
+    id:optimisticId,
+    sender_id:state.profile.id,
+    recipient_id:peerId,
+    body,
+    message_kind:'text',
+    created_at:new Date().toISOString(),
+    read_at:null,
+    reply_to_id:replyTo,
+    reply_to:state.replyingTo?{id:state.replyingTo.id,body:state.replyingTo.body,message_kind:state.replyingTo.message_kind,deleted_at:state.replyingTo.deleted_at}:null,
+    reactions:[]
+  };
+  if(state.chatWindowOpen&&state.directPeerId===peerId)appendDirectMessage(optimistic);
   const {data,error}=await supabase.from('direct_messages')
     .insert({sender_id:state.profile.id,recipient_id:peerId,body,message_kind:'text',reply_to_id:replyTo})
     .select('*').single();
   if(error){
+    document.querySelector(`[data-dm-id="${CSS.escape(optimisticId)}"]`)?.remove();
     input.value=body;syncDmComposerAction();
-    return toast('A mensagem não atravessou o fio. Confirme que vocês ainda são amigos.');
+    return toast(error.code==='P0001'?'Você está enviando rápido demais. Espere um pouco.':'A mensagem não atravessou o fio. Confirme que vocês ainda são amigos.');
   }
   const hydrated=(await hydrateDirectMessages([data]))[0]||data;
-  if(state.chatWindowOpen&&state.directPeerId===peerId)appendDirectMessage(hydrated);
+  if(state.chatWindowOpen&&state.directPeerId===peerId)appendDirectMessage(hydrated,{replaceId:optimisticId});
   state.replyingTo=null;renderDmReplyComposer();
   sendTypingState(false);
   dispatchPush('message',data.id);
