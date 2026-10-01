@@ -275,7 +275,7 @@ function storyCardHtml(story,{compact=false}={}){
 
 async function loadStoriesStrip(){
   const host=$('#stories-zone');
-  if(!host||!state.profile||state.tab!=='feed'){host?.classList.add('hidden');return;}
+  if(!host||!state.profile||state.tab!=='feed'||state.siteSettings?.story_settings?.enabled===false){host?.classList.add('hidden');return;}
   host.classList.remove('hidden');
   const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,media_type,visibility,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(60);
   if(error){host.innerHTML='<div class="stories-error">stories deram tela azul.</div>';return;}
@@ -1548,7 +1548,7 @@ $('#story-image').onchange=e=>{
 $$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
 function setAuthMode(mode){ state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
 
-$('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);const email=f.get('email');const password=f.get('password');$('#auth-submit').disabled=true;$('#auth-message').textContent='conversando com os computadores...';let result;if(state.mode==='signup'){const handle=String(f.get('handle')||'').toLowerCase();const display_name=String(f.get('display_name')||'').trim().slice(0,80);if(!display_name){result={error:{message:'Escolha um nome exibido. Vale símbolo, emoji, drama e decisões questionáveis.'}}}else if(!/^[a-z0-9_]{3,24}$/.test(handle)){result={error:{message:'Seu @ precisa ter 3–24 letras minúsculas, números ou _.'}}}else{result=await supabase.auth.signUp({email,password,options:{data:{handle,display_name},emailRedirectTo:SITE_URL}});}}else result=await supabase.auth.signInWithPassword({email,password});$('#auth-submit').disabled=false;if(result.error){$('#auth-message').textContent=humanError(result.error.message);return}if(state.mode==='signup'&&!result.data.session){$('#auth-message').textContent='Confira seu e-mail e use o link mais recente. Se já confirmou a conta, abra a aba de entrar e use sua senha.';$('#resend-confirmation').classList.remove('hidden');return}$('#auth-dialog').close();toast('Você entrou. Tente não estragar tudo.');});
+$('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();if(state.mode==='signup'&&state.siteSettings?.login_settings?.registration_enabled===false){$('#auth-message').textContent='Novos cadastros estão temporariamente desativados pelo administrador.';return;}const f=new FormData(e.currentTarget);const email=f.get('email');const password=f.get('password');$('#auth-submit').disabled=true;$('#auth-message').textContent='conversando com os computadores...';let result;if(state.mode==='signup'){const handle=String(f.get('handle')||'').toLowerCase();const display_name=String(f.get('display_name')||'').trim().slice(0,80);if(!display_name){result={error:{message:'Escolha um nome exibido. Vale símbolo, emoji, drama e decisões questionáveis.'}}}else if(!/^[a-z0-9_]{3,24}$/.test(handle)){result={error:{message:'Seu @ precisa ter 3–24 letras minúsculas, números ou _.'}}}else{result=await supabase.auth.signUp({email,password,options:{data:{handle,display_name},emailRedirectTo:SITE_URL}});}}else result=await supabase.auth.signInWithPassword({email,password});$('#auth-submit').disabled=false;if(result.error){$('#auth-message').textContent=humanError(result.error.message);return}if(state.mode==='signup'&&!result.data.session){$('#auth-message').textContent='Confira seu e-mail e use o link mais recente. Se já confirmou a conta, abra a aba de entrar e use sua senha.';$('#resend-confirmation').classList.remove('hidden');return}$('#auth-dialog').close();toast('Você entrou. Tente não estragar tudo.');});
 
 $('#resend-confirmation').onclick=async()=>{const email=new FormData($('#auth-form')).get('email');if(!email)return toast('Digite seu e-mail primeiro. Adivinhação ainda está em beta.');const button=$('#resend-confirmation');button.disabled=true;button.textContent='reenviando...';const {error}=await supabase.auth.resend({type:'signup',email,options:{emailRedirectTo:SITE_URL}});button.disabled=false;button.textContent='reenviar confirmação de e-mail';if(error){$('#auth-message').textContent=humanError(error.message);return}$('#auth-message').textContent='Se a conta ainda estiver pendente, você receberá um novo link. Se já confirmou, entre com sua senha.';toast('Solicitação recebida. Confira seu e-mail ou tente entrar.');};
 
@@ -2138,7 +2138,8 @@ async function loadFeed(){
   if(requestedTab==='quiet')query=query.eq('response_count',0);
   if(requestedTab==='sent')query=query.eq('author_id',state.profile.id);
 
-  const {data,error}=await query.order('created_at',{ascending:false}).limit(40);
+  const feedPageSize=Math.max(10,Math.min(100,Number(state.siteSettings?.feed_settings?.page_size)||40));
+  const {data,error}=await query.order('created_at',{ascending:false}).limit(feedPageSize);
 
   // O usuário pode ter mudado de página enquanto o banco respondia.
   if(viewVersion!==state.viewVersion||state.tab!==requestedTab||!isFeedTab())return;
@@ -2196,7 +2197,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       <div class="conversation-list">${conversation.map(item=>{
         if(item.type==='character'){
           const c=item.character||{};
-          return `<article class="conversation-item character-conversation">${characterVisual(c,'conversation-character')}<div><div class="conversation-author"><b>${escapeHtml(c.name||'Habitante')}</b><span>HABITANTE · ${ago(item.created_at)}</span></div><p>${escapeHtml(item.body)}</p></div></article>`;
+          return `<article class="conversation-item character-conversation">${characterVisual(c,'conversation-character')}<div><div class="conversation-author"><b>${escapeHtml(c.name||'Habitante')}</b><span>HABITANTE · ${ago(item.created_at)}</span></div><p>${renderEmoticonText(item.body)}</p></div></article>`;
         }
         return `<article class="conversation-item"><button class="mini-avatar profile-avatar-button" data-profile-id="${item.author_id}">${avatarHtml(item.author?.avatar_url,item.author?.display_name||'?')}</button><div><div class="conversation-author"><button class="user-link" data-profile-id="${item.author_id}">${identityNameHtml(item.author_id,item.author?.display_name||'alguém')}</button><span>@${escapeHtml(item.author?.handle||'...')} · ${ago(item.created_at)}</span></div><p>${escapeHtml(item.body)}</p></div></article>`;
       }).join('')}</div></section>`:'';
@@ -2216,7 +2217,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${identityNameHtml(p.author_id,p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       ${ownerActions}
       ${turnedBadge}
-      <p class="post-body" data-post-body="${p.id}">${escapeHtml(p.body)}</p>
+      <p class="post-body" data-post-body="${p.id}">${renderEmoticonText(p.body)}</p>
       ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea>${['youtube','spotify'].includes(p.media_kind)?`<input type="url" data-post-media-link-edit="${p.id}" value="${escapeAttr(externalMediaShareUrl(p.media_url))}" placeholder="link do YouTube ou Spotify">`:''}<div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
       ${effectiveImage?`<figure class="post-image ${effectiveGif?'post-gif':''}"><img class="post-image-open" ${p.reshare_photo_id?`data-photo-open="${p.reshare_photo_id}"`:`data-feed-image-open="${p.id}"`} src="${escapeAttr(effectiveImage)}" alt="${effectiveGif?'GIF':'Imagem'} publicado por ${escapeAttr(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
       ${feedMediaHtml(p.media_url,p.media_kind)}
