@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -129,17 +129,20 @@ function storyTimeLeft(expiresAt){
 
 function storyCardHtml(story,{compact=false}={}){
   const a=story.author||{};
-  return `<button class="story-card ${compact?'compact':''}" data-story-open="${story.id}" style="${story.image_url?`--story-thumb:url('${escapeAttr(story.image_url)}')`:''}">
-    <span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span>
-    <span class="story-card-copy"><b>${escapeHtml(a.display_name||'humano')}</b><small>${story.visibility==='amigos'?'amigos':'público'} · ${storyTimeLeft(story.expires_at)}</small></span>
-  </button>`;
-}
+  const isVideo=story.media_type==='video';
+  const style=story.image_url&&!isVideo?'--story-thumb:url(\''+escapeAttr(story.image_url)+'\')':'';
+  return '<button class="story-card '+(compact?'compact ':'')+(isVideo?'has-video':'')+'" data-story-open="'+escapeAttr(story.id)+'" style="'+style+'">'+
+    '<span class="story-ring"><i>'+avatarHtml(a.avatar_url,a.display_name||'?')+'</i></span>'+
+    (isVideo?'<em class="story-card-media">▶ vídeo</em>':'')+
+    '<span class="story-card-copy"><b>'+escapeHtml(a.display_name||'humano')+'</b><small>'+(story.visibility==='amigos'?'amigos':'público')+' · '+storyTimeLeft(story.expires_at)+'</small></span>'+
+  '</button>';
+
 
 async function loadStoriesStrip(){
   const host=$('#stories-zone');
   if(!host||!state.profile||state.tab!=='feed'){host?.classList.add('hidden');return;}
   host.classList.remove('hidden');
-  const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(60);
+  const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,media_type,visibility,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(60);
   if(error){host.innerHTML='<div class="stories-error">stories deram tela azul.</div>';return;}
   const stories=await hydrateStories((data||[]).filter(s=>!isPeerBlocked(s.author_id)));
   const latestByAuthor=[],seen=new Set();
@@ -151,14 +154,139 @@ async function loadStoriesStrip(){
   host.querySelectorAll('[data-story-open]').forEach(b=>b.onclick=()=>openStory(b.dataset.storyOpen,{sequence:storySequence}));
 }
 
+function clearStoryPreview(){
+  if(state.storyPreviewUrl){try{URL.revokeObjectURL(state.storyPreviewUrl);}catch{}}
+  state.storyPreviewUrl='';
+  const box=$('#story-image-preview');
+  if(box){box.classList.add('hidden');box.innerHTML='';}
+}
+function stopStoryCamera(){
+  clearTimeout(state.storyRecordStopTimer);state.storyRecordStopTimer=null;
+  if(state.storyCameraRecorder&&state.storyCameraRecorder.state!=='inactive'){
+    try{state.storyCameraRecorder.stop();}catch{}
+  }
+  state.storyCameraRecorder=null;
+  state.storyCameraRecording=false;
+  state.storyCameraChunks=[];
+  if(state.storyCameraStream)state.storyCameraStream.getTracks().forEach(track=>track.stop());
+  state.storyCameraStream=null;
+  const video=$('#story-camera-preview');if(video)video.srcObject=null;
+  $('#story-camera-panel')?.classList.add('hidden');
+  const record=$('#story-camera-record');
+  if(record){record.classList.remove('recording');record.textContent='● gravar vídeo';}
+}
+function storySelectedFile(){
+  return state.storyCapturedFile||$('#story-image')?.files?.[0]||null;
+}
+function renderStoryMediaPreview(file){
+  clearStoryPreview();
+  if(!file)return;
+  const box=$('#story-image-preview');if(!box)return;
+  const url=URL.createObjectURL(file);state.storyPreviewUrl=url;
+  const isVideo=file.type.startsWith('video/');
+  if(isVideo){
+    box.innerHTML='<video src="'+escapeAttr(url)+'" controls playsinline preload="metadata"></video><small>'+escapeHtml(file.name)+' · vídeo</small>';
+  }else{
+    box.innerHTML='<img src="'+escapeAttr(url)+'" alt="prévia do story"><small>'+escapeHtml(file.name)+' · imagem</small>';
+  }
+  box.classList.remove('hidden');
+}
+async function openStoryCamera(){
+  if(!navigator.mediaDevices?.getUserMedia)return toast('Este navegador não liberou câmera para o AVESSO.');
+  stopStoryCamera();
+  const constraints={
+    video:{facingMode:{ideal:state.storyCameraFacing},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30,max:30}},
+    audio:true
+  };
+  let stream;
+  try{stream=await navigator.mediaDevices.getUserMedia(constraints);}
+  catch{
+    try{stream=await navigator.mediaDevices.getUserMedia({video:constraints.video,audio:false});}
+    catch{return toast('A câmera não abriu. Confira a permissão do navegador e se outro aplicativo não sequestrou a lente.');}
+  }
+  state.storyCameraStream=stream;
+  const video=$('#story-camera-preview');
+  if(video){video.srcObject=stream;video.play().catch(()=>{});}
+  $('#story-camera-panel')?.classList.remove('hidden');
+  const status=$('#story-camera-status');
+  if(status)status.textContent='CAMERA.SYS // '+(state.storyCameraFacing==='user'?'frontal':'traseira');
+}
+async function switchStoryCamera(){
+  state.storyCameraFacing=state.storyCameraFacing==='user'?'environment':'user';
+  await openStoryCamera();
+}
+function takeStoryPhoto(){
+  const video=$('#story-camera-preview');
+  if(!video||!state.storyCameraStream||!video.videoWidth)return toast('A câmera ainda está acordando.');
+  const canvas=document.createElement('canvas');
+  const max=1600,scale=Math.min(1,max/video.videoWidth);
+  canvas.width=Math.max(1,Math.round(video.videoWidth*scale));
+  canvas.height=Math.max(1,Math.round(video.videoHeight*scale));
+  const ctx=canvas.getContext('2d');
+  if(state.storyCameraFacing==='user'){ctx.translate(canvas.width,0);ctx.scale(-1,1);}
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  canvas.toBlob(blob=>{
+    if(!blob)return toast('A foto virou metafísica antes de virar arquivo.');
+    state.storyCapturedFile=new File([blob],'avesso-story-'+Date.now()+'.jpg',{type:'image/jpeg'});
+    const input=$('#story-image');if(input)input.value='';
+    renderStoryMediaPreview(state.storyCapturedFile);
+    stopStoryCamera();
+  },'image/jpeg',.9);
+}
+function preferredStoryVideoMime(){
+  const candidates=['video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+  return candidates.find(type=>window.MediaRecorder?.isTypeSupported?.(type))||'';
+}
+function toggleStoryRecording(){
+  if(!state.storyCameraStream){openStoryCamera();return;}
+  if(!window.MediaRecorder)return toast('Este navegador vê vídeo, mas decidiu não saber gravá-lo. Modernidade seletiva.');
+  if(state.storyCameraRecorder?.state==='recording'){
+    clearTimeout(state.storyRecordStopTimer);state.storyRecordStopTimer=null;
+    state.storyCameraRecorder.stop();
+    return;
+  }
+  const mime=preferredStoryVideoMime();
+  let recorder;
+  try{recorder=new MediaRecorder(state.storyCameraStream,mime?{mimeType:mime}:undefined);}
+  catch{return toast('O gravador não conseguiu negociar um formato com este navegador.');}
+  state.storyCameraRecorder=recorder;
+  state.storyCameraChunks=[];
+  recorder.ondataavailable=e=>{if(e.data?.size)state.storyCameraChunks.push(e.data);};
+  recorder.onstop=()=>{
+    clearTimeout(state.storyRecordStopTimer);state.storyRecordStopTimer=null;
+    const type=recorder.mimeType||mime||'video/webm';
+    const blob=new Blob(state.storyCameraChunks,{type});
+    if(blob.size){
+      const ext=type.includes('mp4')?'mp4':'webm';
+      state.storyCapturedFile=new File([blob],'avesso-story-'+Date.now()+'.'+ext,{type});
+      const input=$('#story-image');if(input)input.value='';
+      renderStoryMediaPreview(state.storyCapturedFile);
+    }
+    state.storyCameraRecording=false;
+    const button=$('#story-camera-record');
+    if(button){button.classList.remove('recording');button.textContent='● gravar vídeo';}
+    state.storyCameraRecorder=null;
+    if(state.storyCameraStream)state.storyCameraStream.getTracks().forEach(track=>track.stop());
+    state.storyCameraStream=null;
+    const live=$('#story-camera-preview');if(live)live.srcObject=null;
+    $('#story-camera-panel')?.classList.add('hidden');
+  };
+  recorder.start(250);
+  state.storyCameraRecording=true;
+  const button=$('#story-camera-record');
+  if(button){button.classList.add('recording');button.textContent='■ parar gravação';}
+  const status=$('#story-camera-status');if(status)status.textContent='REC // máximo 15 segundos';
+  state.storyRecordStopTimer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();},15000);
+}
 function openStoryCreate(){
   const dialog=$('#story-create-dialog');if(!dialog)return;
+  stopStoryCamera();
+  state.storyCapturedFile=null;
+  clearStoryPreview();
   $('#story-create-message').textContent='';
   $('#story-body').value='';
   $('#story-image').value='';
   $('#story-visibility').value='publico';
-  $('#story-image-preview').classList.add('hidden');
-  $('#story-image-preview').innerHTML='';
   if(!dialog.open)dialog.showModal();
   setTimeout(()=>$('#story-body')?.focus(),40);
 }
@@ -166,43 +294,50 @@ function openStoryCreate(){
 async function publishStory(){
   if(state.storyBusy)return;
   const body=String($('#story-body')?.value||'').trim().slice(0,420);
-  const file=$('#story-image')?.files?.[0]||null;
+  const file=storySelectedFile();
   const visibility=$('#story-visibility')?.value==='amigos'?'amigos':'publico';
+  const mediaType=file?(file.type.startsWith('video/')?'video':'image'):null;
   if(!body&&!file)return toast('Story vazio dura zero horas. Eficiência admirável, utilidade discutível.');
-  if(file&&file.size>8*1024*1024)return toast('Imagem de story: até 8 MB. A fita VHS agradece.');
-  if(file&&!/^image\/(jpeg|png|webp|gif)$/i.test(file.type))return toast('Story aceita JPG, PNG, WEBP ou GIF.');
+  if(file&&mediaType==='image'&&file.size>8*1024*1024)return toast('Imagem de story: até 8 MB. Pixels também pagam aluguel.');
+  if(file&&mediaType==='video'&&file.size>30*1024*1024)return toast('Vídeo de story: até 30 MB. Não vamos recriar um streaming dentro do feed.');
+  if(file&&mediaType==='image'&&!/^image\/(jpeg|png|webp|gif)$/i.test(file.type))return toast('Imagem de story aceita JPG, PNG, WEBP ou GIF.');
+  if(file&&mediaType==='video'&&!/^video\/(webm|mp4|quicktime)$/i.test(file.type))return toast('Vídeo de story aceita WEBM, MP4 ou MOV.');
   state.storyBusy=true;
   const btn=$('#story-publish');if(btn){btn.disabled=true;btn.textContent='subindo para a internet...';}
-  let created=null,imagePath=null;
+  let created=null,mediaPath=null;
   try{
-    const ins=await supabase.from('stories').insert({author_id:state.profile.id,body,visibility}).select().single();
+    const ins=await supabase.from('stories').insert({author_id:state.profile.id,body,visibility,media_type:mediaType}).select().single();
     if(ins.error)throw ins.error;
     created=ins.data;
     if(file){
-      imagePath=`${state.profile.id}/${created.id}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
-      const up=await supabase.storage.from('avesso-stories').upload(imagePath,file,{cacheControl:'86400',upsert:false,contentType:file.type});
+      mediaPath=state.profile.id+'/'+created.id+'/'+crypto.randomUUID()+'-'+safeFileName(file.name);
+      const up=await supabase.storage.from('avesso-stories').upload(mediaPath,file,{cacheControl:'86400',upsert:false,contentType:file.type});
       if(up.error)throw up.error;
-      const upd=await supabase.from('stories').update({image_path:imagePath}).eq('id',created.id);
+      const upd=await supabase.from('stories').update({image_path:mediaPath,media_type:mediaType}).eq('id',created.id);
       if(upd.error)throw upd.error;
     }
+    stopStoryCamera();
+    clearStoryPreview();
+    state.storyCapturedFile=null;
     $('#story-create-dialog')?.close();
-    toast('Story publicado. O relógio de 24h já está julgando.');
-    trackAction('story_posted','stories',{visibility,has_image:Boolean(file)});
+    toast(mediaType==='video'?'Vídeo no story. Ele tem 24 horas antes do esquecimento institucional.':'Story publicado. O relógio de 24h já está julgando.');
+    trackAction('story_posted','stories',{visibility,media_type:mediaType||'text'});
     await loadStoriesStrip();
     if(state.tab==='profile')loadProfileStories(state.profile.id,'#profile-story-list');
   }catch(err){
-    if(imagePath)await supabase.storage.from('avesso-stories').remove([imagePath]);
+    if(mediaPath)await supabase.storage.from('avesso-stories').remove([mediaPath]);
     if(created?.id)await supabase.from('stories').delete().eq('id',created.id);
     console.error('story publish',err);
     toast('O story caiu antes de completar 24 horas.');
   }finally{
-    state.storyBusy=false;if(btn){btn.disabled=false;btn.textContent='publicar por 24h';}
+    state.storyBusy=false;
+    if(btn){btn.disabled=false;btn.textContent='publicar por 24h';}
   }
 }
 
 async function loadProfileStories(userId,selector){
   const host=$(selector);if(!host||!userId)return;
-  const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').eq('author_id',userId).gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(20);
+  const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,media_type,visibility,created_at,expires_at').eq('author_id',userId).gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(20);
   if(error){host.innerHTML='<p class="story-empty">Os stories se perderam no cache.</p>';return;}
   const stories=await hydrateStories(data||[]);
   host.innerHTML=stories.map(s=>storyCardHtml(s)).join('')||'<p class="story-empty">Nenhum story ativo. A internet sobreviveu.</p>';
@@ -236,7 +371,7 @@ function pauseStoryTimer(){clearStoryTimer();}
 function resumeStoryTimer(){if($('#story-view-dialog')?.open)scheduleStoryAdvance();}
 
 async function openStory(storyId,options={}){
-  const {data:story,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').eq('id',storyId).gt('expires_at',new Date().toISOString()).maybeSingle();
+  const {data:story,error}=await supabase.from('stories').select('id,author_id,body,image_path,media_type,visibility,created_at,expires_at').eq('id',storyId).gt('expires_at',new Date().toISOString()).maybeSingle();
   if(error||!story){if(options.auto)closeStoryViewer();return toast('Este story expirou ou você não pode vê-lo. O tempo venceu outra vez.');}
   if(isPeerBlocked(story.author_id))return toast('Este usuário está bloqueado. O story ficou do outro lado da porta.');
   const suppliedSequence=Array.isArray(options.sequence)?options.sequence.filter(Boolean):[];
