@@ -3026,6 +3026,17 @@ async function renderProfile(){
   loadAlbum(state.profile.id,true);
   loadProfileMedia(state.profile.id,true,'#profile-media-list');
   loadGuestbook(state.profile.id,'#profile-guestbook');
+  if(state.profile.corner_music_url&&!state.profile.corner_music_title){
+    resolveMediaMetadata(state.profile.corner_music_url).then(async metadata=>{
+      if(!metadata?.title||state.tab!=='profile')return;
+      const patch={corner_music_title:metadata.title,corner_music_provider:metadata.provider||state.profile.corner_music_provider||null,updated_at:new Date().toISOString()};
+      const {data}=await supabase.from('profiles').update(patch).eq('id',state.profile.id).select().single();
+      if(data){
+        state.profile=data;
+        const hero=$('#profile-hero-corner-music');if(hero)hero.innerHTML=cornerMusicBadgeHtml(state.profile,{owner:true});
+      }
+    });
+  }
   algoSay('profile');
   setTimeout(()=>maybeWorldCharacter('profile',{surface:'profile'},.12,180000),900);
 }
