@@ -109,7 +109,92 @@ function applyAppWallpaper(){
 }
 
 function adminCrownHtml(extraClass=''){
-  return '<span class="admin-crown-pixel '+escapeAttr(extraClass)+'" title="Administrador do AVESSO" aria-label="Administrador"><i></i></span>';
+  return '<span class="admin-crown-pixel '+escapeAttr(extraClass)+'" title="Administrador Geral do AVESSO" aria-label="Administrador Geral"><i></i></span>';
+}
+function staffRoleLabel(role=''){
+  return ({owner:'Administrador Geral',senior_admin:'Administrador-Senior',moderator:'Moderador'})[role]||'';
+}
+function staffRankValue(role=''){
+  return ({owner:30,senior_admin:20,moderator:10})[role]||0;
+}
+function badgeHtmlForUser(userId){
+  return (state.userBadges?.[userId]||[]).slice(0,4).map(row=>{
+    const badge=row.badge||row.badges||{};
+    if(!badge.image_path)return'';
+    return '<img class="identity-badge" src="'+escapeAttr(assetPublicUrl(badge.image_path))+'" alt="'+escapeAttr(badge.name||'emblema')+'" title="'+escapeAttr(badge.name||'Emblema')+'">';
+  }).join('');
+}
+function decorateIdentityNodes(root=document){
+  if(!root?.querySelectorAll)return;
+  const nodes=[];
+  if(root.matches?.('[data-profile-id]'))nodes.push(root);
+  nodes.push(...root.querySelectorAll('[data-profile-id]'));
+  nodes.forEach(el=>{
+    const id=el.dataset.profileId;
+    if(!id)return;
+    const role=state.staffRoles?.[id]||'';
+    el.dataset.staffRole=role;
+    const target=el.matches('.user-link,.dm-peer-name,.dm-title-peer,.identity-name,[data-identity-name]')?el:
+      el.querySelector?.('.user-link,.identity-name,[data-identity-name],strong,b');
+    if(!target)return;
+    target.querySelectorAll?.(':scope > .identity-badges')?.forEach(x=>x.remove());
+    target.querySelectorAll?.(':scope > .admin-crown-pixel')?.forEach(x=>x.remove());
+    if(role==='owner')target.insertAdjacentHTML('beforeend',adminCrownHtml('identity-owner-crown'));
+    const badges=badgeHtmlForUser(id);
+    if(badges)target.insertAdjacentHTML('beforeend','<span class="identity-badges">'+badges+'</span>');
+  });
+}
+function startIdentityDecoration(){
+  decorateIdentityNodes(document);
+  if(state.identityObserver)return;
+  state.identityObserver=new MutationObserver(records=>{
+    for(const record of records)record.addedNodes.forEach(node=>{if(node.nodeType===1)decorateIdentityNodes(node);});
+  });
+  state.identityObserver.observe(document.body,{childList:true,subtree:true});
+}
+function renderCustomEmoticons(text=''){
+  let html=escapeHtml(text);
+  for(const asset of (state.customAssets?.emoticon||[])){
+    const token=asset.token||(':'+asset.slug+':');
+    if(!token)continue;
+    const escapedToken=escapeHtml(token);
+    const img='<img class="inline-custom-emoticon" src="'+escapeAttr(assetPublicUrl(asset.storage_path))+'" alt="'+escapeAttr(token)+'" title="'+escapeAttr(asset.name||token)+'">';
+    html=html.split(escapedToken).join(img);
+  }
+  return html;
+}
+async function loadPublicExperience(){
+  const [assetsRes,cmsRes,userBadgesRes]=await Promise.all([
+    supabase.from('asset_catalog').select('*').eq('active',true).order('sort_order').order('name'),
+    supabase.from('site_content_blocks').select('*').eq('enabled',true).order('page_slug').order('sort_order'),
+    supabase.from('user_badges').select('user_id,badge_id,badges(id,name,description,image_path,active)')
+  ]);
+  state.customAssets={wallpaper:[],avatar:[],emoticon:[],character:[],landing:[],other:[]};
+  for(const asset of (assetsRes.data||[]))(state.customAssets[asset.kind]??=[]).push(asset);
+  state.cmsBlocks=cmsRes.data||[];
+  state.userBadges={};
+  for(const row of (userBadgesRes.data||[])){
+    const badge=row.badges;
+    if(!badge?.active)continue;
+    (state.userBadges[row.user_id]??=[]).push({...row,badge});
+  }
+  applyCmsBlocks();
+  decorateIdentityNodes(document);
+}
+function cmsValue(page,key,fallback=''){
+  return state.cmsBlocks?.find(x=>x.page_slug===page&&x.block_key===key&&x.enabled!==false)?.value??fallback;
+}
+function applyCmsBlocks(){
+  const kicker=document.querySelector('#marketing-view .hero .eyebrow');
+  if(kicker)kicker.innerHTML='<i></i> '+escapeHtml(cmsValue('home','hero.kicker','CONEXÃO RESTABELECIDA // 56K DE HUMANIDADE'));
+  const title=document.querySelector('#marketing-view .hero h1');
+  if(title)title.textContent=cmsValue('home','hero.title','A internet ficou do Avesso. A gente só admitiu.');
+  const body=document.querySelector('#marketing-view .hero-copy>p');
+  if(body)body.textContent=cmsValue('home','hero.body','Uma rede social onde você não publica sobre si mesmo, não coleciona seguidores e não ganha medalha por ter opinião em horário comercial.');
+  const authTitle=document.querySelector('#auth-dialog .auth-brand h2');
+  if(authTitle)authTitle.textContent=cmsValue('auth','title','Vire do Avesso');
+  const authSub=document.querySelector('#auth-dialog .auth-brand p');
+  if(authSub)authSub.textContent=cmsValue('auth','subtitle','Leva menos tempo que escolher uma bio “autêntica”.');
 }
 function applySiteSettings(settings=state.siteSettings||{}){
   if(!settings)return;
