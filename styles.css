@@ -7958,3 +7958,769 @@ body.avesso-own-corner .profile-avatar-large img{
     width:100%;
   }
 }
+
+
+/* =========================================================
+   AVESSO // VIRAR + VISUALIZADOR SOCIAL + ADMIN OWNER
+   2026-10-01
+   ========================================================= */
+
+/* Coroa construída em pixels. Nenhum glifo elegante demais escapou vivo. */
+.admin-crown-pixel{
+  --crown-pixel:#ffd84a;
+  position:relative;
+  display:inline-block;
+  width:18px;
+  height:16px;
+  margin-left:8px;
+  vertical-align:-2px;
+  flex:0 0 18px;
+  filter:drop-shadow(2px 2px 0 #5d4100) drop-shadow(0 0 5px #ffd84a55);
+}
+.admin-crown-pixel:before{
+  content:"";
+  position:absolute;
+  left:1px;
+  top:1px;
+  width:3px;
+  height:3px;
+  background:var(--crown-pixel);
+  box-shadow:
+    6px 0 0 var(--crown-pixel),
+    12px 0 0 var(--crown-pixel),
+    0 3px 0 var(--crown-pixel),
+    3px 3px 0 var(--crown-pixel),
+    6px 3px 0 var(--crown-pixel),
+    9px 3px 0 var(--crown-pixel),
+    12px 3px 0 var(--crown-pixel),
+    3px 6px 0 var(--crown-pixel),
+    6px 6px 0 var(--crown-pixel),
+    9px 6px 0 var(--crown-pixel),
+    0 9px 0 var(--crown-pixel),
+    3px 9px 0 var(--crown-pixel),
+    6px 9px 0 var(--crown-pixel),
+    9px 9px 0 var(--crown-pixel),
+    12px 9px 0 var(--crown-pixel),
+    0 12px 0 var(--crown-pixel),
+    3px 12px 0 var(--crown-pixel),
+    6px 12px 0 var(--crown-pixel),
+    9px 12px 0 var(--crown-pixel),
+    12px 12px 0 var(--crown-pixel);
+}
+.admin-crown-pixel:after{
+  content:"";
+  position:absolute;
+  left:4px;
+  top:10px;
+  width:8px;
+  height:2px;
+  background:#fff3a2;
+  opacity:.7;
+}
+.nav-admin-crown{
+  margin-left:6px;
+  transform:scale(.82);
+  transform-origin:left center;
+}
+.profile-admin-crown{
+  transform:scale(1.08);
+  transform-origin:left center;
+}
+.admin-hero-crown{
+  transform:scale(1.35);
+  transform-origin:left center;
+}
+
+/* Publicações "viradas", a palavra AVESSO finalmente fazendo hora extra. */
+.post-turned-badge{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:6px 10px;
+  margin:8px 0 10px;
+  padding:7px 9px;
+  border:1px solid #d8ff3e66;
+  border-left:4px solid var(--acid);
+  background:linear-gradient(90deg,#d8ff3e0f,transparent 72%);
+  color:#b7c1be;
+  font:700 .49rem/1.3 var(--mono);
+  letter-spacing:.02em;
+}
+.post-turned-badge span{
+  color:var(--acid);
+  font-weight:900;
+}
+.post-turned-badge b{
+  color:var(--cyan);
+}
+.post-turned-badge small{
+  color:#7e8c89;
+  font:600 .46rem var(--mono);
+}
+.turn-feed-button{
+  border-color:#7b6c20!important;
+  color:#ffe066!important;
+}
+.turn-feed-button:hover,
+.turn-feed-button:focus-visible{
+  border-color:#ffd84a!important;
+  color:#fff0a1!important;
+  background:#211b06!important;
+}
+.post-image-open{
+  cursor:zoom-in;
+}
+
+/* Álbum: a imagem é uma ação, mas sem virar botão azul de formulário de 1997. */
+.album-photo-open{
+  width:100%;
+  display:block;
+  padding:0;
+  border:0;
+  background:transparent;
+  cursor:zoom-in;
+  text-align:inherit;
+}
+.album-photo-open img{
+  display:block;
+  width:100%;
+  aspect-ratio:4/3;
+  object-fit:cover;
+}
+.album-photo-open:hover img,
+.album-photo-open:focus-visible img{
+  outline:2px solid var(--cyan);
+  outline-offset:-2px;
+  filter:brightness(1.04);
+}
+
+/* Visualizador social de imagem */
+.avesso-image-viewer{
+  width:min(1180px,94vw);
+  max-width:1180px;
+  height:min(820px,90dvh);
+  max-height:90dvh;
+  margin:auto;
+  padding:0;
+  border:1px solid #486068;
+  background:#05090b;
+  color:var(--ink);
+  box-shadow:14px 14px 0 #0009,0 0 50px #22d9ee18;
+  overflow:hidden;
+}
+.avesso-image-viewer::backdrop{
+  background:#020405dc;
+  backdrop-filter:blur(5px);
+}
+.image-viewer-close{
+  position:absolute;
+  top:8px;
+  right:8px;
+  z-index:5;
+  width:34px;
+  height:32px;
+  border:1px solid #714047;
+  background:#17090b;
+  color:#ff776f;
+  font:900 1rem/1 var(--mono);
+  cursor:pointer;
+  box-shadow:3px 3px 0 #0007;
+}
+.image-viewer-close:hover{
+  background:#351014;
+  color:#ffd3cf;
+  border-color:#ff776f;
+}
+#image-viewer-content{
+  width:100%;
+  height:100%;
+  min-height:0;
+}
+.image-viewer-loading,
+.image-viewer-error{
+  display:grid;
+  place-items:center;
+  min-height:420px;
+  color:#879592;
+  font:700 .64rem var(--mono);
+}
+.image-viewer-error{color:#ff8d84}
+.image-viewer-grid{
+  height:100%;
+  display:grid;
+  grid-template-columns:minmax(0,1.65fr) minmax(320px,.75fr);
+  min-height:0;
+}
+.image-viewer-stage{
+  min-width:0;
+  min-height:0;
+  display:grid;
+  place-items:center;
+  padding:34px 24px;
+  background:
+    radial-gradient(circle at 50% 45%,#13242a 0,transparent 44%),
+    repeating-linear-gradient(0deg,#071013 0 3px,#05090b 3px 4px);
+  border-right:1px solid #304349;
+  overflow:hidden;
+}
+.image-viewer-stage img{
+  display:block;
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+  background:transparent;
+  box-shadow:0 14px 45px #000b;
+}
+.image-viewer-social{
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  padding:18px 14px 14px;
+  background:#091013;
+  overflow:auto;
+}
+.image-viewer-owner{
+  display:grid;
+  grid-template-columns:46px minmax(0,1fr);
+  gap:9px;
+  align-items:center;
+  padding:2px 36px 12px 0;
+  border-bottom:1px solid #2b3a3e;
+}
+.image-viewer-owner .mini-avatar{
+  width:46px;
+  height:46px;
+}
+.image-viewer-owner .user-link{
+  color:#f0f4ef;
+  font-weight:800;
+}
+.image-viewer-owner small{
+  display:block;
+  color:#788783;
+  font:500 .48rem var(--mono);
+}
+.image-viewer-caption{
+  margin:12px 0;
+  color:#d5dcda;
+  line-height:1.5;
+}
+.image-viewer-actions{
+  display:flex;
+  gap:7px;
+  margin-bottom:10px;
+}
+.image-viewer-actions button{
+  min-height:34px;
+  padding:6px 9px;
+  border:1px solid #4a5659;
+  background:#0d1517;
+  color:#cbd4d1;
+  font:700 .50rem var(--mono);
+  cursor:pointer;
+}
+.image-viewer-reactions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  padding:9px 0 12px;
+  border-bottom:1px dashed #2a3b3f;
+}
+.image-viewer-reactions button{
+  min-height:31px;
+  padding:5px 7px;
+  border:1px solid #34464a;
+  background:#0a1113;
+  color:#909e9a;
+  font:600 .46rem var(--mono);
+  cursor:pointer;
+}
+.image-viewer-reactions button span{
+  margin-right:4px;
+  color:var(--acid);
+}
+.image-viewer-reactions button.active,
+.image-viewer-reactions button:hover{
+  border-color:var(--acid);
+  color:var(--acid);
+}
+.image-viewer-comments{
+  min-height:0;
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  margin-top:12px;
+}
+.image-viewer-comments>header{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  color:var(--cyan);
+  font:700 .48rem var(--mono);
+}
+.image-viewer-comments>header small{
+  color:#6d7d79;
+  font-weight:500;
+}
+.image-viewer-comment-list{
+  display:grid;
+  gap:6px;
+  margin-top:8px;
+}
+.image-viewer-comment{
+  display:grid;
+  grid-template-columns:34px minmax(0,1fr);
+  gap:7px;
+  padding:7px;
+  border:1px solid #25363a;
+  background:#071013;
+}
+.image-viewer-comment .mini-avatar{
+  width:34px;
+  height:34px;
+}
+.image-viewer-comment header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.image-viewer-comment .user-link{
+  color:#dfe7e4;
+  font-size:.72rem;
+  font-weight:800;
+}
+.image-viewer-comment header small{
+  color:#71807d;
+  font:500 .44rem var(--mono);
+}
+.image-viewer-comment p{
+  margin:4px 0 0;
+  color:#bec8c5;
+  font-size:.72rem;
+}
+.image-comment-delete{
+  margin-top:5px;
+  padding:3px 5px;
+  border:1px solid #5e3438;
+  background:transparent;
+  color:#df7169;
+  font:600 .43rem var(--mono);
+  cursor:pointer;
+}
+.image-viewer-empty{
+  color:#6f7d7a;
+  font:600 .50rem/1.4 var(--mono);
+}
+.image-viewer-comment-form{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:6px;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid #2b3a3e;
+}
+.image-viewer-comment-form textarea{
+  min-height:64px;
+  max-height:130px;
+  resize:vertical;
+  border:1px solid #3b4d52;
+  background:#040809;
+  color:#eef2ed;
+  padding:8px;
+}
+.image-viewer-comment-form button{
+  min-width:82px;
+  border:1px solid var(--acid);
+  background:var(--acid);
+  color:#111608;
+  padding:7px;
+  font:800 .50rem var(--mono);
+  cursor:pointer;
+}
+
+/* Aviso global configurável pelo owner */
+.site-admin-announcement{
+  position:fixed;
+  top:8px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:26000;
+  width:min(760px,calc(100vw - 24px));
+  padding:8px 36px 8px 12px;
+  border:1px solid var(--acid);
+  background:#0c1208ee;
+  color:#eaffaa;
+  box-shadow:5px 5px 0 #0008;
+  text-align:center;
+  font:700 .54rem/1.35 var(--mono);
+  pointer-events:none;
+}
+
+/* Admin owner: personalização, usuários, conteúdo e auditoria. */
+.admin-appearance-panel{
+  border-color:#66591d!important;
+  background:
+    radial-gradient(circle at 90% 10%,#ffd84a0d,transparent 30%),
+    #081013e8!important;
+}
+.admin-site-copy{
+  display:grid;
+  grid-template-columns:1fr 1.4fr;
+  gap:8px;
+}
+.admin-site-copy label,
+.admin-announcement,
+.admin-custom-css{
+  display:grid;
+  gap:5px;
+  color:#899793;
+  font:700 .49rem var(--mono);
+}
+.admin-site-copy input,
+.admin-announcement textarea,
+.admin-custom-css textarea{
+  width:100%;
+  border:1px solid #3b4b50;
+  background:#040809;
+  color:#edf1ec;
+  padding:9px;
+}
+.admin-announcement{
+  margin-top:9px;
+}
+.admin-announcement textarea{
+  min-height:68px;
+  resize:vertical;
+}
+.admin-presets{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:6px;
+  margin:12px 0;
+  padding:8px;
+  border:1px dashed #3b4c50;
+  background:#060b0d;
+}
+.admin-presets>span{
+  margin-right:5px;
+  color:#ffd84a;
+  font:800 .48rem var(--mono);
+}
+.admin-presets button{
+  border:1px solid #46575c;
+  background:#0b1416;
+  color:#b9c4c1;
+  padding:6px 8px;
+  font:700 .45rem var(--mono);
+  cursor:pointer;
+}
+.admin-presets button:hover{
+  border-color:var(--acid);
+  color:var(--acid);
+}
+.admin-color-grid{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(100px,1fr));
+  gap:7px;
+}
+.admin-color-grid label{
+  display:grid;
+  grid-template-columns:1fr 36px;
+  align-items:center;
+  gap:7px;
+  min-height:46px;
+  padding:7px;
+  border:1px solid #2f4044;
+  background:#0a1113;
+  color:#94a19e;
+  font:600 .45rem var(--mono);
+}
+.admin-color-grid input[type="color"]{
+  width:36px;
+  height:28px;
+  padding:0;
+  border:1px solid #506166;
+  background:#020405;
+  cursor:pointer;
+}
+.admin-custom-css{
+  margin-top:11px;
+}
+.admin-custom-css textarea{
+  min-height:220px;
+  resize:vertical;
+  font:500 .58rem/1.5 var(--mono);
+  tab-size:2;
+}
+.admin-custom-css small{
+  color:#6f7e7a;
+  font-weight:500;
+}
+.admin-primary{
+  margin-top:10px;
+  min-height:38px;
+  padding:8px 12px;
+  border:1px solid var(--acid);
+  background:var(--acid);
+  color:#101307;
+  font:900 .53rem var(--mono);
+  cursor:pointer;
+}
+
+/* A linha do usuário agora é uma mini mesa de comando, porque pedir "todos os direitos" tem consequências visuais. */
+.admin-user-row{
+  grid-template-columns:minmax(190px,1fr) auto auto auto minmax(180px,auto)!important;
+  gap:8px!important;
+}
+.admin-user-row.is-suspended{
+  border-color:#71383c!important;
+  background:#170b0d!important;
+}
+.admin-user-profile{
+  min-width:0;
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr);
+  gap:9px;
+  align-items:center;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.admin-account-state{
+  color:#b7c3bf;
+  font:800 .44rem var(--mono);
+}
+.admin-user-row.is-suspended .admin-account-state{
+  color:#ff786f;
+}
+.admin-user-controls{
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:5px;
+}
+.admin-role-select{
+  min-width:92px;
+  border:1px solid #415258;
+  background:#071013;
+  color:#dce4e1;
+  padding:5px;
+  font:600 .45rem var(--mono);
+}
+.admin-role-label,
+.admin-self-tag{
+  padding:5px 6px;
+  border:1px solid #405157;
+  color:#8e9c98;
+  font:700 .43rem var(--mono);
+}
+.admin-user-controls button{
+  min-height:29px;
+  border:1px solid #714047;
+  background:#16090b;
+  color:#ff7a72;
+  padding:5px 7px;
+  font:700 .44rem var(--mono);
+  cursor:pointer;
+}
+.admin-user-controls button.restore{
+  border-color:#587f35;
+  background:#0c1608;
+  color:#9dde63;
+}
+
+/* Moderação de conteúdo */
+.admin-content-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.admin-content-column{
+  min-width:0;
+  display:grid;
+  align-content:start;
+  gap:6px;
+  padding:9px;
+  border:1px solid #2f4044;
+  background:#060b0d;
+}
+.admin-content-column h4{
+  margin:0 0 3px;
+  color:var(--cyan);
+  font:800 .50rem var(--mono);
+}
+.admin-content-card{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:7px;
+  align-items:start;
+  padding:8px;
+  border:1px solid #293a3e;
+  background:#0a1113;
+}
+.admin-content-card>img{
+  grid-column:1/-1;
+  width:100%;
+  max-height:130px;
+  object-fit:cover;
+  border:1px solid #34474b;
+}
+.admin-content-card header{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+}
+.admin-content-card header b{
+  color:#dce5e2;
+  font-size:.68rem;
+}
+.admin-content-card header small{
+  color:#6f7e7b;
+  font:500 .43rem var(--mono);
+}
+.admin-content-card p{
+  margin:4px 0 0;
+  max-height:72px;
+  overflow:auto;
+  color:#aebbb7;
+  font-size:.68rem;
+  line-height:1.4;
+}
+.admin-content-card>button{
+  border:1px solid #6d3338;
+  background:#16090b;
+  color:#ff746b;
+  padding:5px 7px;
+  font:700 .43rem var(--mono);
+  cursor:pointer;
+}
+
+/* Auditoria */
+.admin-audit-list{
+  display:grid;
+  gap:4px;
+}
+.admin-audit-row{
+  display:grid;
+  grid-template-columns:minmax(160px,.8fr) minmax(180px,1fr) auto;
+  gap:9px;
+  align-items:center;
+  padding:7px 9px;
+  border:1px solid #29393d;
+  background:#071013;
+}
+.admin-audit-row b{
+  color:#dfe6e3;
+  font:700 .49rem var(--mono);
+}
+.admin-audit-row span,
+.admin-audit-row time{
+  color:#70807c;
+  font:500 .45rem var(--mono);
+}
+.admin-audit-row time{
+  white-space:nowrap;
+}
+
+.account-suspended .composer:before{
+  content:"CONTA SUSPENSA // novas ações sociais serão recusadas pelo servidor";
+  display:block;
+  margin-bottom:10px;
+  padding:7px 9px;
+  border:1px solid #8b3f43;
+  background:#2a0e11;
+  color:#ff9a92;
+  font:800 .50rem var(--mono);
+}
+
+@media(max-width:1000px){
+  .image-viewer-grid{
+    grid-template-columns:minmax(0,1.3fr) minmax(300px,.8fr);
+  }
+  .admin-color-grid{
+    grid-template-columns:repeat(3,minmax(100px,1fr));
+  }
+  .admin-user-row{
+    grid-template-columns:minmax(180px,1fr) auto auto!important;
+  }
+  .admin-user-row>time{
+    display:none;
+  }
+  .admin-user-controls{
+    grid-column:1/-1;
+    justify-content:flex-start;
+    padding-top:5px;
+    border-top:1px dashed #2c3b3f;
+  }
+}
+@media(max-width:760px){
+  .avesso-image-viewer{
+    width:calc(100vw - 10px);
+    max-width:calc(100vw - 10px);
+    height:calc(100dvh - 16px);
+    max-height:calc(100dvh - 16px);
+  }
+  .image-viewer-grid{
+    display:block;
+    height:100%;
+    overflow:auto;
+  }
+  .image-viewer-stage{
+    min-height:42dvh;
+    max-height:52dvh;
+    padding:40px 10px 14px;
+    border-right:0;
+    border-bottom:1px solid #304349;
+  }
+  .image-viewer-stage img{
+    max-height:44dvh;
+  }
+  .image-viewer-social{
+    overflow:visible;
+  }
+  .image-viewer-comment-form{
+    grid-template-columns:1fr;
+  }
+  .image-viewer-comment-form button{
+    min-height:38px;
+  }
+  .post-turned-badge{
+    display:grid;
+    gap:3px;
+  }
+  .admin-site-copy{
+    grid-template-columns:1fr;
+  }
+  .admin-color-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .admin-content-grid{
+    grid-template-columns:1fr;
+  }
+  .admin-user-row{
+    grid-template-columns:minmax(0,1fr) auto!important;
+  }
+  .admin-user-row>em{
+    justify-self:end;
+  }
+  .admin-account-state{
+    grid-column:1/-1;
+  }
+  .admin-audit-row{
+    grid-template-columns:1fr auto;
+  }
+  .admin-audit-row span{
+    grid-column:1/-1;
+    grid-row:2;
+  }
+}
+@media(max-width:420px){
+  .admin-color-grid{
+    grid-template-columns:1fr;
+  }
+}
