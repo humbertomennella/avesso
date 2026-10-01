@@ -1368,12 +1368,14 @@ function noteFriendPresence(profile){
 function stopDirectRealtime({resetWatch=true}={}){
   clearTimeout(state.directReconnectTimer);state.directReconnectTimer=null;
   clearInterval(state.directPollTimer);state.directPollTimer=null;
-  if(state.directChannel){supabase.removeChannel(state.directChannel);state.directChannel=null;}
-  state.directChannelStatus='CLOSED';
   if(resetWatch){
     state.directWatchStartedAt=null;
     state.directSeenIds=new Set();
   }
+  const channel=state.directChannel;
+  state.directChannel=null;
+  state.directChannelStatus='CLOSED';
+  if(channel)supabase.removeChannel(channel);
 }
 function rememberDirectMessage(id){
   if(!id)return false;
@@ -1386,7 +1388,7 @@ function rememberDirectMessage(id){
   return true;
 }
 function scheduleDirectReconnect(){
-  if(state.directReconnectTimer||!state.profile?.id)return;
+  if(state.directReconnectTimer||!state.profile?.id||!state.directWatchStartedAt)return;
   state.directReconnectTimer=setTimeout(()=>{
     state.directReconnectTimer=null;
     if(state.directChannel){supabase.removeChannel(state.directChannel);state.directChannel=null;}
