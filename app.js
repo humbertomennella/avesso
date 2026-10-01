@@ -1500,7 +1500,7 @@ function startDirectRealtime(){
   const me=state.profile.id;
   if(!state.directWatchStartedAt)state.directWatchStartedAt=new Date(Date.now()-1500).toISOString();
   startDirectFallbackPoll();
-  state.directChannel=supabase.channel(`avesso-social-${me}-${Date.now()}`)
+  const channel=supabase.channel(`avesso-social-${me}-${Date.now()}`)
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>receiveIncomingDirectMessage(payload.new||{}, {source:'realtime'}))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'friendships'},async payload=>{
       const f=payload.new||{};
@@ -1537,12 +1537,14 @@ function startDirectRealtime(){
         action:()=>openPublicProfile(row.author_id)
       });
       if(state.tab==='profile')loadGuestbook(me,'#profile-guestbook');
-    })
-    .subscribe(status=>{
-      state.directChannelStatus=status;
-      if(status==='SUBSCRIBED')pollDirectInbox();
-      if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))scheduleDirectReconnect();
     });
+  state.directChannel=channel;
+  channel.subscribe(status=>{
+    if(state.directChannel!==channel)return;
+    state.directChannelStatus=status;
+    if(status==='SUBSCRIBED')pollDirectInbox();
+    if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))scheduleDirectReconnect();
+  });
 }
 
 async function loadDirectConversation(peerId){
