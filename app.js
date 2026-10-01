@@ -2217,30 +2217,30 @@ async function renderAdminDashboard(){
       '<footer><span>alvo: '+escapeHtml(target)+'</span>'+(report.post_id?'<code>'+escapeHtml(String(report.post_id))+'</code>':'')+'</footer>'+
     '</article>';
   }).join('')||'<p class="admin-empty">Nenhuma denúncia na fila. Ou todos amadureceram, hipótese estatisticamente ousada.</p>';
-  host.innerHTML=\`<section class="admin-shell">
+  host.innerHTML=`<section class="admin-shell">
     <header class="admin-hero">
-      <div><span class="section-code">ADMIN.SYS // ACESSO \${escapeHtml((state.adminRole||'admin').toUpperCase())}</span><h2>Painel do AVESSO <span>♛</span></h2><p>Visão operacional da rede. Sem gráfico 3D, porque ainda temos algum respeito por computadores.</p></div>
+      <div><span class="section-code">ADMIN.SYS // ACESSO ${escapeHtml((state.adminRole||'admin').toUpperCase())}</span><h2>Painel do AVESSO <span>♛</span></h2><p>Visão operacional da rede. Sem gráfico 3D, porque ainda temos algum respeito por computadores.</p></div>
       <button id="admin-refresh" type="button">↻ atualizar</button>
     </header>
-    <div class="admin-stats">\${statCards}</div>
+    <div class="admin-stats">${statCards}</div>
     <div class="admin-grid">
       <section class="admin-panel">
-        <div class="admin-panel-head"><div><span class="section-code">CONTAS // RECENTES</span><h3>Novos habitantes</h3></div><small>\${users.length} exibidos</small></div>
-        <div class="admin-user-list">\${usersHtml}</div>
+        <div class="admin-panel-head"><div><span class="section-code">CONTAS // RECENTES</span><h3>Novos habitantes</h3></div><small>${users.length} exibidos</small></div>
+        <div class="admin-user-list">${usersHtml}</div>
       </section>
       <section class="admin-panel admin-world-panel">
-        <div class="admin-panel-head"><div><span class="section-code">MUNDO // CONTROLES</span><h3>Estado global</h3></div><strong>\${world.world_events_enabled?'ONLINE':'PAUSADO'}</strong></div>
-        <label class="admin-switch"><input id="admin-world-events" type="checkbox" \${world.world_events_enabled?'checked':''}><span><b>eventos do mundo</b><small>habilita os acontecimentos gerais dos habitantes</small></span></label>
-        <label class="admin-switch"><input id="admin-world-interventions" type="checkbox" \${world.world_interventions_enabled?'checked':''}><span><b>interferências visuais</b><small>libera intervenções de interface quando a regra permitir</small></span></label>
-        <label class="admin-world-message">mensagem do sistema<textarea id="admin-world-message" maxlength="240">\${escapeHtml(world.message||'')}</textarea></label>
+        <div class="admin-panel-head"><div><span class="section-code">MUNDO // CONTROLES</span><h3>Estado global</h3></div><strong>${world.world_events_enabled?'ONLINE':'PAUSADO'}</strong></div>
+        <label class="admin-switch"><input id="admin-world-events" type="checkbox" ${world.world_events_enabled?'checked':''}><span><b>eventos do mundo</b><small>habilita os acontecimentos gerais dos habitantes</small></span></label>
+        <label class="admin-switch"><input id="admin-world-interventions" type="checkbox" ${world.world_interventions_enabled?'checked':''}><span><b>interferências visuais</b><small>libera intervenções de interface quando a regra permitir</small></span></label>
+        <label class="admin-world-message">mensagem do sistema<textarea id="admin-world-message" maxlength="240">${escapeHtml(world.message||'')}</textarea></label>
         <button id="admin-world-save" type="button">salvar controles</button>
       </section>
     </div>
     <section class="admin-panel admin-reports-panel">
-      <div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // DENÚNCIAS</span><h3>Fila de revisão</h3></div><small>\${reports.length} carregadas</small></div>
-      <div class="admin-report-list">\${reportsHtml}</div>
+      <div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // DENÚNCIAS</span><h3>Fila de revisão</h3></div><small>${reports.length} carregadas</small></div>
+      <div class="admin-report-list">${reportsHtml}</div>
     </section>
-  </section>\`;
+  </section>`;
   $('#admin-refresh')?.addEventListener('click',renderAdminDashboard);
   $('#admin-world-save')?.addEventListener('click',saveAdminWorldControls);
   host.querySelectorAll('[data-admin-report-status]').forEach(select=>select.onchange=()=>setAdminReportStatus(select.dataset.adminReportStatus,select.value));
