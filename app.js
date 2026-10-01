@@ -136,7 +136,7 @@ function storyCardHtml(story,{compact=false}={}){
     (isVideo?'<em class="story-card-media">▶ vídeo</em>':'')+
     '<span class="story-card-copy"><b>'+escapeHtml(a.display_name||'humano')+'</b><small>'+(story.visibility==='amigos'?'amigos':'público')+' · '+storyTimeLeft(story.expires_at)+'</small></span>'+
   '</button>';
-
+}
 
 async function loadStoriesStrip(){
   const host=$('#stories-zone');
