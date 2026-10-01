@@ -1334,12 +1334,6 @@
     box-shadow:inset 4px 0 0 var(--acid)!important;
   }
 
-  html.avesso-keyboard-open .avesso-mobile-nav{
-    transform:translateY(115%)!important;
-    opacity:0!important;
-    pointer-events:none!important;
-  }
-
   /* Reações: um único atalho no post, bandeja apenas quando solicitada. */
   .reaction-shell{
     position:relative!important;
@@ -1635,11 +1629,6 @@
     border-right:0!important;
     border-top:0!important;
     border-radius:0!important;
-  }
-
-  html.avesso-keyboard-open .dm-floating-window:not(.minimized){
-    height:var(--avesso-visual-height,100dvh)!important;
-    max-height:var(--avesso-visual-height,100dvh)!important;
   }
 
   .dm-floating-window.minimized{
