@@ -3697,18 +3697,40 @@ async function hydrateDirectMessages(rows=[]){
     reply_to:row.reply_to_id?(replies[row.reply_to_id]||null):null
   })));
 }
+function chatNearBottom(log=$('#dm-log')){
+  if(!log)return true;
+  return log.scrollHeight-log.scrollTop-log.clientHeight<120;
+}
+function showNewDirectMessageIndicator(){
+  const host=$('.dm-msn-conversation');if(!host)return;
+  let button=$('#dm-new-messages');
+  if(!button){
+    button=document.createElement('button');
+    button.id='dm-new-messages';
+    button.className='dm-new-messages';
+    button.type='button';
+    button.textContent='↓ novas mensagens';
+    host.appendChild(button);
+    button.onclick=()=>{const log=$('#dm-log');if(log)log.scrollTo({top:log.scrollHeight,behavior:'smooth'});button.remove();};
+  }
+}
 function appendDirectMessage(m,{replaceId=null}={}){
   const log=$('#dm-log');if(!log||!m)return;
   if(m.id&&log.querySelector(`[data-dm-id="${CSS.escape(String(m.id))}"]`))return;
+  const mine=m.sender_id===state.profile.id;
+  const shouldStick=mine||chatNearBottom(log);
   const html=dmMessageHtml(m);
   if(replaceId){
     const old=log.querySelector(`[data-dm-id="${CSS.escape(String(replaceId))}"]`);
-    if(old){old.outerHTML=html;bindDirectMessageActions(log);log.scrollTop=log.scrollHeight;return;}
+    if(old){old.outerHTML=html;bindDirectMessageActions(log);if(shouldStick)log.scrollTop=log.scrollHeight;return;}
   }
   log.querySelector('.dm-empty')?.remove();
   log.insertAdjacentHTML('beforeend',html);
   bindDirectMessageActions(log);
-  log.scrollTop=log.scrollHeight;
+  if(shouldStick){
+    log.scrollTop=log.scrollHeight;
+    $('#dm-new-messages')?.remove();
+  }else showNewDirectMessageIndicator();
 }
 async function markDirectDelivered(id){
   if(!id||!state.profile?.id)return;
