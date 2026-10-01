@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -32,13 +32,40 @@ const WALLPAPER_OPTIONS=[
   ['humano-nao-encontrado','Humano Não Encontrado','http 418 // continue tentando']
 ];
 const ACID_REACTIONS=[
-  ['suspeito','◉','isso tá suspeito'],
-  ['merece_cafe','☕','merece café'],
-  ['caos_aprovado','⚠','caos aprovado'],
   ['li_me_arrependi','↩','li e me arrependi'],
-  ['isso_escalou','↗','isso escalou'],
-  ['humano_detectado','♡','humano detectado']
+  ['infelizmente_concordo','≋','infelizmente eu concordo'],
+  ['modem_julgou','⌁','meu modem julgou'],
+  ['melhor_offline','□','era melhor ter ficado offline'],
+  ['fingir_nao_vi','◌','vou fingir que não vi'],
+  ['argumento_carregando','…','argumento carregando...'],
+  ['virou_reuniao','▦','isso virou reunião']
 ];
+const AVESSO_EMOTICONS=[
+  '☻','☺','ಠ_ಠ','¬_¬','(ง •̀_•́)ง','¯\\_(ツ)_/¯','(╯°□°）╯︵ ┻━┻','┬─┬ ノ( ゜-゜ノ)',
+  '[404]','[56K]','[AFK]','[PING?]','[ERRO HUMANO]','<3.exe','...','?!','⚡','⌁','◉','◌','▣','✦',
+  '👀','🤨','🫠','🙃','😂','😅','☕','⚠️','🖥️','💾','📟','📼','🌀','🫥','🔥','❤️','🐈','⌛'
+];
+const STORY_REACTIONS=[
+  ['curti','♥','curti sem querer'],
+  ['vi','◉','vi. infelizmente'],
+  ['modem','⌁','meu modem aprovou'],
+  ['pane','⚡','deu pane'],
+  ['quatro_zero_quatro','404','isso merece um 404']
+];
+function avessoEmoticonButtons(attribute='data-emoticon-value'){
+  return AVESSO_EMOTICONS.map(value=>`<button type="button" ${attribute}="${escapeAttr(value)}" title="inserir ${escapeAttr(value)}">${escapeHtml(value)}</button>`).join('');
+}
+function setupFeedEmoticons(){
+  const palette=$('#post-emoticon-palette');
+  if(!palette)return;
+  palette.innerHTML=avessoEmoticonButtons('data-post-emoticon');
+  $('#post-emoticons')?.addEventListener('click',e=>{e.stopPropagation();palette.classList.toggle('hidden');});
+  palette.querySelectorAll('[data-post-emoticon]').forEach(b=>b.onclick=()=>{
+    const input=$('#post-body'); if(!input)return;
+    input.value+=`${input.value?' ':''}${b.dataset.postEmoticon}`;
+    input.dispatchEvent(new Event('input')); input.focus();
+  });
+}
 const CHAT_THEMES=[
   ['bbs_cyan','BBS Ciano','#22d9ee'],
   ['phosphor_green','Fósforo Verde','#74ff4b'],
@@ -49,7 +76,13 @@ const CHAT_THEMES=[
   ['janela_95','Janela 95','#8aa8b0'],
   ['midnight_modem','Modem Noturno','#4268a8'],
   ['magenta_crt','CRT Magenta','#ff59d6'],
-  ['graphite_dos','Grafite DOS','#7b8588']
+  ['graphite_dos','Grafite DOS','#7b8588'],
+  ['win95_future','Windows 95½','#00a7a7'],
+  ['icq_neon','ICQ Neon','#8cff3f'],
+  ['winamp_2026','Winamp 2026','#ffb000'],
+  ['web98_glass','Web 98 Glass','#5a8cff'],
+  ['crt_void','CRT Vazio','#75ff91'],
+  ['arcade_os','Arcade OS','#ff4fd8']
 ];
 const CHAT_WALLPAPERS=[['none','Sem fundo','o vazio também é um layout'],...WALLPAPER_OPTIONS];
 function chatThemeClass(theme=state.profile?.chat_theme||'bbs_cyan'){
@@ -514,6 +547,7 @@ function updateComposerTarget(){
 }
 $('#post-target').addEventListener('change',updateComposerTarget);
 updateComposerTarget();
+setupFeedEmoticons();
 $('#post-body').addEventListener('input',e=>$('#char-count').textContent=420-e.target.value.length);
 $('#post-image').addEventListener('change',e=>{
   const file=e.target.files?.[0]||null;
@@ -1243,7 +1277,7 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
         <button id="dm-voice" class="dm-voice-button" title="Gravar mensagem de voz">🎙 voz</button>
         <button id="dm-voice-cancel" class="dm-voice-cancel hidden" title="Cancelar gravação">× cancelar</button>
         <input id="dm-file-input" type="file" hidden accept="image/*,audio/*,.pdf,.txt,.zip,.docx">
-        <div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${['😀','😂','😅','🙃','👀','🤨','❤️','💀','🔥','☕','⚠️','🖥️','🐈','⌛','🫠','¯\\_(ツ)_/¯'].map(e=>`<button type="button" data-emoticon="${escapeAttr(e)}">${e}</button>`).join('')}</div>
+        <div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${avessoEmoticonButtons('data-emoticon')}</div>
       </div>
       <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem... ou grave voz no celular sem fingir que 2006 tinha tudo."><button>Enviar</button></form>
     </div>`;
