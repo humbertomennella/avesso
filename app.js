@@ -48,7 +48,7 @@ async function loadStaffDirectory(){
 function managedAssetPublicUrl(path){
   if(!path)return'';
   if(/^https?:\/\//i.test(path))return path;
-  return supabase.storage.from('avesso-media').getPublicUrl(path).data.publicUrl;
+  return supabase.storage.from('avesso-assets').getPublicUrl(path).data.publicUrl;
 }
 async function loadManagedAssets(){
   const {data}=await supabase.from('asset_catalog').select('*').eq('active',true).order('sort_order',{ascending:true});
@@ -2875,7 +2875,7 @@ async function ownerUploadFile(file,folder='dashboard'){
   if(!file)return null;
   const ext=(file.name.split('.').pop()||'bin').replace(/[^a-z0-9]/gi,'').toLowerCase();
   const path=state.profile.id+'/staff-assets/'+folder+'/'+Date.now()+'-'+crypto.randomUUID()+'.'+ext;
-  const {error}=await supabase.storage.from('avesso-media').upload(path,file,{contentType:file.type,upsert:false,cacheControl:'31536000'});
+  const {error}=await supabase.storage.from('avesso-assets').upload(path,file,{contentType:file.type,upsert:false,cacheControl:'31536000'});
   if(error)throw error;
   return path;
 }
