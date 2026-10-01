@@ -206,6 +206,7 @@ async function loadSiteSettings(){
   if(error||!data)return;
   state.siteSettings=data;
   applySiteSettings(data);
+  applyExperienceSettings(data);
 }
 async function loadOwnModeration(){
   state.suspended=false;state.suspension=null;
@@ -5140,5 +5141,5 @@ function showAuthLinkError(){
   if(!$('#auth-dialog').open)$('#auth-dialog').showModal();
 }
 
-await loadSiteSettings();
+await Promise.all([loadSiteSettings(),loadManagedAssets(),loadCmsContent()]);
 const {data:{session}}=await supabase.auth.getSession();state.session=session;if(session)enterApp();else showAuthLinkError();
