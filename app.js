@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -32,14 +32,16 @@ const WALLPAPER_OPTIONS=[
   ['humano-nao-encontrado','Humano Não Encontrado','http 418 // continue tentando']
 ];
 const ACID_REACTIONS=[
+  ['infelizmente_gostei','♥','infelizmente gostei'],
+  ['isso_prestou','✓','isso prestou'],
+  ['salvaria_disquete','▣','salvaria em disquete'],
+  ['modem_aprovou','⌁','meu modem aprovou'],
+  ['humano_detectado','◉','humano detectado'],
   ['li_me_arrependi','↩','li e me arrependi'],
   ['infelizmente_concordo','≋','infelizmente eu concordo'],
-  ['modem_julgou','⌁','meu modem julgou'],
-  ['melhor_offline','□','era melhor ter ficado offline'],
-  ['fingir_nao_vi','◌','vou fingir que não vi'],
-  ['argumento_carregando','…','argumento carregando...'],
-  ['virou_reuniao','▦','isso virou reunião']
+  ['pane_mas_gostei','⚡','deu pane, mas gostei']
 ];
+const DM_REACTIONS=['♥','☻','⌁','⚡','◉','▣'];
 const AVESSO_EMOTICONS=[
   '☻','☺','ಠ_ಠ','¬_¬','(ง •̀_•́)ง','¯\\_(ツ)_/¯','(╯°□°）╯︵ ┻━┻','┬─┬ ノ( ゜-゜ノ)',
   '[404]','[56K]','[AFK]','[PING?]','[ERRO HUMANO]','<3.exe','...','?!','⚡','⌁','◉','◌','▣','✦',
@@ -570,12 +572,26 @@ window.addEventListener('message',event=>{
   pushNowPlaying(event.data.payload||null);
 });
 
+function awayThresholdMs(profile){
+  const minutes=Number(profile?.away_after_minutes);
+  if(minutes===0)return 8*60*60*1000;
+  return (Number.isFinite(minutes)&&[5,10,15,20,30].includes(minutes)?minutes:10)*60*1000;
+}
 function presenceView(profile){
   if(!profile)return{mode:'offline',label:'offline'};
   if(profile.presence_mode==='invisible')return{mode:'offline',label:'offline'};
   if(profile.presence_mode==='away')return{mode:'away',label:'ausente'};
-  const fresh=profile.last_seen&&Date.now()-new Date(profile.last_seen).getTime()<120000;
+  const fresh=profile.last_seen&&Date.now()-new Date(profile.last_seen).getTime()<awayThresholdMs(profile);
   return fresh?{mode:'online',label:'online'}:{mode:'away',label:'ausente'};
+}
+async function saveAwayAfterMinutes(value){
+  const away_after_minutes=Number(value);
+  if(![0,5,10,15,20,30].includes(away_after_minutes)||!state.profile?.id)return;
+  const {data,error}=await supabase.from('profiles').update({away_after_minutes,updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
+  if(error)return toast('A ausência automática se perdeu no caminho.');
+  state.profile=data;
+  renderOnlineFriendsDock();
+  toast(away_after_minutes===0?'Ausência automática desligada. Você escolheu o modo fantasma persistente.':`Ausente após ${away_after_minutes} minutos sem atividade.`);
 }
 async function setPresenceMode(mode){
   if(!['online','away','invisible'].includes(mode)||!state.profile)return;
@@ -1531,6 +1547,8 @@ async function sendReply(post_id){
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
 function applyAppTabLayout(){
   const worldOpen=['residents','plaza','tower','profile','public_profile','messages'].includes(state.tab);
+  document.body.classList.toggle('avesso-feed-home',state.tab==='feed');
+  document.body.classList.toggle('avesso-own-corner',state.tab==='profile');
   $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
   $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
   $('#stories-zone')?.classList.toggle('hidden',state.tab!=='feed');
@@ -1745,11 +1763,11 @@ async function acceptedFriendProfiles(){
     .or(`requester_id.eq.${state.profile.id},addressee_id.eq.${state.profile.id}`);
   const ids=[...new Set((rels||[]).map(r=>r.requester_id===state.profile.id?r.addressee_id:r.requester_id))];
   if(!ids.length)return[];
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual').in('id',ids);
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').in('id',ids);
   return data||[];
 }
 async function profileById(id){
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual').eq('id',id).maybeSingle();
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').eq('id',id).maybeSingle();
   return data||null;
 }
 function cachedPresenceEntry(profile){
@@ -1791,7 +1809,7 @@ async function primeFriendPresenceCache(){
 function ageFriendPresenceCache(render=true){
   const now=Date.now();
   Object.values(state.friendPresence||{}).forEach(entry=>{
-    if(entry?.mode==='online'&&entry.lastSeen&&now-entry.lastSeen>120000)entry.mode='away';
+    if(entry?.mode==='online'&&entry.lastSeen&&now-entry.lastSeen>awayThresholdMs(entry.profile))entry.mode='away';
   });
   if(render)renderOnlineFriendsDock();
 }
@@ -1799,6 +1817,14 @@ function startFriendPresenceWatch(){
   clearInterval(state.presenceWatchTimer);
   ageFriendPresenceCache();
   state.presenceWatchTimer=setInterval(()=>ageFriendPresenceCache(true),30000);
+}
+function onlineNoticeAllowed(profileId){
+  const key=`avesso.online.notice.${profileId}`;
+  const last=Number(state.onlineNoticeAt?.[profileId]||localStorage.getItem(key)||0);
+  if(Date.now()-last<6*60*60*1000)return false;
+  state.onlineNoticeAt[profileId]=Date.now();
+  try{localStorage.setItem(key,String(Date.now()));}catch{}
+  return true;
 }
 function noteFriendPresence(profile){
   if(!profile?.id||!Object.prototype.hasOwnProperty.call(state.friendPresence,profile.id))return;
@@ -1808,13 +1834,13 @@ function noteFriendPresence(profile){
   state.friendPresence[profile.id]=next;
   renderOnlineFriendsDock();
   if(state.chatWindowOpen&&state.directPeerId===profile.id)updateChatPeerHeader(profile);
-  if(prev?.mode!=='online'&&next.mode==='online'&&!isPeerMuted(profile.id)){
+  if(prev?.mode!=='online'&&next.mode==='online'&&!isPeerMuted(profile.id)&&onlineNoticeAllowed(profile.id)){
     socialNotify({
       title:`${profile.display_name||'Um amigo'} entrou no AVESSO`,
-      body:'Online agora. A bolinha verde ressuscitou sem pedir licença.',
+      body:'Online agora. Uma notificação basta. A internet sobreviverá.',
       avatar:profile.avatar_url||'',
       kind:'online',
-      action:()=>openFriendChat(profile.id)
+      action:()=>openQuickFriendChat(profile.id)
     });
   }
 }
