@@ -215,6 +215,7 @@ function applySiteSettings(settings=state.siteSettings||{}){
   const announcement=String(settings.announcement||'').trim();
   bar.textContent=announcement;
   bar.classList.toggle('hidden',!announcement);
+  document.documentElement.dataset.compactFeed=settings.layout_settings?.compact_feed?'1':'0';
 }
 async function loadSiteSettings(){
   const {data,error}=await supabase.from('site_settings').select('*').eq('id','global').maybeSingle();
