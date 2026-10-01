@@ -5763,3 +5763,348 @@ body.avesso-own-corner .profile-avatar-large img{
     font-size:.47rem;
   }
 }
+
+
+/* AVESSO // PRESENCE + GIF + CHAT IDENTITY 2026-10-01 */
+
+/* GIFs no feed: arquivo local ou link direto, sem transformar uma imagem animada em plataforma. */
+.gif-toggle.active{
+  border-color:var(--acid)!important;
+  color:var(--acid)!important;
+  box-shadow:inset 0 0 0 1px #d8ff3e33,0 0 12px #d8ff3e18;
+}
+.gif-composer-row{
+  position:absolute;
+  z-index:22;
+  left:0;
+  top:calc(100% + 7px);
+  width:min(560px,calc(100vw - 32px));
+  display:grid;
+  grid-template-columns:auto auto minmax(150px,1fr) 28px;
+  gap:7px;
+  align-items:center;
+  padding:9px;
+  border:1px solid #405157;
+  background:#071013f5;
+  box-shadow:6px 6px 0 #020405;
+}
+.gif-composer-row.hidden{display:none}
+.gif-composer-row>span{
+  color:#74817f;
+  font:700 .46rem var(--mono);
+}
+.gif-file-pick{
+  display:inline-flex;
+  align-items:center;
+  min-height:32px;
+  padding:0 9px;
+  border:1px solid #506069;
+  background:#0d1416;
+  color:var(--cyan);
+  cursor:pointer;
+  font:700 .49rem var(--mono);
+}
+.gif-file-pick input{display:none}
+.gif-composer-row>input{
+  min-width:0;
+  height:32px;
+  border:1px solid #53676b;
+  background:#f4f8e9;
+  color:#182326;
+  padding:0 8px;
+  font:600 .55rem var(--mono);
+}
+.gif-composer-row>button{
+  width:28px;
+  height:28px;
+  border:1px solid #63383b;
+  background:#16090a;
+  color:#ff766d;
+  cursor:pointer;
+}
+.gif-composer-row>small{
+  grid-column:1/-1;
+  color:#8d9996;
+  font:500 .46rem/1.35 var(--mono);
+}
+
+/* Nome + frase + música vivem na mesma faixa lógica do cabeçalho. */
+.dm-peer-identity-row{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:4px 7px;
+  margin:2px 0 3px;
+}
+.dm-peer-identity-row .dm-peer-name{
+  flex:0 1 auto;
+  max-width:220px;
+}
+.dm-user-status{
+  min-width:0;
+  max-width:210px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  padding-left:7px;
+  border-left:1px solid color-mix(in srgb,var(--dm-accent) 36%,#7d9297);
+  color:#687d81;
+  font:600 .48rem/1.3 var(--mono);
+}
+.dm-listening-inline{
+  min-width:0;
+  flex:1 1 190px;
+  max-width:360px;
+}
+.dm-listening-inline:empty{display:none}
+.dm-listening-inline .now-playing-status{
+  display:flex!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:360px!important;
+  margin:0!important;
+  padding:3px 6px!important;
+  box-shadow:inset 2px 0 0 var(--dm-accent)!important;
+}
+.dm-listening-inline .now-playing-status>span:last-child{
+  min-width:0;
+}
+.dm-listening-inline .now-playing-status b{
+  font-size:.38rem!important;
+}
+.dm-listening-inline .now-playing-status small{
+  display:block;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap!important;
+  font-size:.44rem!important;
+}
+.dm-floating-window>header.dm-floating-head{
+  min-height:72px!important;
+}
+.dm-floating-window>header.dm-floating-head #dm-peer-listening{
+  margin:0!important;
+}
+
+/* Preferências rápidas sem ocupar a conversa. */
+.dm-chat-listening-setting{
+  display:flex;
+  gap:7px;
+  align-items:flex-start;
+  padding:8px;
+  border-bottom:1px solid #c5d6da;
+  color:#29454a;
+}
+.dm-chat-listening-setting input{
+  margin-top:2px;
+  accent-color:var(--dm-accent);
+}
+.dm-chat-listening-setting span,
+.dm-chat-listening-setting b,
+.dm-chat-listening-setting small{
+  display:block;
+}
+.dm-chat-listening-setting b{
+  font:700 .50rem/1.3 var(--mono);
+}
+.dm-chat-listening-setting small{
+  margin-top:2px;
+  color:#72858a;
+  font:500 .43rem/1.35 var(--mono);
+}
+.dm-status-setting{
+  padding:8px;
+  border-bottom:1px solid #c5d6da;
+}
+.dm-status-setting>span{
+  display:block;
+  margin-bottom:5px;
+  color:#657c81;
+  font:700 .47rem var(--mono);
+}
+.dm-status-setting>div{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:5px;
+}
+.dm-status-setting input{
+  min-width:0;
+  padding:6px;
+  border:1px solid #a9c0c5;
+  background:#fff;
+  color:#20363b;
+  font:600 .50rem var(--mono);
+}
+.dm-status-setting button{
+  border:1px solid #789da5;
+  background:#e9f2f4;
+  color:#26464d;
+  padding:0 8px;
+  cursor:pointer;
+  font:700 .47rem var(--mono);
+}
+
+/* Os avatares do chat respiram, discretamente. Não viraram mascotes de cassino. */
+.dm-floating-window #dm-peer-avatar,
+.dm-floating-window .dm-msn-peer-avatar,
+.dm-floating-window .dm-msn-self-avatar{
+  animation:dm-avatar-breathe 6.8s ease-in-out infinite;
+  transform-origin:50% 70%;
+}
+.dm-floating-window #dm-peer-avatar img,
+.dm-floating-window .dm-msn-peer-avatar img,
+.dm-floating-window .dm-msn-self-avatar img{
+  animation:dm-avatar-scan 8.7s ease-in-out infinite;
+}
+.dm-floating-window .dm-msn-self-avatar{animation-delay:-2.3s}
+@keyframes dm-avatar-breathe{
+  0%,100%{transform:translateY(0) scale(1)}
+  48%{transform:translateY(-1px) scale(1.008)}
+  52%{transform:translateY(-2px) scale(1.016)}
+  56%{transform:translateY(-1px) scale(1.008)}
+}
+@keyframes dm-avatar-scan{
+  0%,93%,100%{filter:none}
+  95%{filter:brightness(1.12) contrast(1.08)}
+  97%{filter:brightness(.96) contrast(1.12)}
+}
+
+/* Aquele só recebe contexto de outras abas quando esta chave é ligada pelo usuário. */
+.ai-browser-context-setting{
+  margin-top:12px;
+  padding:11px;
+  display:flex;
+  align-items:flex-start;
+  gap:9px;
+  border:1px solid #34494e;
+  background:#071012;
+}
+.ai-browser-context-setting input{
+  margin-top:3px;
+  accent-color:var(--acid);
+}
+.ai-browser-context-setting span,
+.ai-browser-context-setting b,
+.ai-browser-context-setting small{
+  display:block;
+}
+.ai-browser-context-setting b{
+  color:#e9eeeb;
+  font:700 .60rem/1.35 var(--mono);
+}
+.ai-browser-context-setting small{
+  margin-top:4px;
+  color:#879391;
+  font:500 .49rem/1.45 var(--mono);
+}
+#ai-browser-context-status{
+  display:block;
+  margin-top:6px;
+  color:var(--cyan);
+  font:700 .46rem/1.35 var(--mono);
+}
+
+/* Amigos online ficam no fluxo da lateral. Absoluto era uma maneira sofisticada de fazê-los sumir. */
+@media(min-width:761px){
+  .app-nav{
+    display:flex!important;
+    flex-direction:column!important;
+  }
+  .app-nav>nav{
+    flex:0 0 auto;
+  }
+  .app-nav .online-friends-dock{
+    position:relative!important;
+    inset:auto!important;
+    width:calc(100% - 20px)!important;
+    max-width:none!important;
+    min-height:76px;
+    max-height:230px;
+    flex:0 1 230px;
+    margin:9px 10px 10px!important;
+    box-shadow:4px 4px 0 #020405!important;
+  }
+  .app-nav .online-friends-list{
+    max-height:188px!important;
+    overflow:auto!important;
+  }
+  .app-nav .online-friends-dock.collapsed{
+    flex:0 0 36px;
+    min-height:36px;
+  }
+  body:has(.dm-floating-window:not(.hidden).minimized) .app-nav .online-friends-dock,
+  body:has(.dm-floating-window:not(.hidden):not(.minimized)) .app-nav .online-friends-dock{
+    position:relative!important;
+    inset:auto!important;
+    display:block!important;
+  }
+}
+
+/* Desconectar é ação importante; não precisa parecer legenda de rodapé. */
+.app-logout{
+  min-height:34px!important;
+  padding:8px 12px!important;
+  border:1px solid #b84d4f!important;
+  background:linear-gradient(180deg,#241012,#14090a)!important;
+  color:#ff8a82!important;
+  font-size:.55rem!important;
+  letter-spacing:.025em;
+  box-shadow:3px 3px 0 #020405,0 0 12px #ff625719!important;
+}
+.app-logout:hover,
+.app-logout:focus-visible{
+  border-color:#ff766d!important;
+  color:#ffd0cc!important;
+  background:#321214!important;
+  box-shadow:3px 3px 0 #020405,0 0 18px #ff625744!important;
+}
+
+@media(max-width:760px){
+  .gif-composer-row{
+    position:fixed;
+    left:10px;
+    right:10px;
+    top:auto;
+    bottom:86px;
+    width:auto;
+    grid-template-columns:1fr auto;
+  }
+  .gif-composer-row>input{
+    grid-column:1/-1;
+  }
+  .gif-composer-row>button{
+    position:absolute;
+    right:7px;
+    top:7px;
+  }
+  .dm-peer-identity-row{
+    gap:3px 6px;
+  }
+  .dm-user-status{
+    max-width:145px;
+    font-size:.43rem;
+  }
+  .dm-listening-inline{
+    flex-basis:100%;
+    max-width:100%;
+  }
+  .dm-listening-inline .now-playing-status{
+    max-width:100%!important;
+  }
+  .app-logout{
+    min-height:32px!important;
+    font-size:.49rem!important;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .dm-floating-window #dm-peer-avatar,
+  .dm-floating-window .dm-msn-peer-avatar,
+  .dm-floating-window .dm-msn-self-avatar,
+  .dm-floating-window #dm-peer-avatar img,
+  .dm-floating-window .dm-msn-peer-avatar img,
+  .dm-floating-window .dm-msn-self-avatar img{
+    animation:none!important;
+  }
+}
