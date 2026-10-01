@@ -1532,14 +1532,10 @@ $('#nav-profile-link').onclick=()=>document.querySelector('[data-app-tab="profil
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
 async function loadAdminAccess(){
   if(!state.profile?.id){
-    state.isAdmin=false;state.adminRole=null;
+    state.isAdmin=false;state.adminRole=null;state.staffRoles={};
     return false;
   }
-  const {data,error}=await supabase.from('admin_users').select('role').eq('user_id',state.profile.id).maybeSingle();
-  state.isAdmin=!error&&Boolean(data?.role);
-  state.adminRole=state.isAdmin?data.role:null;
-  const nav=$('#admin-nav-button');
-  if(nav)nav.classList.toggle('hidden',!state.isAdmin);
+  await loadStaffDirectory();
   return state.isAdmin;
 }
 async function enterApp(){
@@ -1550,9 +1546,9 @@ async function enterApp(){
   const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();
   state.profile=data;
   if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return;}
-  await loadAdminAccess();
+  await Promise.all([loadAdminAccess(),loadManagedAssets(),loadUserBadges()]);
   await loadOwnModeration();
-  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):'');
+  $('#nav-name').innerHTML=userDisplayNameHtml(data);
   $('#nav-handle').textContent='@'+data.handle;
   renderNavAvatar();
   applyAppWallpaper();
@@ -1566,7 +1562,7 @@ async function enterApp(){
   startDirectRealtime();
   await primeFriendPresenceCache();
   startFriendPresenceWatch();
-  Promise.allSettled([loadFeed(),loadImpact(),loadStoriesStrip(),loadMutedPeers()]).then(()=>{});
+  Promise.allSettled([loadFeed(),loadImpact(),loadStoriesStrip(),loadMutedPeers(),loadStaffNotifications()]).then(()=>{});
   registerNotificationWorker();
   armBrowserNotifications();
   startStoryRealtime();
@@ -1597,7 +1593,7 @@ function leaveApp(){
   document.body.classList.remove('avesso-app-active');
   $('#online-friends-dock')?.classList.add('hidden');
   state.profile=null;
-  state.isAdmin=false;state.adminRole=null;state.adminSnapshot=null;state.suspended=false;state.suspension=null;
+  state.isAdmin=false;state.adminRole=null;state.adminSnapshot=null;state.staffSnapshot=null;state.staffRoles={};state.userBadges={};state.managedAssets={};state.suspended=false;state.suspension=null;
   document.body.classList.remove('account-suspended');
   $('#admin-nav-button')?.classList.add('hidden');
   $('#app-view').classList.add('hidden');
@@ -2547,7 +2543,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   applyAppWallpaper();
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
-  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Amigos & cúmplices',admin:'Painel do administrador'};
+  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Amigos & cúmplices',admin:'Dashboard'};
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
   trackAction('tab_view',state.tab,{tab:state.tab});
