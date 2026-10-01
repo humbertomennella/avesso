@@ -3759,3 +3759,175 @@ html.msn-screen-nudge body{
   .dm-floating-window .dm-peer-name{font-size:.86rem!important}
   .dm-floating-window .dm-floating-head small{font-size:.52rem!important}
 }
+
+
+/* AVESSO CHAT REALTIME + HOLD TO TALK 2026-10-01 */
+
+.dm-floating-window #dm-form{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  gap:8px!important;
+  align-items:stretch!important;
+}
+.dm-send-action{
+  width:92px!important;
+  min-width:92px!important;
+  height:auto!important;
+  min-height:44px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+  padding:6px 10px!important;
+  border:2px outset color-mix(in srgb,var(--dm-accent) 42%,#dfe8e6)!important;
+  border-radius:0!important;
+  background:linear-gradient(#f4fbfa,#cfdddd)!important;
+  color:#1f3538!important;
+  cursor:pointer!important;
+  user-select:none!important;
+  -webkit-user-select:none!important;
+  touch-action:none!important;
+  box-shadow:none!important;
+}
+.dm-send-action:hover{
+  background:color-mix(in srgb,var(--dm-accent) 12%,#e9f2f0)!important;
+  border-color:var(--dm-accent)!important;
+}
+.dm-send-action.text-ready{
+  background:var(--dm-accent)!important;
+  color:var(--dm-dark)!important;
+}
+.dm-send-action.text-ready b{
+  font:800 .64rem/1 var(--mono)!important;
+}
+.dm-send-action small{
+  font:800 .39rem/1 var(--mono)!important;
+  letter-spacing:.06em;
+}
+.dm-send-action.recording{
+  background:#631d22!important;
+  color:#fff!important;
+  border-color:#ff7a70!important;
+  animation:dmRecordPulse .7s steps(2,end) infinite;
+}
+.dm-send-action.recording b{
+  font:800 .58rem/1 var(--mono)!important;
+}
+.dm-send-action.recording small{
+  color:#ffd8d3!important;
+}
+.dm-rec-dot{
+  width:9px;height:9px;
+  flex:0 0 9px;
+  background:#ff5b50;
+  box-shadow:0 0 0 2px #26080a,0 0 10px #ff5b5099;
+}
+@keyframes dmRecordPulse{50%{filter:brightness(.78)}}
+
+/* Microfone pixelado sem depender de emoji e da boa vontade da fonte do sistema. */
+.avesso-mic-icon{
+  width:20px;
+  height:24px;
+  position:relative;
+  display:inline-block;
+  flex:0 0 20px;
+}
+.avesso-mic-icon:before{
+  content:"";
+  position:absolute;
+  left:6px;top:1px;
+  width:8px;height:13px;
+  border:2px solid currentColor;
+  background:color-mix(in srgb,var(--dm-accent) 18%,#fff);
+}
+.avesso-mic-icon:after{
+  content:"";
+  position:absolute;
+  left:3px;top:9px;
+  width:14px;height:9px;
+  border-left:2px solid currentColor;
+  border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;
+}
+.avesso-mic-icon i{
+  position:absolute;
+  left:9px;top:18px;
+  width:2px;height:5px;
+  background:currentColor;
+}
+.avesso-mic-icon i:after{
+  content:"";
+  position:absolute;
+  left:-4px;bottom:0;
+  width:10px;height:2px;
+  background:currentColor;
+}
+
+/* Áudio compacto e estável no desktop. */
+.dm-floating-window .dm-bubble:has(.dm-audio-card){
+  width:min(360px,78%)!important;
+  max-width:min(360px,78%)!important;
+  min-width:0!important;
+  padding:8px!important;
+}
+.dm-audio-card{
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  padding:7px!important;
+  overflow:hidden!important;
+  border:1px solid color-mix(in srgb,var(--dm-accent) 48%,#91a2a4)!important;
+  background:color-mix(in srgb,var(--dm-paper) 92%,transparent)!important;
+}
+.dm-audio-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:6px;
+}
+.dm-audio-head>span{
+  color:color-mix(in srgb,var(--dm-accent) 75%,#233638)!important;
+  font:800 .55rem/1 var(--mono)!important;
+  letter-spacing:.045em;
+}
+.dm-audio-head>small{
+  margin:0!important;
+  color:color-mix(in srgb,var(--dm-ink) 60%,#66777a)!important;
+  font:700 .49rem/1 var(--mono)!important;
+}
+.dm-audio-card audio{
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  height:36px!important;
+  margin:0!important;
+}
+.dm-message-time{
+  margin-top:5px!important;
+}
+
+/* Feedback local do chamar atenção. Nada de destruir e recriar a janela inteira. */
+#dm-attention.sent{
+  animation:dmAttentionSent .42s steps(2,end);
+}
+@keyframes dmAttentionSent{
+  0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-3px);background:#fff3bc!important}
+  75%{transform:translateX(3px);background:#fff3bc!important}
+}
+
+@media(max-width:760px){
+  .dm-send-action{
+    width:64px!important;
+    min-width:64px!important;
+    padding:5px!important;
+  }
+  .dm-send-action small{display:none!important}
+  .dm-floating-window .dm-bubble:has(.dm-audio-card){
+    width:min(300px,88%)!important;
+    max-width:88%!important;
+  }
+}
