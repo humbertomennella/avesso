@@ -16,6 +16,63 @@ function validPayload(payload){
   };
 }
 
+function cleanBrowserTitle(value=""){
+  return String(value||"")
+    .replace(/\s*[-|]\s*(YouTube|YouTube Music|Spotify|SoundCloud|Deezer|TIDAL|Apple Music)\s*$/i,"")
+    .replace(/\s*\|\s*Spotify\s*$/i,"")
+    .trim();
+}
+
+function supportedSource(host=""){
+  const h=host.replace(/^www\./,"").toLowerCase();
+  if(h.endsWith("youtube.com")||h==="youtu.be")return h.includes("music.youtube")?"YouTube Music":"YouTube";
+  if(h==="open.spotify.com")return"Spotify";
+  if(h==="soundcloud.com")return"SoundCloud";
+  if(h.endsWith("deezer.com"))return"Deezer";
+  if(h==="listen.tidal.com")return"TIDAL";
+  if(h==="music.apple.com")return"Apple Music";
+  return"";
+}
+
+function tabFallbackPayload(tab){
+  try{
+    if(!tab?.audible)return null;
+    const url=new URL(tab.url||"");
+    const source=supportedSource(url.hostname);
+    if(!source)return null;
+    let raw=cleanBrowserTitle(tab.title||"");
+    if(!raw||/^(youtube|youtube music|spotify|soundcloud|deezer|tidal|apple music)$/i.test(raw))return null;
+
+    let title=raw,artist="";
+    if(source==="Spotify"&&raw.includes(" • ")){
+      const parts=raw.split(" • ").map(x=>x.trim()).filter(Boolean);
+      title=parts[0]||raw;
+      artist=parts[1]||"";
+    }else if(source==="YouTube Music"&&raw.includes(" • ")){
+      const parts=raw.split(" • ").map(x=>x.trim()).filter(Boolean);
+      title=parts[0]||raw;
+      artist=parts[1]||"";
+    }else if(source==="YouTube"){
+      const dash=raw.indexOf(" - ");
+      if(dash>1&&dash<80){
+        artist=raw.slice(0,dash).trim();
+        title=raw.slice(dash+3).trim();
+      }
+    }
+    return {
+      title:title.slice(0,180),
+      artist:artist.slice(0,180),
+      source,
+      url:String(tab.url||"").slice(0,1000),
+      playing:true,
+      updatedAt:Date.now(),
+      fromTab:true
+    };
+  }catch{
+    return null;
+  }
+}
+
 function safeContext(tab){
   try{
     const url=new URL(tab?.url||"");
@@ -46,42 +103,67 @@ async function sendToAvesso(message,{contextOnly=false}={}){
   }
 }
 
-async function broadcastNowPlaying(force=false){
+async function currentNowPlaying(){
   const now=Date.now();
   for(const [tabId,payload] of states){
-    if(!payload?.playing||now-payload.updatedAt>12000)states.delete(tabId);
+    if(!payload?.playing||now-payload.updatedAt>10000)states.delete(tabId);
   }
 
-  let chosen=null;
   try{
     const tabs=await api.tabs.query({});
-    const byId=new Map(tabs.map(tab=>[tab.id,tab]));
-    const candidates=[...states.entries()]
-      .map(([tabId,payload])=>({tabId,...payload,tab:byId.get(tabId)}))
-      .filter(item=>item.tab&&item.playing&&now-item.updatedAt<=12000);
+    const candidates=[];
+    for(const tab of tabs){
+      const live=states.get(tab.id);
+      const fallback=tabFallbackPayload(tab);
+
+      if(fallback){
+        // O título da aba é a melhor defesa contra SPAs que mantêm um nó antigo no player.
+        // Para YouTube/YouTube Music ele vence quando há áudio real.
+        if(fallback.source==="YouTube"||fallback.source==="YouTube Music"){
+          candidates.push({...fallback,tab});
+          continue;
+        }
+        if(live?.playing){
+          candidates.push({...live,tab});
+          continue;
+        }
+        candidates.push({...fallback,tab});
+        continue;
+      }
+
+      if(live?.playing&&now-live.updatedAt<=10000){
+        candidates.push({...live,tab});
+      }
+    }
 
     candidates.sort((a,b)=>{
       const audible=Number(Boolean(b.tab?.audible))-Number(Boolean(a.tab?.audible));
       if(audible)return audible;
       const active=Number(Boolean(b.tab?.active))-Number(Boolean(a.tab?.active));
       if(active)return active;
-      return b.updatedAt-a.updatedAt;
+      return Number(b.updatedAt||0)-Number(a.updatedAt||0);
     });
-    chosen=candidates[0]||null;
-  }catch{}
+    const chosen=candidates[0]||null;
+    return chosen?{
+      title:chosen.title,
+      artist:chosen.artist||"",
+      source:chosen.source||"",
+      url:chosen.url||chosen.tab?.url||"",
+      observedAt:now
+    }:null;
+  }catch{
+    const chosen=[...states.values()].filter(x=>x.playing&&now-x.updatedAt<=10000).sort((a,b)=>b.updatedAt-a.updatedAt)[0];
+    return chosen?{title:chosen.title,artist:chosen.artist,source:chosen.source,url:chosen.url,observedAt:now}:null;
+  }
+}
 
-  const payload=chosen?{
-    title:chosen.title,
-    artist:chosen.artist,
-    source:chosen.source,
-    url:chosen.url,
-    observedAt:now
-  }:null;
+async function broadcastNowPlaying(force=false){
+  const payload=await currentNowPlaying();
   const signature=JSON.stringify(payload?{
     title:payload.title,artist:payload.artist,source:payload.source,url:payload.url
   }:null);
-
-  if(!force&&signature===lastNowPlayingSignature&&now-lastNowPlayingBroadcastAt<8000)return;
+  const now=Date.now();
+  if(!force&&signature===lastNowPlayingSignature&&now-lastNowPlayingBroadcastAt<3500)return;
   lastNowPlayingSignature=signature;
   lastNowPlayingBroadcastAt=now;
   await sendToAvesso({type:"AVESSO_NOW_PLAYING",payload});
@@ -104,7 +186,7 @@ api.runtime.onMessage.addListener((message,sender)=>{
     broadcastNowPlaying();
     return;
   }
-  if(message?.type==="AVESSO_BRIDGE_READY"){
+  if(message?.type==="AVESSO_BRIDGE_READY"||message?.type==="AVESSO_BRIDGE_POLL"){
     broadcastNowPlaying(true);
     return;
   }
@@ -126,7 +208,9 @@ api.tabs.onRemoved.addListener(tabId=>{
 
 api.tabs.onUpdated.addListener((tabId,changeInfo)=>{
   if(changeInfo.url)states.delete(tabId);
-  if("audible" in changeInfo||"url" in changeInfo||changeInfo.status==="complete")broadcastNowPlaying(true);
+  if("title" in changeInfo||"audible" in changeInfo||"url" in changeInfo||changeInfo.status==="complete"){
+    broadcastNowPlaying(true);
+  }
 });
 
-setInterval(()=>broadcastNowPlaying(),2500);
+setInterval(()=>broadcastNowPlaying(),1800);

@@ -1,7 +1,11 @@
 const api=globalThis.browser||globalThis.chrome;
+const version=api.runtime?.getManifest?.().version||"";
 
 function post(type,payload={}){
   window.postMessage({type,...payload},location.origin);
+}
+function poll(){
+  try{api.runtime.sendMessage({type:"AVESSO_BRIDGE_POLL"});}catch{}
 }
 
 api.runtime.onMessage.addListener(message=>{
@@ -14,12 +18,15 @@ api.runtime.onMessage.addListener(message=>{
   }
 });
 
+post("AVESSO_PRESENCE_HELLO",{version});
 try{api.runtime.sendMessage({type:"AVESSO_BRIDGE_READY"});}catch{}
+setInterval(poll,1500);
 
 window.addEventListener("message",event=>{
   if(event.source!==window||event.origin!==location.origin)return;
   if(event.data?.type==="AVESSO_PRESENCE_REQUEST"){
-    try{api.runtime.sendMessage({type:"AVESSO_BRIDGE_READY"});}catch{}
+    post("AVESSO_PRESENCE_HELLO",{version});
+    poll();
     return;
   }
   if(event.data?.type==="AVESSO_PRESENCE_CONFIG"){

@@ -26,12 +26,16 @@ function detect(){
   if(host.endsWith("youtube.com")||host==="youtu.be"){
     const music=host.includes("music.youtube");
     source=music?"YouTube Music":"YouTube";
-    title=music
-      ?text("ytmusic-player-bar .title")||text("ytmusic-player-bar .title yt-formatted-string")||cleanTitle(document.title)
-      :text("h1.ytd-watch-metadata yt-formatted-string")||text("h1.title yt-formatted-string")||cleanTitle(document.title);
-    artist=music
-      ?text("ytmusic-player-bar .byline a")||text("ytmusic-player-bar .byline")
-      :text("#owner #channel-name a")||text("ytd-channel-name a");
+    if(music){
+      title=text("ytmusic-player-bar .title")||text("ytmusic-player-bar .title yt-formatted-string")||cleanTitle(document.title);
+      artist=text("ytmusic-player-bar .byline a")||text("ytmusic-player-bar .byline");
+    }else{
+      title=text("h1.ytd-watch-metadata yt-formatted-string")
+        ||text("#title h1 yt-formatted-string")
+        ||text("h1.title yt-formatted-string")
+        ||cleanTitle(document.title);
+      artist=text("#owner #channel-name a")||text("ytd-channel-name a");
+    }
   }else if(host==="open.spotify.com"){
     source="Spotify";
     title=text('[data-testid="context-item-info-title"] a')
@@ -76,7 +80,7 @@ function send(){
 }
 function schedule(){
   clearTimeout(timer);
-  timer=setTimeout(send,120);
+  timer=setTimeout(send,80);
 }
 
 new MutationObserver(schedule).observe(document.documentElement,{
@@ -84,12 +88,15 @@ new MutationObserver(schedule).observe(document.documentElement,{
   childList:true,
   characterData:true,
   attributes:true,
-  attributeFilter:["title","aria-label","class","data-testid"]
+  attributeFilter:["title","aria-label","class","data-testid","href"]
 });
 document.addEventListener("play",schedule,true);
 document.addEventListener("pause",schedule,true);
 document.addEventListener("ended",schedule,true);
+document.addEventListener("loadedmetadata",schedule,true);
 window.addEventListener("popstate",schedule);
 window.addEventListener("hashchange",schedule);
-setInterval(send,2000);
+document.addEventListener("yt-navigate-finish",schedule,true);
+document.addEventListener("yt-page-data-updated",schedule,true);
+setInterval(send,1200);
 send();

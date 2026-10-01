@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -41,7 +41,7 @@ const ACID_REACTIONS=[
   ['infelizmente_concordo','≋','infelizmente eu concordo'],
   ['pane_mas_gostei','⚡','deu pane, mas gostei']
 ];
-const DM_REACTIONS=['♥','☻','⌁','⚡','◉','▣'];
+const DM_REACTIONS=['👍','❤️','😂','😮','😢','😡'];
 const AVESSO_EMOTICONS=[
   '☻','☺','ಠ_ಠ','¬_¬','(ง •̀_•́)ง','¯\\_(ツ)_/¯','(╯°□°）╯︵ ┻━┻','┬─┬ ノ( ゜-゜ノ)',
   '[404]','[56K]','[AFK]','[PING?]','[ERRO HUMANO]','<3.exe','...','?!','⚡','⌁','◉','◌','▣','✦',
@@ -439,7 +439,7 @@ function runSocialNotificationQueue(){
   if(item.sound!==false)playUiSound(item.kind==='friend'?'friend':item.kind==='attention'?'attention':item.kind==='online'?'online':item.kind==='guestbook'?'guestbook':'message');
   setTimeout(dismiss,5000);
 }
-const NOW_PLAYING_TTL_MS=180000;
+const NOW_PLAYING_TTL_MS=35000;
 function nowPlayingView(profile){
   if(!profile?.listening_visible||!profile.now_playing_title)return null;
   if(!profile.now_playing_manual){
@@ -473,6 +473,7 @@ function syncPresenceCompanionConfig(){
     type:'AVESSO_PRESENCE_CONFIG',
     shareContext:Boolean(state.profile.ai_browser_context_visible)
   },location.origin);
+  window.postMessage({type:'AVESSO_PRESENCE_REQUEST'},location.origin);
 }
 function refreshOwnNowPlayingPreview(){
   const host=$('#profile-now-playing-preview');
@@ -481,7 +482,7 @@ function refreshOwnNowPlayingPreview(){
   const hero=$('#profile-hero-listening');
   if(hero)hero.innerHTML=nowPlayingHtml(state.profile);
   const bridge=$('#listening-bridge-status');
-  if(bridge)bridge.textContent=state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // site sozinho não consegue ler outras abas ou apps';
+  if(bridge)bridge.textContent=state.presenceBridgeSeen?`PONTE ATIVA${state.presenceBridgeVersion?' // v'+state.presenceBridgeVersion:''} // recebendo do navegador`:'PONTE AUSENTE // site sozinho não consegue ler outras abas ou apps';
 }
 async function saveListeningPrivacy(){
   if(!state.profile?.id)return;
@@ -591,8 +592,22 @@ window.addEventListener('message',event=>{
   if(event.source!==window||event.origin!==location.origin)return;
   if(event.data?.type==='AVESSO_NOW_PLAYING'){
     state.presenceBridgeSeen=true;
+    if(!state.presenceBridgeVersion&&!state.presenceBridgeWarned){
+      state.presenceBridgeWarned=true;
+      setTimeout(()=>{
+        if(state.presenceBridgeSeen&&!state.presenceBridgeVersion){
+          toast('AVESSO Presence antiga detectada. Recarregue a extensão para a versão 0.3.0; a internet não atualiza extensão local por telepatia.');
+        }
+      },1200);
+    }
     refreshOwnNowPlayingPreview();
     pushNowPlaying(event.data.payload||null);
+    return;
+  }
+  if(event.data?.type==='AVESSO_PRESENCE_HELLO'){
+    state.presenceBridgeSeen=true;
+    state.presenceBridgeVersion=String(event.data.version||'').slice(0,24);
+    refreshOwnNowPlayingPreview();
     return;
   }
   if(event.data?.type==='AVESSO_CONTEXT_EVENT'){
@@ -635,10 +650,11 @@ function awayThresholdMs(profile){
 function presenceView(profile){
   if(!profile)return{mode:'offline',label:'offline'};
   if(profile.presence_mode==='invisible')return{mode:'offline',label:'offline'};
+  const onlineUntil=profile.online_until?new Date(profile.online_until).getTime():0;
+  if(!Number.isFinite(onlineUntil)||onlineUntil<=Date.now())return{mode:'offline',label:'offline'};
   if(profile.presence_mode==='away')return{mode:'away',label:'ausente'};
   const seen=profile.last_seen?new Date(profile.last_seen).getTime():0;
   const age=seen?Date.now()-seen:Infinity;
-  if(age>45*60*1000)return{mode:'offline',label:'offline'};
   if(Number(profile.away_after_minutes)===0)return{mode:'online',label:'online'};
   return age<awayThresholdMs(profile)?{mode:'online',label:'online'}:{mode:'away',label:'ausente'};
 }
@@ -660,11 +676,60 @@ async function setPresenceMode(mode){
   const profileSel=$('#profile-presence');if(profileSel)profileSel.value=mode;
   toast(mode==='invisible'?'Você ficou invisível. Parabéns por redescobrir o MSN.':mode==='away'?'Ausente. Presente o suficiente para configurar isso.':'Online. A internet foi avisada.');
 }
+function presenceLeasePatch(){
+  const now=Date.now();
+  return {
+    online_until:new Date(now+45000).toISOString(),
+    updated_at:new Date(now).toISOString()
+  };
+}
+function markPresenceActivity({force=false}={}){
+  if(!state.profile?.id||state.profile.presence_mode==='invisible')return;
+  const now=Date.now();
+  if(!force&&now-state.lastPresenceActivityAt<15000)return;
+  state.lastPresenceActivityAt=now;
+  const patch={
+    last_seen:new Date(now).toISOString(),
+    online_until:new Date(now+45000).toISOString(),
+    updated_at:new Date(now).toISOString()
+  };
+  state.profile={...state.profile,...patch};
+  supabase.from('profiles').update(patch).eq('id',state.profile.id).then(()=>{});
+}
+async function markPresenceOffline({keepalive=false}={}){
+  const profileId=state.profile?.id;
+  if(!profileId)return;
+  const now=new Date().toISOString();
+  const patch={last_seen:now,online_until:new Date(Date.now()-1000).toISOString(),updated_at:now};
+  if(keepalive&&state.session?.access_token){
+    try{
+      fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(profileId)}`,{
+        method:'PATCH',
+        keepalive:true,
+        headers:{
+          apikey:SUPABASE_PUBLISHABLE_KEY,
+          Authorization:`Bearer ${state.session.access_token}`,
+          'Content-Type':'application/json',
+          Prefer:'return=minimal'
+        },
+        body:JSON.stringify(patch)
+      }).catch(()=>{});
+      return;
+    }catch{}
+  }
+  try{await supabase.from('profiles').update(patch).eq('id',profileId);}catch{}
+}
 function startPresenceHeartbeat(){
   clearInterval(state.presenceTimer);
   if(!state.profile?.id)return;
-  const beat=()=>{if(!state.profile||state.profile.presence_mode==='invisible'||document.hidden)return;supabase.from('profiles').update({last_seen:new Date().toISOString()}).eq('id',state.profile.id).then(()=>{});};
-  beat();state.presenceTimer=setInterval(beat,45000);
+  const beat=()=>{
+    if(!state.profile||state.profile.presence_mode==='invisible')return;
+    const patch=presenceLeasePatch();
+    state.profile={...state.profile,...patch};
+    supabase.from('profiles').update(patch).eq('id',state.profile.id).then(()=>{});
+  };
+  beat();
+  state.presenceTimer=setInterval(beat,15000);
 }
 document.addEventListener('visibilitychange',()=>{
   if(!state.profile)return;
@@ -672,6 +737,7 @@ document.addEventListener('visibilitychange',()=>{
     autoMinimizeChat();
     return;
   }
+  markPresenceActivity({force:true});
   startPresenceHeartbeat();
   if(state.world.pendingAquele){
     const payload=state.world.pendingAquele;
@@ -693,6 +759,10 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 window.addEventListener('blur',()=>{if(state.profile)autoMinimizeChat();});
+window.addEventListener('pagehide',()=>{if(state.profile)markPresenceOffline({keepalive:true});});
+window.addEventListener('beforeunload',()=>{if(state.profile)markPresenceOffline({keepalive:true});});
+['pointerdown','keydown','touchstart'].forEach(type=>document.addEventListener(type,()=>markPresenceActivity(),{passive:true}));
+window.addEventListener('focus',()=>markPresenceActivity({force:true}));
 const PHOTO_REACTIONS=[
   ['nao_foi_horrivel','♥','não foi horrível'],
   ['eu_vi','◉','eu vi'],
@@ -1115,7 +1185,10 @@ $('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=
 $('#resend-confirmation').onclick=async()=>{const email=new FormData($('#auth-form')).get('email');if(!email)return toast('Digite seu e-mail primeiro. Adivinhação ainda está em beta.');const button=$('#resend-confirmation');button.disabled=true;button.textContent='reenviando...';const {error}=await supabase.auth.resend({type:'signup',email,options:{emailRedirectTo:SITE_URL}});button.disabled=false;button.textContent='reenviar confirmação de e-mail';if(error){$('#auth-message').textContent=humanError(error.message);return}$('#auth-message').textContent='Se a conta ainda estiver pendente, você receberá um novo link. Se já confirmou, entre com sua senha.';toast('Solicitação recebida. Confira seu e-mail ou tente entrar.');};
 
 function humanError(m){const value=String(m||'');const lower=value.toLowerCase();if(lower.includes('email not confirmed'))return'Confirme seu e-mail antes de entrar. Use o link mais recente ou solicite outro na aba de cadastro.';if(lower.includes('invalid login'))return'E-mail ou senha não conferem. Se você já confirmou, use a senha do cadastro.';if(lower.includes('already registered'))return'Este e-mail já tem cadastro. Use a aba de entrar.';if(lower.includes('expired')||lower.includes('otp_expired'))return'Este link expirou ou já foi utilizado. Se já confirmou, entre com sua senha.';if(lower.includes('password'))return'A senha precisa atender aos requisitos de segurança.';return value;}
-$('#logout').onclick=()=>supabase.auth.signOut();
+$('#logout').onclick=async()=>{
+  await markPresenceOffline();
+  await supabase.auth.signOut();
+};
 async function goToFeedHome(){
   if(!state.profile)return;
   const previousTab=state.tab;
@@ -1135,8 +1208,62 @@ $('#nav-home-link').onclick=e=>{e.preventDefault();e.stopPropagation();goToFeedH
 $('#nav-profile-link').onclick=()=>document.querySelector('[data-app-tab="profile"]')?.click();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();syncPresenceCompanionConfig();await loadWorldState();await loadBlockedPeers();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();setupOnlineFriendsDock();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearTimeout(state.nowPlayingPushTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.blockedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();stopCornerMusic();closeStoryViewer();closeChatWindow(true);document.body.classList.remove('avesso-app-active');$('#online-friends-dock')?.classList.add('hidden');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){
+  $('#marketing-view').classList.add('hidden');
+  $('.site-header').classList.add('hidden');
+  $('.site-footer').classList.add('hidden');
+  $('#app-view').classList.remove('hidden');
+  const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();
+  state.profile=data;
+  if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return;}
+  $('#nav-name').textContent=data.display_name;
+  $('#nav-handle').textContent='@'+data.handle;
+  renderNavAvatar();
+  applyAppWallpaper();
+  setupOnlineFriendsDock();
+  markPresenceActivity({force:true});
+  startPresenceHeartbeat();
+  syncPresenceCompanionConfig();
+  await loadWorldState();
+  await loadBlockedPeers();
+  subscribeRealtime();
+  startDirectRealtime();
+  await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip(),primeFriendPresenceCache(),loadMutedPeers()]);
+  startFriendPresenceWatch();
+  registerNotificationWorker();
+  armBrowserNotifications();
+  startStoryRealtime();
+  loadStoryNotifications();
+  scheduleIdleWorld();
+  scheduleTowerPulse();
+  trackAction('login','app');
+  setTimeout(notifyPendingFriendRequests,900);
+  setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);
+}
+function leaveApp(){
+  clearTimeout(state.world.idleTimer);
+  clearTimeout(state.world.towerTimer);
+  clearTimeout(state.nowPlayingPushTimer);
+  clearInterval(state.presenceTimer);
+  clearInterval(state.presenceWatchTimer);
+  state.friendPresence={};
+  state.mutedPeers={};
+  state.blockedPeers={};
+  state.pendingAttentionPeerId=null;
+  stopPlazaRealtime();
+  stopDirectRealtime();
+  stopStoryRealtime();
+  stopCornerMusic();
+  closeStoryViewer();
+  closeChatWindow(true);
+  document.body.classList.remove('avesso-app-active');
+  $('#online-friends-dock')?.classList.add('hidden');
+  state.profile=null;
+  $('#app-view').classList.add('hidden');
+  $('#marketing-view').classList.remove('hidden');
+  $('.site-header').classList.remove('hidden');
+  $('.site-footer').classList.remove('hidden');
+}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -1985,11 +2112,11 @@ async function acceptedFriendProfiles(){
     .or(`requester_id.eq.${state.profile.id},addressee_id.eq.${state.profile.id}`);
   const ids=[...new Set((rels||[]).map(r=>r.requester_id===state.profile.id?r.addressee_id:r.requester_id))];
   if(!ids.length)return[];
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,chat_listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').in('id',ids);
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,online_until,listening_visible,chat_listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').in('id',ids);
   return data||[];
 }
 async function profileById(id){
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,chat_listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').eq('id',id).maybeSingle();
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,online_until,listening_visible,chat_listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').eq('id',id).maybeSingle();
   return data||null;
 }
 function cachedPresenceEntry(profile){
@@ -2000,22 +2127,26 @@ function renderOnlineFriendsDock(){
   if(!dock||!list||!count||!state.profile)return;
   ageFriendPresenceCache(false);
   const entries=Object.values(state.friendPresence||{})
-    .filter(entry=>entry?.profile&&!isPeerBlocked(entry.profile.id)&&entry.mode!=='offline')
+    .filter(entry=>entry?.profile&&!isPeerBlocked(entry.profile.id))
     .sort((a,b)=>{
-      const rank={online:0,away:1};
+      const rank={online:0,away:1,offline:2};
       const d=(rank[a.mode]??9)-(rank[b.mode]??9);
       return d||String(a.profile.display_name||'').localeCompare(String(b.profile.display_name||''),'pt-BR');
     });
   const onlineCount=entries.filter(entry=>entry.mode==='online').length;
   count.textContent=onlineCount;
-  list.innerHTML=entries.map(entry=>{
+  const zeroOnline=entries.length&&onlineCount===0
+    ?'<div class="online-friends-empty online-friends-none">◌ ninguém online agora // até o modem está descansando.</div>'
+    :'';
+  list.innerHTML=zeroOnline+(entries.map(entry=>{
     const friend=entry.profile;
-    const np=nowPlayingView(friend);
+    const np=entry.mode==='offline'?null:nowPlayingView(friend);
+    const statusLabel=entry.mode==='online'?'online':entry.mode==='away'?'ausente':'offline';
     return `<button class="online-friend-item ${entry.mode}" data-online-friend="${friend.id}" type="button">
       <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
-      <span class="online-friend-copy"><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${entry.mode==='online'?'online':'ausente'}</strong><em>${np?`♫ ${escapeHtml(np.title)}`:'♫ silêncio detectado'}</em></span>
+      <span class="online-friend-copy"><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${statusLabel}</strong><em>${np?`♫ ${escapeHtml(np.title)}`:entry.mode==='offline'?'◌ fora da rede':'♫ silêncio detectado'}</em></span>
     </button>`;
-  }).join('')||'<div class="online-friends-empty">Nenhum amigo disponível. O modem ganhou alguns minutos de paz.</div>';
+  }).join('')||'<div class="online-friends-empty">Nenhum cúmplice por aqui ainda. Estranhamente saudável.</div>');
   list.querySelectorAll('[data-online-friend]').forEach(b=>b.onclick=()=>openQuickFriendChat(b.dataset.onlineFriend));
   dock.classList.remove('hidden');
   dock.classList.toggle('collapsed',state.onlineDockCollapsed);
@@ -2023,17 +2154,39 @@ function renderOnlineFriendsDock(){
 }
 function setupOnlineFriendsDock(){
   state.onlineDockCollapsed=window.matchMedia('(max-width:760px)').matches;
-  $('#online-friends-toggle').onclick=()=>{
+  const toggle=$('#online-friends-toggle');
+  if(toggle)toggle.onclick=()=>{
     state.onlineDockCollapsed=!state.onlineDockCollapsed;
     renderOnlineFriendsDock();
   };
   renderOnlineFriendsDock();
 }
+async function refreshFriendPresenceCache({notify=true}={}){
+  const friends=await acceptedFriendProfiles();
+  const next={};
+  const seen=new Set();
+  for(const friend of friends){
+    seen.add(friend.id);
+    const previous=state.friendPresence[friend.id];
+    const entry=cachedPresenceEntry(friend);
+    next[friend.id]=entry;
+    if(notify&&previous?.mode==='offline'&&entry.mode==='online'&&!isPeerMuted(friend.id)&&onlineNoticeAllowed(friend.id)){
+      socialNotify({
+        title:`${friend.display_name||'Um amigo'} entrou no AVESSO`,
+        body:'Online agora. Uma notificação basta; o modem não precisa de bis.',
+        avatar:friend.avatar_url||'',
+        kind:'online',
+        action:()=>openQuickFriendChat(friend.id)
+      });
+    }
+    if(state.chatWindowOpen&&state.directPeerId===friend.id)updateChatPeerHeader(friend);
+  }
+  state.friendPresence=next;
+  renderOnlineFriendsDock();
+}
 async function primeFriendPresenceCache(){
   state.friendPresence={};
-  const friends=await acceptedFriendProfiles();
-  friends.forEach(friend=>{state.friendPresence[friend.id]=cachedPresenceEntry(friend);});
-  renderOnlineFriendsDock();
+  await refreshFriendPresenceCache({notify:false});
 }
 function ageFriendPresenceCache(render=true){
   Object.values(state.friendPresence||{}).forEach(entry=>{
@@ -2044,28 +2197,27 @@ function ageFriendPresenceCache(render=true){
 function startFriendPresenceWatch(){
   clearInterval(state.presenceWatchTimer);
   ageFriendPresenceCache();
-  state.presenceWatchTimer=setInterval(()=>ageFriendPresenceCache(true),30000);
+  state.presenceWatchTimer=setInterval(()=>refreshFriendPresenceCache({notify:true}),15000);
 }
 function onlineNoticeAllowed(profileId){
   const key=`avesso.online.notice.${profileId}`;
   const last=Number(state.onlineNoticeAt?.[profileId]||localStorage.getItem(key)||0);
-  if(Date.now()-last<6*60*60*1000)return false;
+  if(Date.now()-last<90*1000)return false;
   state.onlineNoticeAt[profileId]=Date.now();
   try{localStorage.setItem(key,String(Date.now()));}catch{}
   return true;
 }
 function noteFriendPresence(profile){
   if(!profile?.id||!Object.prototype.hasOwnProperty.call(state.friendPresence,profile.id))return;
-  ageFriendPresenceCache();
   const prev=state.friendPresence[profile.id];
   const next=cachedPresenceEntry(profile);
   state.friendPresence[profile.id]=next;
   renderOnlineFriendsDock();
   if(state.chatWindowOpen&&state.directPeerId===profile.id)updateChatPeerHeader(profile);
-  if(prev?.mode!=='online'&&next.mode==='online'&&!isPeerMuted(profile.id)&&onlineNoticeAllowed(profile.id)){
+  if(prev?.mode==='offline'&&next.mode==='online'&&!isPeerMuted(profile.id)&&onlineNoticeAllowed(profile.id)){
     socialNotify({
       title:`${profile.display_name||'Um amigo'} entrou no AVESSO`,
-      body:'Online agora. Uma notificação basta. A internet sobreviverá.',
+      body:'Online agora. Uma notificação basta; o modem não precisa de bis.',
       avatar:profile.avatar_url||'',
       kind:'online',
       action:()=>openQuickFriendChat(profile.id)
@@ -2194,7 +2346,7 @@ async function pollDirectInbox(){
     .order('created_at',{ascending:true})
     .limit(30);
   if(error)return;
-  const rows=data||[];
+  const rows=(data||[]).slice().reverse();
   for(const m of rows)await receiveIncomingDirectMessage(m,{source:'poll'});
   if(rows.length)state.directWatchStartedAt=rows[rows.length-1].created_at;
 }
@@ -2292,13 +2444,13 @@ async function loadDirectConversation(peerId,{markRead=true}={}){
   const me=state.profile.id;
   const {data,error}=await supabase.from('direct_messages').select('*')
     .or(`and(sender_id.eq.${me},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${me})`)
-    .order('created_at',{ascending:true}).limit(250);
+    .order('created_at',{ascending:false}).limit(250);
   if(error)return[];
   if(markRead){
     await supabase.from('direct_messages').update({read_at:new Date().toISOString()})
       .eq('sender_id',peerId).eq('recipient_id',me).is('read_at',null);
   }
-  const rows=data||[];
+  const rows=(data||[]).slice().reverse();
   rows.forEach(m=>{if(m.recipient_id===me)rememberDirectMessage(m.id);});
   const ids=rows.map(m=>m.id).filter(Boolean);
   const grouped={};
@@ -2347,7 +2499,7 @@ function dmMessageHtml(m){
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
   const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${escapeHtml(m.body)}</p>`:'');
   const canEdit=mine&&m.message_kind==='text'&&!m.attachment_path;
-  const menu=`<button type="button" class="dm-message-kebab" data-dm-menu-toggle="${messageId}" aria-label="Opções da mensagem">•••</button><div class="dm-message-menu hidden" data-dm-message-menu="${messageId}"><div class="dm-message-menu-actions">${canEdit?`<button type="button" data-dm-edit="${messageId}">editar</button>`:''}${mine?`<button type="button" class="danger" data-dm-delete="${messageId}">apagar</button>`:''}<span>reagir</span></div><div class="dm-message-react-choices">${DM_REACTIONS.map(icon=>`<button type="button" data-dm-react="${escapeAttr(icon)}" data-message-id="${messageId}">${escapeHtml(icon)}</button>`).join('')}</div></div>`;
+  const menu=`<button type="button" class="dm-message-kebab" data-dm-menu-toggle="${messageId}" aria-label="Opções da mensagem" title="Editar, apagar ou reagir">•••</button><div class="dm-message-menu hidden" data-dm-message-menu="${messageId}"><div class="dm-message-menu-actions">${canEdit?`<button type="button" data-dm-edit="${messageId}">✎ editar</button>`:''}${mine?`<button type="button" class="danger" data-dm-delete="${messageId}">× apagar</button>`:''}<span>${mine?'reagir à mensagem':'reagir'}</span></div><div class="dm-message-react-choices">${DM_REACTIONS.map(icon=>`<button type="button" data-dm-react="${escapeAttr(icon)}" data-message-id="${messageId}" aria-label="Reagir com ${escapeAttr(icon)}">${escapeHtml(icon)}</button>`).join('')}</div></div>`;
   const reactions=dmReactionSummary(m);
   return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}">${menu}${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}${m.edited_at?' · editada':''}${mine&&m.read_at?' · lida':''}</small>${reactions?`<div class="dm-message-reactions">${reactions}</div>`:''}</article>`;
 }
@@ -2363,6 +2515,15 @@ function openDmMessageMenu(messageId){
   const opening=menu.classList.contains('hidden');
   closeDmMessageMenus(opening?messageId:null);
   menu.classList.toggle('hidden',!opening);
+  menu.classList.remove('open-up');
+  if(opening){
+    requestAnimationFrame(()=>{
+      const log=$('#dm-log');
+      if(!log)return;
+      const mr=menu.getBoundingClientRect(),lr=log.getBoundingClientRect();
+      if(mr.bottom>lr.bottom-8)menu.classList.add('open-up');
+    });
+  }
 }
 async function startEditDirectMessage(messageId){
   const {data,error}=await supabase.from('direct_messages').select('id,body,sender_id,message_kind,deleted_at').eq('id',messageId).maybeSingle();
@@ -2975,7 +3136,12 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $$('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
   installChatDesktopWindowing();
   syncVoiceRecordingUI();
-  const log=$('#dm-log');if(log)log.scrollTop=log.scrollHeight;
+  const scrollLatest=()=>{
+    const log=$('#dm-log');
+    if(log)log.scrollTop=log.scrollHeight;
+  };
+  requestAnimationFrame(()=>requestAnimationFrame(scrollLatest));
+  setTimeout(scrollLatest,120);
   repairLegacyVoicePlayers(win);
 }
 async function refreshChatWindow(){
@@ -3110,8 +3276,27 @@ async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDu
   }
   if(optimisticUrl)setTimeout(()=>URL.revokeObjectURL(optimisticUrl),500);
 }
+function restoreChatWindowInstant(){
+  if(!state.chatWindowOpen)return false;
+  state.chatWindowMinimized=false;
+  const win=ensureChatWindow();
+  win.classList.remove('minimized','docked-minimized','hidden','incoming-pulse');
+  const button=$('#dm-minimize');
+  if(button){button.textContent='_';button.title='Minimizar';}
+  applyChatGeometry();
+  requestAnimationFrame(()=>{
+    const log=$('#dm-log');if(log)log.scrollTop=log.scrollHeight;
+    $('#dm-input')?.focus();
+  });
+  return true;
+}
 function openQuickFriendChat(peerId){
   if(!peerId)return;
+  if(state.chatWindowOpen&&state.directPeerId===peerId){
+    restoreChatWindowInstant();
+    profileById(peerId).then(updateChatPeerHeader);
+    return;
+  }
   openChatWindow(peerId,{keepMinimized:false,markRead:true});
 }
 function openFriendChat(peerId){
@@ -3149,7 +3334,7 @@ async function loadFriendPanel(){
   const ids=[...new Set(list.flatMap(r=>[r.requester_id,r.addressee_id]).filter(id=>id!==state.profile.id))];
   let profiles={};
   if(ids.length){
-    const {data:ps}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen').in('id',ids);
+    const {data:ps}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,online_until').in('id',ids);
     profiles=Object.fromEntries((ps||[]).map(p=>[p.id,p]));
   }
   const incoming=list.filter(r=>r.status==='pending'&&r.addressee_id===state.profile.id);
