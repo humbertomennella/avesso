@@ -49,6 +49,22 @@ async function compressImageFile(file,{maxEdge=1600,quality=.82,minBytes=550*102
 }
 function isFeedTab(tab=state.tab){ return ['feed','quiet','sent'].includes(tab); }
 function bumpView(){ state.viewVersion+=1; return state.viewVersion; }
+function feedCacheKey(tab=state.tab){
+  return `avesso_feed_cache_v1:${state.profile?.id||'anon'}:${tab}`;
+}
+function saveFeedCache(tab,posts,threadData){
+  try{
+    const payload={savedAt:Date.now(),posts:(posts||[]).slice(0,40),threadData};
+    localStorage.setItem(feedCacheKey(tab),JSON.stringify(payload));
+  }catch{}
+}
+function readFeedCache(tab){
+  try{
+    const value=JSON.parse(localStorage.getItem(feedCacheKey(tab))||'null');
+    if(!value?.posts||Date.now()-Number(value.savedAt||0)>24*60*60*1000)return null;
+    return value;
+  }catch{return null;}
+}
 const AVATAR_OPTIONS=[
   ['Humano 01','assets/avatars/humano-01.svg','humano'],['Humano 02','assets/avatars/humano-02.svg','humano'],['Humano 03','assets/avatars/humano-03.svg','humano'],
   ['Humana 01','assets/avatars/humana-01.svg','humana'],['Humana 02','assets/avatars/humana-02.svg','humana'],['Humana 03','assets/avatars/humana-03.svg','humana'],
@@ -2375,6 +2391,15 @@ async function loadFeed({append=false}={}){
   if(error){
     state.feedLoadingMore=false;
     if(append){const more=$('#feed-load-more');if(more){more.disabled=false;more.textContent='carregar mais';}return toast('O passado se recusou a carregar. Tente de novo.');}
+    const cached=readFeedCache(requestedTab);
+    if(cached?.posts?.length){
+      state.feedLoadedPosts=cached.posts;
+      state.feedHasMore=false;
+      status.classList.remove('hidden');
+      status.textContent='MODO OFFLINE // mostrando o último feed salvo neste aparelho.';
+      renderFeed(cached.posts,cached.threadData||{responses:{},characters:{},reactions:{}});
+      return;
+    }
     status.textContent='O feed falhou. Até o anti-algoritmo tem segunda-feira.';
     algoSay('feed_error');
     return;
@@ -2401,6 +2426,7 @@ async function loadFeed({append=false}={}){
   state.feedLoadingMore=false;
   status.classList.add('hidden');
   renderFeed(merged,threadData);
+  if(!append)saveFeedCache(requestedTab,merged,threadData);
   renderTowerCard();
 
   if(!append&&merged.some(p=>p.response_count===0)){
