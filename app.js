@@ -42,7 +42,6 @@ const ACID_REACTIONS=[
   ['infelizmente_concordo','≋','infelizmente eu concordo'],
   ['pane_mas_gostei','⚡','deu pane, mas gostei']
 ];
-const DM_REACTIONS=['👍','❤️','😂','😮','😢','😡'];
 const AVESSO_EMOTICONS=[
   '☻','☺','ಠ_ಠ','¬_¬','(ง •̀_•́)ง','¯\\_(ツ)_/¯','(╯°□°）╯︵ ┻━┻','┬─┬ ノ( ゜-゜ノ)',
   '[404]','[56K]','[AFK]','[PING?]','[ERRO HUMANO]','<3.exe','...','?!','⚡','⌁','◉','◌','▣','✦',
@@ -1256,6 +1255,7 @@ function leaveApp(){
   clearInterval(state.presenceTimer);
   clearInterval(state.presenceWatchTimer);
   state.friendPresence={};
+  state.friendPresenceReady=false;
   state.mutedPeers={};
   state.blockedPeers={};
   state.pendingAttentionPeerId=null;
@@ -2210,7 +2210,7 @@ function setupOnlineFriendsDock(){
   renderOnlineFriendsDock();
 }
 async function refreshFriendPresenceCache({notify=true}={}){
-  const friends=await acceptedFriendProfiles();
+  const friends=(await acceptedFriendProfiles())||[];
   if(friends===null){
     state.friendPresenceReady=Object.keys(state.friendPresence||{}).length>0;
     renderOnlineFriendsDock();
@@ -2439,7 +2439,6 @@ function startDirectRealtime(){
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>receiveIncomingDirectMessage(payload.new||{}, {source:'realtime'}))
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`sender_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
-    .on('postgres_changes',{event:'*',schema:'public',table:'direct_message_reactions'},payload=>handleDirectReactionMutation(payload))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'friendships'},async payload=>{
       const f=payload.new||{};
       if(f.addressee_id!==me||f.status!=='pending')return;
@@ -2508,24 +2507,18 @@ async function loadDirectConversation(peerId,{markRead=true}={}){
   }
   const rows=(data||[]).slice().reverse();
   rows.forEach(m=>{if(m.recipient_id===me)rememberDirectMessage(m.id);});
-  const ids=rows.map(m=>m.id).filter(Boolean);
-  const grouped={};
-  if(ids.length){
-    const {data:reactionRows}=await supabase.from('direct_message_reactions').select('message_id,user_id,reaction').in('message_id',ids);
-    (reactionRows||[]).forEach(r=>{(grouped[r.message_id]??=[]).push(r);});
-  }
-  return Promise.all(rows.map(async m=>({...await hydrateDirectMessage(m),_reactions:grouped[m.id]||[]})));
+  return Promise.all(rows.map(m=>hydrateDirectMessage(m)));
 }
-async function directMessageWithReactions(messageId){
+
+async function directMessageForRefresh(messageId){
   const {data,error}=await supabase.from('direct_messages').select('*').eq('id',messageId).maybeSingle();
   if(error||!data)return null;
-  const {data:reactions}=await supabase.from('direct_message_reactions').select('message_id,user_id,reaction').eq('message_id',messageId);
-  return {...await hydrateDirectMessage(data),_reactions:reactions||[]};
+  return hydrateDirectMessage(data);
 }
 async function refreshDirectMessageBubble(messageId){
   if(!messageId||!state.chatWindowOpen)return;
   const log=$('#dm-log');if(!log)return;
-  const row=await directMessageWithReactions(messageId);
+  const row=await directMessageForRefresh(messageId);
   const old=log.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
   if(!row){old?.remove();return;}
   if(old){
@@ -2556,83 +2549,11 @@ function dmMessageHtml(m){
   const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${escapeHtml(m.body)}</p>`:'');
   return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}</small></article>`;
 }
-function closeDmMessageMenus(exceptId=null){
-  document.querySelectorAll('[data-dm-message-menu]').forEach(menu=>{
-    if(exceptId&&menu.dataset.dmMessageMenu===String(exceptId))return;
-    menu.classList.add('hidden');
-  });
-}
-function openDmMessageMenu(messageId){
-  const menu=document.querySelector(`[data-dm-message-menu="${CSS.escape(String(messageId))}"]`);
-  if(!menu)return;
-  const opening=menu.classList.contains('hidden');
-  closeDmMessageMenus(opening?messageId:null);
-  menu.classList.toggle('hidden',!opening);
-  menu.classList.remove('open-up');
-  if(opening){
-    requestAnimationFrame(()=>{
-      const log=$('#dm-log');
-      if(!log)return;
-      const mr=menu.getBoundingClientRect(),lr=log.getBoundingClientRect();
-      if(mr.bottom>lr.bottom-8)menu.classList.add('open-up');
-    });
-  }
-}
-async function startEditDirectMessage(messageId){
-  const {data,error}=await supabase.from('direct_messages').select('id,body,sender_id,message_kind,deleted_at').eq('id',messageId).maybeSingle();
-  if(error||!data||data.sender_id!==state.profile.id||data.message_kind!=='text'||data.deleted_at)return toast('Essa mensagem não pode ser editada.');
-  const bubble=document.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
-  const body=bubble?.querySelector('.dm-message-body');
-  if(!bubble||!body)return;
-  closeDmMessageMenus();
-  const wrapper=document.createElement('div');
-  wrapper.className='dm-inline-edit';
-  wrapper.innerHTML=`<textarea maxlength="1000">${escapeHtml(data.body||'')}</textarea><div><button type="button" data-dm-edit-save="${escapeAttr(messageId)}">salvar</button><button type="button" data-dm-edit-cancel="${escapeAttr(messageId)}">cancelar</button></div>`;
-  body.replaceWith(wrapper);
-  wrapper.querySelector('textarea')?.focus();
-}
-async function saveEditDirectMessage(messageId){
-  const bubble=document.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
-  const input=bubble?.querySelector('.dm-inline-edit textarea');
-  const body=String(input?.value||'').trim();
-  if(!body)return toast('Mensagem vazia continua sendo silêncio.');
-  if(body.length>1000)return toast('Até 1000 caracteres. Nem o MSN aguentava um tratado.');
-  const {error}=await supabase.rpc('edit_direct_message',{p_message_id:messageId,p_body:body});
-  if(error)return toast('A edição tropeçou no cabo.');
-  await refreshDirectMessageBubble(messageId);
-}
-async function deleteDirectMessage(messageId){
-  if(!messageId||!confirm('Apagar esta mensagem? Ela ficará marcada como apagada para manter a conversa sincronizada.'))return;
-  const {data:attachmentPath,error}=await supabase.rpc('delete_direct_message',{p_message_id:messageId});
-  if(error)return toast('A mensagem se recusou a desaparecer.');
-  if(attachmentPath)await supabase.storage.from('avesso-chat').remove([attachmentPath]).catch(()=>{});
-  await refreshDirectMessageBubble(messageId);
-}
-async function toggleDirectMessageReaction(messageId,reaction){
-  if(!messageId||!DM_REACTIONS.includes(reaction))return;
-  const {data:existing}=await supabase.from('direct_message_reactions').select('reaction').eq('message_id',messageId).eq('user_id',state.profile.id).maybeSingle();
-  let error=null;
-  if(existing?.reaction===reaction){
-    ({error}=await supabase.from('direct_message_reactions').delete().eq('message_id',messageId).eq('user_id',state.profile.id));
-  }else{
-    ({error}=await supabase.from('direct_message_reactions').upsert({message_id:messageId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'message_id,user_id'}));
-  }
-  if(error)return toast('A reação teve uma reação adversa.');
-  closeDmMessageMenus();
-  await refreshDirectMessageBubble(messageId);
-}
 async function handleDirectMessageMutation(row){
   if(!row?.id||!state.chatWindowOpen||!state.directPeerId)return;
   const belongs=(row.sender_id===state.profile.id&&row.recipient_id===state.directPeerId)||(row.sender_id===state.directPeerId&&row.recipient_id===state.profile.id);
   if(belongs)await refreshDirectMessageBubble(row.id);
 }
-async function handleDirectReactionMutation(payload){
-  const messageId=payload?.new?.message_id||payload?.old?.message_id;
-  if(!messageId||!state.chatWindowOpen)return;
-  const bubble=$('#dm-log')?.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
-  if(bubble)await refreshDirectMessageBubble(messageId);
-}
-let dmLongPressOrigin=null;
 async function repairLegacyVoicePlayers(root=document){
   const players=[...root.querySelectorAll?.('.dm-voice-audio')||[]].filter(audio=>!audio.dataset.voiceRepaired&&audio.dataset.voiceType&&audio.dataset.voiceType!=='audio/wav').slice(0,30);
   for(const audio of players){
