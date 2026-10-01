@@ -3741,7 +3741,8 @@ async function renderMessagesPage(){
 
 document.addEventListener('pointerdown',e=>{
   const menu=$('#dm-options-menu');
-  if(menu&&!menu.classList.contains('hidden')&&!e.target.closest('#dm-options-menu,#dm-options'))setChatOptionsOpen(false);
+  const windowControl=e.target.closest?.('#dm-minimize,#dm-maximize,#dm-close');
+  if(menu&&!menu.classList.contains('hidden')&&!windowControl&&!e.target.closest('#dm-options-menu,#dm-options'))setChatOptionsOpen(false);
   const emoji=$('#dm-emoticon-palette');
   if(emoji&&!emoji.classList.contains('hidden')&&!e.target.closest('#dm-emoticon-palette,#dm-emoticons'))emoji.classList.add('hidden');
   const postEmoji=$('#post-emoticon-palette');
@@ -4223,9 +4224,13 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
         </div>
       </form>
     </div>`;
-  bindChatControl($('#dm-minimize'),toggleChatMinimize);
-  bindChatControl($('#dm-maximize'),toggleChatMaximize);
-  bindChatControl($('#dm-close'),()=>closeChatWindow());
+  const minimizeButton=$('#dm-minimize');
+  const maximizeButton=$('#dm-maximize');
+  const closeButton=$('#dm-close');
+  [minimizeButton,maximizeButton,closeButton].forEach(b=>{if(b)b.dataset.directChatControl='1';});
+  bindChatControl(minimizeButton,toggleChatMinimize);
+  bindChatControl(maximizeButton,toggleChatMaximize);
+  bindChatControl(closeButton,()=>closeChatWindow());
   $('#dm-restore-name').onclick=e=>{e.stopPropagation();if(state.chatWindowMinimized)toggleChatMinimize();else $('#dm-input')?.focus();};
   $('#dm-peer-avatar').onclick=()=>openPublicProfile(peerId);
   $('#dm-peer-profile-name').onclick=()=>openPublicProfile(peerId);
@@ -4257,21 +4262,42 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
 }
 function bindChatControl(button,action){
   if(!button||typeof action!=='function')return;
-  let touchStamp=0;
+  let lastActivation=0;
+  const activate=e=>{
+    const now=Date.now();
+    if(now-lastActivation<420){
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
+      return;
+    }
+    lastActivation=now;
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    action();
+  };
   button.onclick=null;
-  button.addEventListener('pointerup',e=>{
-    if(e.pointerType!=='touch'&&e.pointerType!=='pen')return;
-    e.preventDefault();
-    e.stopPropagation();
-    touchStamp=performance.now();
-    action();
-  },{passive:false});
-  button.addEventListener('click',e=>{
-    e.preventDefault();
-    e.stopPropagation();
-    if(performance.now()-touchStamp<550)return;
-    action();
+  button.ontouchend=null;
+  button.onpointerup=null;
+  button.addEventListener('touchend',activate,{passive:false});
+  button.addEventListener('click',activate);
+  button.addEventListener('keydown',e=>{
+    if(e.key==='Enter'||e.key===' '){
+      e.preventDefault();
+      activate(e);
+    }
   });
+}
+if(!document.documentElement.dataset.chatWindowControlFallback){
+  document.documentElement.dataset.chatWindowControlFallback='1';
+  document.addEventListener('click',e=>{
+    const button=e.target.closest?.('#dm-minimize,#dm-close');
+    if(!button||!window.matchMedia?.('(max-width: 820px)').matches)return;
+    if(button.dataset.directChatControl==='1')return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(button.id==='dm-minimize')toggleChatMinimize();
+    else closeChatWindow();
+  },true);
 }
 function pinChatToLatest(root=ensureChatWindow()){
   const log=root?.querySelector?.('#dm-log')||$('#dm-log');
