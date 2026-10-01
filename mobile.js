@@ -21,6 +21,7 @@
   let appObserver=null;
   let bodyObserver=null;
   let feedObserver=null;
+  let handleObserver=null;
   let moreButton=null;
   let moreSheet=null;
   let notificationsSheet=null;
@@ -603,7 +604,7 @@
   function bindNavObserver(){
     if(!appNav||navObserver)return;
     navObserver=new MutationObserver(mutations=>{
-      if(mutations.some(m=>m.type==='attributes'&&m.attributeName==='class'))centerActiveNav();
+      if(mutations.some(m=>m.type==='attributes'&&m.attributeName==='class'&&m.target?.matches?.('[data-app-tab]')))centerActiveNav();
     });
     navObserver.observe(appNav,{subtree:true,attributes:true,attributeFilter:['class']});
   }
@@ -620,6 +621,13 @@
     });
     appObserver.observe(app,{attributes:true,attributeFilter:['class']});
   }
+  function bindHandleObserver(){
+    const handle=qs('#nav-handle');
+    if(!handle||handleObserver)return;
+    handleObserver=new MutationObserver(()=>syncNotificationIdentity());
+    handleObserver.observe(handle,{childList:true,characterData:true,subtree:true});
+  }
+
   function bindBodyObserver(){
     if(bodyObserver)return;
     bodyObserver=new MutationObserver(()=>{
@@ -691,13 +699,14 @@
     watchPublish();
     bindNavObserver();
     bindAppObserver();
+    bindHandleObserver();
     bindBodyObserver();
     bindFeedObserver();
     bindPullToRefresh();
     bindPrimarySwipe();
     syncMobileUi();
     registerPwaShell();
-    setTimeout(applyStartupHash,350);
+    setTimeout(()=>{syncNotificationIdentity();applyStartupHash();},350);
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
