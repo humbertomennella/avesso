@@ -2087,8 +2087,8 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       const total=rows.length+botRows.length;
       return `<button class="acid-reaction ${active?'active':''}" data-react-post="${p.id}" data-reaction="${id}" aria-pressed="${active}"><span>${icon}</span>${label}${total?` <b>${total}</b>`:''}${botRows.length?'<i class="character-reaction-mark" title="ALGO reagiu">ALGO</i>':''}</button>`;
     }).join('');
-    const ownerActions=p.author_id===state.profile.id?`<div class="post-owner-actions"><button data-post-edit="${p.id}">editar</button><button class="danger" data-post-delete="${p.id}">apagar</button></div>`:'';
     const turned=Boolean(p.reshare_post_id||p.reshare_photo_id);
+    const ownerActions=p.author_id===state.profile.id?`<div class="post-owner-actions">${turned?'':'<button data-post-edit="'+p.id+'">editar</button>'}<button class="danger" data-post-delete="${p.id}">apagar</button></div>`:'';
     const turnedBadge=turned?`<div class="post-turned-badge"><span>↻ VIRADO DO AVESSO</span><b>original: @${escapeHtml(p.reshare_author_handle||'alguém')}</b><small>virado por @${escapeHtml(p.author_handle||'alguém')}</small></div>`:'';
     const effectiveImage=p.image_url?postImageSrc(p.image_url):(p.reshare_photo_storage_path?publicAlbumUrl(p.reshare_photo_storage_path):'');
     const effectiveGif=Boolean(p.image_url&&isGifPostImage(p.image_url));
