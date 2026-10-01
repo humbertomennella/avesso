@@ -869,7 +869,7 @@ async function browserNotify({title='AVESSO',body='',avatar='',kind='message',ac
   };
   try{
     const registration=await registerNotificationWorker();
-    const pushSubscription=await registration?.pushManager?.getSubscription?.().catch?.(()=>null);
+    const pushSubscription=registration?.pushManager?await registration.pushManager.getSubscription().catch(()=>null):null;
     if(pushSubscription)return;
     if(registration?.showNotification){await registration.showNotification(title,options);return;}
     const n=new Notification(title,options);
