@@ -465,6 +465,8 @@ function refreshOwnNowPlayingPreview(){
   const host=$('#profile-now-playing-preview');
   if(!host)return;
   host.innerHTML=nowPlayingHtml(state.profile)||'<div class="now-playing-empty">nada detectado agora. o silêncio também tem presença.</div>';
+  const hero=$('#profile-hero-listening');
+  if(hero)hero.innerHTML=nowPlayingHtml(state.profile);
   const bridge=$('#listening-bridge-status');
   if(bridge)bridge.textContent=state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // site sozinho não consegue ler outras abas ou apps';
 }
@@ -1060,6 +1062,7 @@ async function resolveMediaMetadata(raw){
     if(error)return{title:null,provider:parsed.provider||'',canonical:parsed.canonical||raw};
     return{
       title:String(data?.title||'').trim().slice(0,220)||null,
+      author:String(data?.author||'').trim().slice(0,120)||null,
       provider:String(data?.provider||parsed.provider||'').trim().slice(0,40)||null,
       canonical:parsed.canonical||raw
     };
@@ -1074,6 +1077,7 @@ function cornerMusicLabel(profile){
 function cornerMusicBadgeHtml(profile,{owner=false}={}){
   if(!profile?.corner_music_url)return'';
   const enabled=Boolean(profile.corner_music_enabled);
+  if(!owner&&!enabled)return'';
   const label=cornerMusicLabel(profile);
   return `<div class="corner-music-badge ${enabled?'active':'off'}"><span class="now-playing-eq" aria-hidden="true"><i></i><i></i><i></i></span><span><b>♫ ${owner?'sua trilha':'deixou ouvindo'}</b><small>${escapeHtml(label)}</small></span>${owner?'':`<button id="public-corner-music-toggle" type="button">${state.cornerMusicLocallyPaused?'ouvir novamente':'parar de ouvir'}</button>`}</div>`;
 }
@@ -2832,7 +2836,7 @@ async function renderProfile(){
   $('#feed-list').innerHTML=`<section class="profile-control" style="--profile-wallpaper:url('${wallpaperUrl(state.profile.profile_wallpaper)}')">
     <header class="profile-control-hero">
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
-      <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><div class="profile-hero-listening">${nowPlayingHtml(state.profile)}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
+      <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><div id="profile-hero-listening" class="profile-hero-listening">${nowPlayingHtml(state.profile)}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
@@ -3013,7 +3017,7 @@ async function openPublicProfile(userId){
     : '<div class="guestbook-locked">Recados são para amigos. Civilização mínima, aparentemente.</div>';
   $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
-    <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</p><div id="public-now-playing">${nowPlayingHtml(p)}</div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</p><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div><div id="public-now-playing">${nowPlayingHtml(p)}</div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
     <section class="public-story-section">
       <span class="section-code">STORIES // AINDA NÃO EXPIRARAM</span>
       <h2>Stories de ${escapeHtml(p.display_name)}</h2>
@@ -3027,7 +3031,7 @@ async function openPublicProfile(userId){
       <div id="public-guestbook-list" class="guestbook-list"><p>carregando recados...</p></div>
     </section>
     <section class="public-album"><h2>Álbum de ${escapeHtml(p.display_name)}</h2><div id="public-album" class="profile-album-grid"><p>abrindo gavetas...</p></div></section>
-    <section class="public-media"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>O que ${escapeHtml(p.display_name)} deixou tocando</h2><div id="public-media-list" class="profile-media-grid"><p>procurando fitas...</p></div></section>
+    <section class="public-media"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Mídia publicada por ${escapeHtml(p.display_name)}</h2><div id="public-media-list" class="profile-media-grid"><p>procurando fitas...</p></div></section>
   </section>`;
   $('#back-from-profile').onclick=()=>document.querySelector('[data-app-tab="feed"]')?.click();
   $('[data-add-friend]')?.addEventListener('click',e=>requestFriend(e.currentTarget.dataset.addFriend));
@@ -3040,6 +3044,14 @@ async function openPublicProfile(userId){
   loadProfileMedia(userId,false,'#public-media-list');
   loadProfileStories(userId,'#public-story-list');
   startCornerMusic(p);
+  if(p.corner_music_url&&!p.corner_music_title){
+    resolveMediaMetadata(p.corner_music_url).then(metadata=>{
+      if(!metadata||state.tab!=='public_profile'||state.publicProfileId!==p.id)return;
+      p.corner_music_title=metadata.title||p.corner_music_title;
+      p.corner_music_provider=metadata.provider||p.corner_music_provider;
+      refreshPublicCornerMusicControl(p);
+    });
+  }
 }
 function bindProfileLinks(){ /* links usam delegação global */ }
 document.addEventListener('click',e=>{
