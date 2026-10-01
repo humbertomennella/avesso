@@ -1777,16 +1777,23 @@ function renderOnlineFriendsDock(){
   const dock=$('#online-friends-dock'),list=$('#online-friends-list'),count=$('#online-friends-count');
   if(!dock||!list||!count||!state.profile)return;
   ageFriendPresenceCache(false);
-  const online=Object.values(state.friendPresence||{})
-    .filter(entry=>entry?.mode==='online'&&entry.profile&&!isPeerBlocked(entry.profile.id))
-    .map(entry=>entry.profile)
-    .sort((a,b)=>String(a.display_name||'').localeCompare(String(b.display_name||''),'pt-BR'));
-  count.textContent=online.length;
-  list.innerHTML=online.map(friend=>`<button class="online-friend-item" data-online-friend="${friend.id}" type="button">
-    <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
-    <span><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small>${nowPlayingView(friend)?`<em>♫ ${escapeHtml(nowPlayingView(friend).title)}</em>`:''}</span>
-    <i class="presence-dot online"></i>
-  </button>`).join('')||'<div class="online-friends-empty">0 humanos online. o modem respira em paz.</div>';
+  const entries=Object.values(state.friendPresence||{})
+    .filter(entry=>entry?.profile&&!isPeerBlocked(entry.profile.id)&&entry.mode!=='offline')
+    .sort((a,b)=>{
+      const rank={online:0,away:1};
+      const d=(rank[a.mode]??9)-(rank[b.mode]??9);
+      return d||String(a.profile.display_name||'').localeCompare(String(b.profile.display_name||''),'pt-BR');
+    });
+  const onlineCount=entries.filter(entry=>entry.mode==='online').length;
+  count.textContent=onlineCount;
+  list.innerHTML=entries.map(entry=>{
+    const friend=entry.profile;
+    const np=nowPlayingView(friend);
+    return `<button class="online-friend-item ${entry.mode}" data-online-friend="${friend.id}" type="button">
+      <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
+      <span class="online-friend-copy"><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${entry.mode==='online'?'online':'ausente'}</strong><em>${np?`♫ ${escapeHtml(np.title)}`:'♫ silêncio detectado'}</em></span>
+    </button>`;
+  }).join('')||'<div class="online-friends-empty">Nenhum amigo disponível. O modem ganhou alguns minutos de paz.</div>';
   list.querySelectorAll('[data-online-friend]').forEach(b=>b.onclick=()=>openQuickFriendChat(b.dataset.onlineFriend));
   dock.classList.remove('hidden');
   dock.classList.toggle('collapsed',state.onlineDockCollapsed);
