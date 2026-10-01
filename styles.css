@@ -6108,3 +6108,104 @@ body.avesso-own-corner .profile-avatar-large img{
     animation:none!important;
   }
 }
+
+
+/* AVESSO FIXPACK // PRESENÇA + CHAT + JANELA 2026-10-01 */
+
+/* O menu de mensagem precisa ser discreto, não invisível. */
+.dm-message-kebab{
+  opacity:.42!important;
+}
+.dm-bubble:hover .dm-message-kebab,
+.dm-bubble:focus-within .dm-message-kebab,
+.dm-message-kebab:focus-visible{
+  opacity:1!important;
+}
+.dm-message-menu{
+  z-index:180!important;
+  overflow:visible!important;
+}
+.dm-message-menu.open-up{
+  top:auto!important;
+  bottom:30px!important;
+}
+.dm-message-menu-actions{
+  grid-template-columns:1fr 1fr!important;
+}
+.dm-message-menu-actions>button{
+  min-height:30px;
+  font-size:.50rem!important;
+}
+.dm-message-react-choices{
+  grid-template-columns:repeat(6,minmax(30px,1fr))!important;
+}
+.dm-message-react-choices button{
+  min-height:34px!important;
+  font-size:1rem!important;
+  line-height:1!important;
+}
+.dm-reaction-chip{
+  font-size:.82rem!important;
+}
+
+/* Presença: a caixa não some enquanto o usuário navega pelo AVESSO. */
+@media(min-width:761px){
+  .app-nav{
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    scrollbar-width:thin;
+    scrollbar-color:#34494e #05090b;
+  }
+  .app-nav>nav{
+    flex:0 0 auto!important;
+  }
+  .app-nav .online-friends-dock{
+    flex:0 0 auto!important;
+    min-height:76px!important;
+    max-height:250px!important;
+    margin-top:auto!important;
+    margin-bottom:10px!important;
+    overflow:hidden!important;
+  }
+  .app-nav .online-friends-list{
+    max-height:204px!important;
+    overflow:auto!important;
+  }
+}
+.online-friend-item.offline{
+  opacity:.50;
+  filter:saturate(.55);
+}
+.online-friend-item.offline:hover{
+  opacity:.82;
+  filter:none;
+}
+.online-friend-item.offline .online-friend-copy strong,
+.online-friend-item.offline .online-friend-copy em{
+  color:#7f8a88!important;
+}
+.online-friends-none{
+  border-bottom:1px dashed #2a3d41;
+  color:#899693!important;
+}
+
+/* Desktop continua sendo uma janela de verdade: arrasta no título e redimensiona nas bordas. */
+@media(min-width:761px) and (pointer:fine){
+  .dm-floating-window.desktop-windowed .dm-msn-titlebar{
+    cursor:move!important;
+  }
+  .dm-floating-window.desktop-windowed .dm-msn-titlebar button,
+  .dm-floating-window.desktop-windowed .dm-window-controls{
+    cursor:pointer!important;
+  }
+  .dm-floating-window.desktop-windowed:not(.maximized):not(.minimized) .dm-resize-handle{
+    display:block!important;
+  }
+  .dm-floating-window.desktop-windowed:not(.maximized):not(.minimized):hover .dm-resize-handle{
+    background:color-mix(in srgb,var(--dm-accent) 12%,transparent);
+  }
+  .dm-resize-e,.dm-resize-w{width:9px!important}
+  .dm-resize-n,.dm-resize-s{height:9px!important}
+  .dm-resize-ne,.dm-resize-nw,.dm-resize-se,.dm-resize-sw{width:15px!important;height:15px!important}
+}
+
