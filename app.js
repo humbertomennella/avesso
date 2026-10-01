@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -671,10 +671,22 @@ async function setPresenceMode(mode){
 function presenceLeasePatch(){
   const now=Date.now();
   return {
+    online_until:new Date(now+45000).toISOString(),
+    updated_at:new Date(now).toISOString()
+  };
+}
+function markPresenceActivity({force=false}={}){
+  if(!state.profile?.id||state.profile.presence_mode==='invisible')return;
+  const now=Date.now();
+  if(!force&&now-state.lastPresenceActivityAt<15000)return;
+  state.lastPresenceActivityAt=now;
+  const patch={
     last_seen:new Date(now).toISOString(),
     online_until:new Date(now+45000).toISOString(),
     updated_at:new Date(now).toISOString()
   };
+  state.profile={...state.profile,...patch};
+  supabase.from('profiles').update(patch).eq('id',state.profile.id).then(()=>{});
 }
 async function markPresenceOffline({keepalive=false}={}){
   const profileId=state.profile?.id;
@@ -717,6 +729,7 @@ document.addEventListener('visibilitychange',()=>{
     autoMinimizeChat();
     return;
   }
+  markPresenceActivity({force:true});
   startPresenceHeartbeat();
   if(state.world.pendingAquele){
     const payload=state.world.pendingAquele;
@@ -740,6 +753,8 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('blur',()=>{if(state.profile)autoMinimizeChat();});
 window.addEventListener('pagehide',()=>{if(state.profile)markPresenceOffline({keepalive:true});});
 window.addEventListener('beforeunload',()=>{if(state.profile)markPresenceOffline({keepalive:true});});
+['pointerdown','keydown','touchstart'].forEach(type=>document.addEventListener(type,()=>markPresenceActivity(),{passive:true}));
+window.addEventListener('focus',()=>markPresenceActivity({force:true}));
 const PHOTO_REACTIONS=[
   ['nao_foi_horrivel','♥','não foi horrível'],
   ['eu_vi','◉','eu vi'],
@@ -1198,6 +1213,7 @@ async function enterApp(){
   renderNavAvatar();
   applyAppWallpaper();
   setupOnlineFriendsDock();
+  markPresenceActivity({force:true});
   startPresenceHeartbeat();
   syncPresenceCompanionConfig();
   await loadWorldState();
@@ -2146,7 +2162,7 @@ async function refreshFriendPresenceCache({notify=true}={}){
     const previous=state.friendPresence[friend.id];
     const entry=cachedPresenceEntry(friend);
     next[friend.id]=entry;
-    if(notify&&previous?.mode!=='online'&&entry.mode==='online'&&!isPeerMuted(friend.id)&&onlineNoticeAllowed(friend.id)){
+    if(notify&&previous?.mode==='offline'&&entry.mode==='online'&&!isPeerMuted(friend.id)&&onlineNoticeAllowed(friend.id)){
       socialNotify({
         title:`${friend.display_name||'Um amigo'} entrou no AVESSO`,
         body:'Online agora. Uma notificação basta; o modem não precisa de bis.',
@@ -2190,7 +2206,7 @@ function noteFriendPresence(profile){
   state.friendPresence[profile.id]=next;
   renderOnlineFriendsDock();
   if(state.chatWindowOpen&&state.directPeerId===profile.id)updateChatPeerHeader(profile);
-  if(prev?.mode!=='online'&&next.mode==='online'&&!isPeerMuted(profile.id)&&onlineNoticeAllowed(profile.id)){
+  if(prev?.mode==='offline'&&next.mode==='online'&&!isPeerMuted(profile.id)&&onlineNoticeAllowed(profile.id)){
     socialNotify({
       title:`${profile.display_name||'Um amigo'} entrou no AVESSO`,
       body:'Online agora. Uma notificação basta; o modem não precisa de bis.',
