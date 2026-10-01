@@ -1106,6 +1106,61 @@ async function setChatWallpaper(slug){
   state.profile=data;
   applyChatAppearance();
 }
+
+function ensureReportUserDialog(){
+  let dialog=$('#report-user-dialog');
+  if(dialog)return dialog;
+  dialog=document.createElement('dialog');
+  dialog.id='report-user-dialog';
+  dialog.className='report-user-dialog';
+  dialog.innerHTML=`<form method="dialog" class="report-user-card">
+    <header><div><span class="section-code">MODERAÇÃO // DENÚNCIA</span><h3>Denunciar usuário</h3></div><button value="cancel" aria-label="Fechar">×</button></header>
+    <p id="report-user-target">carregando alvo...</p>
+    <label>Motivo<select id="report-user-reason">
+      <option value="assedio">assédio</option>
+      <option value="odio">ódio / discriminação</option>
+      <option value="spam">spam</option>
+      <option value="risco">risco / ameaça</option>
+      <option value="outro">outro</option>
+    </select></label>
+    <label>Detalhes<textarea id="report-user-details" maxlength="500" placeholder="descreva o que aconteceu. até 500 caracteres."></textarea></label>
+    <div class="report-user-actions"><button type="button" id="report-user-send">enviar denúncia</button><button value="cancel">cancelar</button></div>
+  </form>`;
+  document.body.appendChild(dialog);
+  return dialog;
+}
+async function openReportUserDialog(userId){
+  if(!userId||userId===state.profile?.id)return toast('Denunciar a si mesmo seria eficiente, mas pouco útil.');
+  const peer=await profileById(userId);
+  if(!peer)return toast('Não encontrei esse usuário.');
+  const dialog=ensureReportUserDialog();
+  dialog.dataset.userId=userId;
+  $('#report-user-target').innerHTML='Você está denunciando <b>'+identityNameHtml(peer.id,peer.display_name,{badges:false})+'</b> <small>@'+escapeHtml(peer.handle)+'</small>. A denúncia vai para a fila da equipe.';
+  $('#report-user-details').value='';
+  $('#report-user-reason').value='outro';
+  $('#report-user-send').onclick=()=>submitUserReport(userId);
+  if(!dialog.open)dialog.showModal();
+}
+async function submitUserReport(userId){
+  const reason=$('#report-user-reason')?.value||'outro';
+  const details=String($('#report-user-details')?.value||'').trim().slice(0,500);
+  const button=$('#report-user-send');if(button)button.disabled=true;
+  const {error}=await supabase.from('reports').insert({
+    reporter_id:state.profile.id,
+    reported_profile_id:userId,
+    reason,
+    details
+  });
+  if(button)button.disabled=false;
+  if(error){
+    console.error('report user failed',error);
+    return toast('A denúncia não foi enviada. Tente novamente.');
+  }
+  $('#report-user-dialog')?.close();
+  toast('Denúncia enviada para a equipe. Sem espetáculo público, como convém.');
+  trackAction('user_reported','moderation',{reported_profile_id:userId,reason});
+}
+
 async function blockChatPeer(peerId){
   if(!peerId||peerId===state.profile?.id)return;
   const peer=await profileById(peerId);
@@ -4502,7 +4557,7 @@ async function openPublicProfile(userId){
     : '<div class="guestbook-locked">Recados são para amigos. Civilização mínima, aparentemente.</div>';
   $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
-    <header class="public-profile-hero"><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div class="public-profile-identity"><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><div class="public-profile-name-row"><h1>${escapeHtml(p.display_name)}</h1><span class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</span></div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><div class="public-profile-sound-row"><div id="public-now-playing">${nowPlayingHtml(p)}</div><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div></div><p class="public-profile-bio">${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <header class="public-profile-hero"><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div class="public-profile-identity"><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><div class="public-profile-name-row"><h1 data-staff-name data-profile-id="${p.id}">${identityNameHtml(p.id,p.display_name,{badges:true})}</h1><span class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</span></div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><div class="public-profile-sound-row"><div id="public-now-playing">${nowPlayingHtml(p)}</div><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div></div><p class="public-profile-bio">${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}<button class="public-report-user" data-report-profile="${p.id}">⚑ denunciar</button></div></div></header>
     <section class="public-story-section">
       <span class="section-code">STORIES // AINDA NÃO EXPIRARAM</span>
       <h2>Stories de ${escapeHtml(p.display_name)}</h2>
@@ -4523,6 +4578,7 @@ async function openPublicProfile(userId){
   $('[data-accept-public]')?.addEventListener('click',async e=>{await answerFriendRequest(e.currentTarget.dataset.acceptPublic,true);openPublicProfile(userId);});
   $('[data-message-friend]')?.addEventListener('click',e=>openFriendChat(e.currentTarget.dataset.messageFriend));
   $('[data-unfriend-public]')?.addEventListener('click',async e=>{if(confirm('Desfazer amizade? Sem textão de despedida.')){await supabase.from('friendships').delete().eq('id',e.currentTarget.dataset.unfriendPublic);openPublicProfile(userId);}});
+  $('[data-report-profile]')?.addEventListener('click',e=>openReportUserDialog(e.currentTarget.dataset.reportProfile));
   $('#guestbook-submit')?.addEventListener('click',()=>sendGuestbookEntry(userId));
   loadGuestbook(userId,'#public-guestbook-list');
   loadAlbum(userId,false);
