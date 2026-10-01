@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -862,6 +862,47 @@ $('#post-image').addEventListener('change',e=>{
   trackAction('image_selected','composer',{type:file.type,size:file.size});
 });
 $('#remove-image').onclick=()=>{state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');};
+$('#post-media').addEventListener('change',e=>{
+  const file=e.target.files?.[0]||null;
+  const preview=$('#media-preview');
+  if(!file){state.postMediaFile=null;preview.classList.add('hidden');return;}
+  const kind=mediaKindFromFile(file);
+  if(!kind){e.target.value='';state.postMediaFile=null;return toast('Use um arquivo de áudio ou vídeo compatível. GIF continua sendo imagem, por mais que tente.');}
+  if(file.size>mediaSizeLimit(kind)){e.target.value='';state.postMediaFile=null;return toast(`${kind==='video'?'Vídeo':'Áudio'} acima de ${mediaSizeLabel(kind)}. O servidor também tem limites emocionais.`);}
+  state.postMediaFile=file;
+  $('#media-preview-icon').textContent=kind==='video'?'▶':'♫';
+  $('#media-preview-name').textContent=file.name;
+  $('#media-preview-kind').textContent=`${kind==='video'?'vídeo':'música/áudio'} · ${Math.max(.1,file.size/1024/1024).toFixed(1)} MB`;
+  preview.classList.remove('hidden');
+  trackAction('media_selected','composer',{type:file.type,size:file.size,kind});
+});
+$('#remove-media').onclick=()=>{state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');};
+function mediaKindFromFile(file){
+  if(!file?.type)return null;
+  if(file.type.startsWith('audio/'))return'audio';
+  if(file.type.startsWith('video/'))return'video';
+  return null;
+}
+function mediaSizeLimit(kind){return kind==='video'?50*1024*1024:20*1024*1024;}
+function mediaSizeLabel(kind){return kind==='video'?'50 MB':'20 MB';}
+function publicMediaUrl(path){return supabase.storage.from('avesso-media').getPublicUrl(path).data.publicUrl;}
+function feedMediaHtml(url,kind,{compact=false}={}){
+  if(!url||!['audio','video'].includes(kind))return'';
+  if(kind==='audio')return `<figure class="post-media post-audio ${compact?'compact':''}"><div class="post-media-label">♫ ÁUDIO // dê play por sua conta</div><audio controls preload="metadata" src="${escapeAttr(url)}"></audio></figure>`;
+  return `<figure class="post-media post-video ${compact?'compact':''}"><div class="post-media-label">▶ VÍDEO // movimento detectado</div><video controls playsinline preload="metadata" src="${escapeAttr(url)}"></video></figure>`;
+}
+async function uploadPostMedia(){
+  const file=state.postMediaFile;if(!file)return{url:null,kind:null};
+  const kind=mediaKindFromFile(file);
+  if(!kind)throw new Error('unsupported media');
+  if(file.size>mediaSizeLimit(kind))throw new Error('media too large');
+  const ext=(file.name.split('.').pop()|| (kind==='video'?'mp4':'mp3')).replace(/[^a-z0-9]/gi,'').toLowerCase();
+  const path=`${state.profile.id}/feed/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const {error}=await supabase.storage.from('avesso-media').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
+  if(error)throw error;
+  return{url:publicMediaUrl(path),kind};
+}
+
 async function uploadPostImage(){
   if(!state.postImageFile)return null;
   const ext=(state.postImageFile.name.split('.').pop()||'webp').replace(/[^a-z0-9]/gi,'').toLowerCase();
@@ -874,24 +915,36 @@ $('#publish-post').onclick=async()=>{
   const body=$('#post-body').value.trim();
   const directed=$('#post-target').value==='person';
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
-  if(directed&&$('#post-visibility').value==='privado'&&state.postImageFile)return toast('Imagem privada ainda não entra aqui. Não vou colocar arquivo íntimo em bucket público só porque seria mais rápido.');
-  if(body.length<3&&!state.postImageFile)return toast('Dê ao menos uma frase ou uma imagem. Telepatia ainda não foi integrada.');
+  if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||state.postMediaFile))return toast('Imagem, música e vídeo privados ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
+  if(body.length<3&&!state.postImageFile&&!state.postMediaFile)return toast('Dê ao menos uma frase, imagem, música ou vídeo. Telepatia ainda não foi integrada.');
   $('#publish-post').disabled=true;
-  let image_url=null;
-  try{ image_url=await uploadPostImage(); }catch(e){$('#publish-post').disabled=false;return toast('A imagem tropeçou no upload. Tente novamente.');}
+  let image_url=null,media_url=null,media_kind=null;
+  try{
+    image_url=await uploadPostImage();
+    const media=await uploadPostMedia();
+    media_url=media.url;media_kind=media.kind;
+  }catch(e){
+    $('#publish-post').disabled=false;
+    console.error('media upload failed',e);
+    return toast('A mídia tropeçou no upload. A internet fingiu que era 1998 de novo.');
+  }
   const {data:createdPost,error}=await supabase.from('posts').insert({
     author_id:state.profile.id,
     recipient_id:directed?state.recipient.id:null,
-    body:body||'Imagem publicada no AVESSO.',
+    body:body||(media_kind==='video'?'Vídeo publicado no AVESSO.':media_kind==='audio'?'Áudio publicado no AVESSO.':'Imagem publicada no AVESSO.'),
     image_url,
+    media_url,
+    media_kind,
     visibility:directed?$('#post-visibility').value:'publico'
   }).select('id').single();
   $('#publish-post').disabled=false;
   if(error)return toast('Não foi possível publicar. Tente novamente.');
   $('#post-body').value='';$('#recipient-search').value='';$('#char-count').textContent='420';state.recipient=null;
   state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');
-  toast(image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.'));
-  trackAction(image_url?'image_posted':'post_created','composer',{directed});
+  state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');
+  const mediaLabel=media_kind==='video'?'Vídeo entregue ao feed.':media_kind==='audio'?'Áudio entregue ao feed.':image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
+  toast(mediaLabel);
+  trackAction(media_kind?`${media_kind}_posted`:image_url?'image_posted':'post_created','composer',{directed,media_kind});
   if(isFeedTab())loadFeed();
   loadImpact();
   if(createdPost?.id)setTimeout(()=>askWorldCharacter(image_url?'image_posted':'post_created',{post_id:createdPost.id,action_type:image_url?'image_posted':'post_created',surface:'feed'}),500);
@@ -999,6 +1052,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       <p class="post-body">${escapeHtml(p.body)}</p>
       ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
+      ${feedMediaHtml(p.media_url,p.media_kind)}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
       ${conversationHtml}
       <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
