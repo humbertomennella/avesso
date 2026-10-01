@@ -152,6 +152,7 @@ Deno.serve(async (req: Request) => {
   let publicPost = false;
   let feedReviewText = "";
   let feedReviewHasImage = false;
+  let feedReviewImageUrl = "";
   if (trigger === "feed_attention") context += " Existe pelo menos uma publicação pública sem resposta no feed.";
   if (trigger === "profile") context += " O usuário abriu o próprio Canto.";
   if (trigger === "login") context += " O usuário acabou de entrar na rede.";
@@ -183,6 +184,7 @@ Deno.serve(async (req: Request) => {
     if (post?.visibility === "publico") {
       publicPost = true;
       feedReviewHasImage = Boolean(post.image_url);
+      feedReviewImageUrl = /^https?:\/\//i.test(String(post.image_url || "")) ? String(post.image_url).slice(0,1600) : "";
       if (post.author_id === userId && ["post_created","image_posted"].includes(trigger)) {
         feedReviewText = String(post.body || "").trim().slice(0,280);
         context += ` O usuário publicou publicamente: "${feedReviewText}".`;
@@ -249,8 +251,8 @@ Deno.serve(async (req: Request) => {
 
   if (feedReviewTrigger && character.slug === "algo") {
     const normalized = feedReviewText.toLowerCase().replace(/\s+/g, " ").trim();
-    const lowSignal = !normalized || normalized.length < 5 || /^(teste|test|oi|ola|olá|e la vamos nos|e lá vamos nós|imagem publicada no avesso\.?|gif publicado no avesso\.?|vídeo publicado no avesso\.?|video publicado no avesso\.?)$/i.test(normalized);
-    if (!publicPost || lowSignal) return json({ skipped: true, reason: "algo_low_context" });
+    const lowSignal = !normalized || normalized.length < 5 || /^(teste|test|oi|ola|olá|e la vamos nos|e lá vamos nós|imagem publicada no avesso\.?|gif publicado no avesso\.?|vídeo publicado no avesso\.?|video publicado no avesso\.?|vídeo do youtube publicado no avesso\.?|video do youtube publicado no avesso\.?|spotify publicado no avesso\.?|áudio publicado no avesso\.?|audio publicado no avesso\.?)$/i.test(normalized);
+    if (!publicPost || (lowSignal && !feedReviewImageUrl)) return json({ skipped: true, reason: "algo_low_context" });
     if (!apiKey || !character.ai_enabled || brain?.ai_enabled === false) return json({ skipped: true, reason: "algo_ai_unavailable" });
     try {
       const decisionPrompt = context + "\n\nVocê está decidindo se ALGO deve interferir em uma publicação do feed." +
@@ -259,7 +261,11 @@ Deno.serve(async (req: Request) => {
         "\nIDs de reação: infelizmente_gostei, isso_prestou, salvaria_disquete, modem_aprovou, humano_detectado, li_me_arrependi, infelizmente_concordo, pane_mas_gostei." +
         "\nPrefira REACT quando um reconhecimento simples basta. Use COMMENT somente se houver algo específico no texto e a frase acrescentar humor ou contexto real." +
         "\nUse SKIP para testes, frases vagas, boilerplate do sistema, mídia sem descrição suficiente ou quando a intervenção parecer forçada." +
-        "\nNunca descreva conteúdo de imagem que você não recebeu. Não invente intenção do usuário.";
+        "\nSe uma imagem for fornecida junto desta decisão, você pode analisá-la. Se não houver imagem fornecida, não invente conteúdo visual. Não invente intenção do usuário.";
+      const decisionInput = feedReviewImageUrl ? [{ role: "user", content: [
+        { type: "input_text", text: decisionPrompt },
+        { type: "input_image", image_url: feedReviewImageUrl }
+      ]}] : decisionPrompt;
       const decisionResponse = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -269,7 +275,7 @@ Deno.serve(async (req: Request) => {
           reasoning: { effort: "low" },
           max_output_tokens: 180,
           instructions,
-          input: decisionPrompt,
+          input: decisionInput,
         }),
       });
       if (!decisionResponse.ok) return json({ skipped: true, reason: "algo_ai_error" });
