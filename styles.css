@@ -3434,3 +3434,328 @@ html.msn-screen-nudge body{
   contain:layout paint;
   transform:translateZ(0);
 }
+
+
+/* AVESSO CHAT WINDOWING + MEDIA 2026-10-01 */
+
+/* Mídia em publicações e no Canto */
+.media-file-pick{cursor:pointer}
+.media-preview{
+  width:100%;
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr) 30px;
+  align-items:center;
+  gap:9px;
+  margin-top:8px;
+  padding:9px;
+  border:1px solid #344247;
+  background:#090e10;
+}
+.media-preview>span{
+  width:36px;height:36px;
+  display:grid;place-items:center;
+  border:1px solid #425155;
+  color:var(--acid);
+  font:800 .9rem var(--mono);
+}
+.media-preview b,.media-preview small{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.media-preview b{font:700 .62rem var(--mono);color:#e7ece7}
+.media-preview small{margin-top:3px;font:500 .52rem var(--mono);color:#7f8b89}
+.media-preview>button{
+  width:28px;height:28px;
+  border:1px solid #573237;
+  background:#180d0f;
+  color:#ff7a6f;
+  cursor:pointer;
+}
+
+.post-media{
+  margin:12px 0;
+  padding:10px;
+  border:1px solid #314044;
+  background:#080d0fe8;
+}
+.post-media-label{
+  margin-bottom:7px;
+  color:var(--cyan);
+  font:700 .55rem var(--mono);
+  letter-spacing:.05em;
+}
+.post-media audio,
+.post-media video{
+  display:block;
+  width:100%;
+  max-width:100%;
+}
+.post-media audio{height:42px}
+.post-media video{
+  max-height:68vh;
+  background:#020303;
+  object-fit:contain;
+}
+.post-media.compact{margin:8px 0;padding:7px}
+.post-media.compact video{max-height:430px}
+
+.profile-media-control,.public-media{
+  border:1px solid var(--line);
+  background:#0a0f11d9;
+  padding:18px;
+  margin-top:16px;
+}
+.profile-media-control>p,.public-media>p{color:var(--muted)}
+.profile-media-upload{
+  display:grid;
+  grid-template-columns:1fr 1.2fr auto;
+  gap:8px;
+  margin:12px 0 14px;
+}
+.profile-media-upload input{margin:0;min-width:0}
+.profile-media-upload button{
+  border:0;
+  background:var(--acid);
+  color:#0b0e08;
+  padding:0 14px;
+  font:800 .56rem var(--mono);
+  cursor:pointer;
+}
+.profile-media-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:10px;
+}
+.profile-media-card{
+  min-width:0;
+  border:1px solid #29363a;
+  background:#070b0d;
+  padding:9px;
+}
+.profile-media-head{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:4px;
+  color:var(--cyan);
+  font:700 .54rem var(--mono);
+}
+.profile-media-head small{color:#74817f;font-weight:500}
+.profile-media-card>p{
+  margin:8px 2px 0;
+  color:#c7cfcc;
+  font-size:.78rem;
+}
+.profile-media-delete{
+  width:100%;
+  margin-top:8px;
+  padding:6px;
+  border:1px solid #552d31;
+  background:transparent;
+  color:#ff7a6f;
+  font:600 .5rem var(--mono);
+  cursor:pointer;
+}
+.profile-media-empty{color:#74817f}
+
+/* A janela volta a parecer software utilizável em vez de concurso de fonte microscópica. */
+.dm-floating-window{
+  --dm-wallpaper-overlay:linear-gradient(rgba(247,251,248,.38),rgba(247,251,248,.50));
+}
+.dm-floating-window.desktop-windowed{
+  container-type:size;
+  container-name:avesso-chat;
+  min-width:300px;
+  min-height:240px;
+  transition:box-shadow .16s,transform .16s!important;
+  will-change:left,top,width,height;
+}
+.dm-window-interacting,
+.dm-window-interacting *{
+  user-select:none!important;
+}
+.dm-window-interacting{cursor:grabbing!important}
+
+@media(min-width:761px) and (pointer:fine){
+  .dm-floating-window.desktop-windowed .dm-msn-titlebar{
+    cursor:grab!important;
+  }
+  .dm-floating-window.desktop-windowed.maximized .dm-msn-titlebar{
+    cursor:default!important;
+  }
+}
+
+/* Tipografia legível, ainda retrô, sem sacrificar acentos ou olhos humanos. */
+.dm-floating-window,
+.dm-floating-window button,
+.dm-floating-window input{
+  font-family:var(--mono)!important;
+  font-variant-ligatures:none;
+  text-rendering:optimizeLegibility;
+}
+.dm-floating-window .dm-msn-appmark{
+  font:800 .70rem/1.2 var(--mono)!important;
+  letter-spacing:.035em!important;
+}
+.dm-floating-window .dm-title-peer{
+  font:700 .70rem/1.2 var(--mono)!important;
+  letter-spacing:0!important;
+  text-decoration:none!important;
+}
+.dm-floating-window .dm-msn-era{
+  font:600 .56rem/1.2 var(--mono)!important;
+  letter-spacing:.02em!important;
+}
+.dm-floating-window .dm-conversation-label{
+  font:800 .56rem/1.25 var(--mono)!important;
+  letter-spacing:.045em!important;
+}
+.dm-floating-window .dm-peer-name{
+  font:800 1rem/1.15 var(--sans)!important;
+  letter-spacing:0!important;
+}
+.dm-floating-window .dm-floating-head small{
+  font:600 .60rem/1.3 var(--mono)!important;
+  letter-spacing:0!important;
+}
+.dm-floating-window .dm-msn-peer>b,
+.dm-floating-window .dm-msn-self>b{
+  font:800 .55rem/1.25 var(--mono)!important;
+  letter-spacing:0!important;
+}
+.dm-floating-window .dm-msn-peer>small,
+.dm-floating-window .dm-msn-self>small{
+  font:500 .50rem/1.3 var(--mono)!important;
+}
+.dm-floating-window .dm-msn-presence{
+  font:600 .48rem/1.3 var(--mono)!important;
+}
+.dm-floating-window .dm-bubble{
+  color:var(--dm-ink)!important;
+  background:color-mix(in srgb,var(--dm-paper) 88%,transparent)!important;
+  border-color:color-mix(in srgb,var(--dm-accent) 46%,#6f8589)!important;
+  box-shadow:0 2px 9px #0002;
+  backdrop-filter:blur(1.5px);
+  -webkit-backdrop-filter:blur(1.5px);
+}
+.dm-floating-window .dm-bubble.mine{
+  background:color-mix(in srgb,var(--dm-accent) 15%,var(--dm-paper) 85%)!important;
+  border-color:color-mix(in srgb,var(--dm-accent) 70%,#73888c)!important;
+}
+.dm-floating-window .dm-bubble p{
+  color:var(--dm-ink)!important;
+  font:600 clamp(.76rem,2cqi,.94rem)/1.48 var(--mono)!important;
+  letter-spacing:0!important;
+  text-shadow:none!important;
+}
+.dm-floating-window .dm-bubble small{
+  color:color-mix(in srgb,var(--dm-ink) 62%,#71807e)!important;
+  font:600 clamp(.52rem,1.35cqi,.64rem)/1.3 var(--mono)!important;
+}
+.dm-floating-window .dm-attention-event{
+  background:color-mix(in srgb,#fff4cf 91%,transparent)!important;
+  color:#744900!important;
+  font:700 clamp(.58rem,1.5cqi,.70rem)/1.45 var(--mono)!important;
+  text-shadow:none!important;
+}
+.dm-floating-window .dm-tools>button{
+  font:700 clamp(.55rem,1.35cqi,.66rem)/1.2 var(--mono)!important;
+}
+.dm-floating-window #dm-form input{
+  font:500 clamp(.78rem,1.8cqi,.94rem)/1.35 var(--sans)!important;
+}
+.dm-floating-window #dm-form button{
+  font:800 clamp(.58rem,1.35cqi,.70rem)/1 var(--mono)!important;
+}
+
+/* Fundo aparece de verdade. A legibilidade fica nas bolhas, não numa cortina branca gigante. */
+.dm-floating-window .dm-log{
+  background-color:var(--dm-paper)!important;
+  background-image:var(--dm-wallpaper-overlay),var(--dm-chat-wallpaper)!important;
+  background-size:cover!important;
+  background-position:center!important;
+  background-attachment:local!important;
+}
+.dm-floating-window.theme-crt_void,
+.dm-floating-window.theme-winamp_2026{
+  --dm-wallpaper-overlay:linear-gradient(rgba(1,4,2,.48),rgba(1,4,2,.62));
+}
+.dm-floating-window.theme-arcade_os{
+  --dm-wallpaper-overlay:linear-gradient(rgba(25,5,28,.38),rgba(25,5,28,.52));
+}
+.dm-floating-window.theme-midnight_modem,
+.dm-floating-window.theme-graphite_dos{
+  --dm-wallpaper-overlay:linear-gradient(rgba(7,11,14,.42),rgba(7,11,14,.55));
+}
+
+/* Handles discretos nas oito direções. Desktop apenas. */
+.dm-resize-handle{
+  position:absolute;
+  z-index:120;
+  display:block;
+  background:transparent;
+  touch-action:none;
+}
+.dm-resize-n,.dm-resize-s{left:9px;right:9px;height:7px}
+.dm-resize-n{top:0;cursor:n-resize}.dm-resize-s{bottom:0;cursor:s-resize}
+.dm-resize-e,.dm-resize-w{top:9px;bottom:9px;width:7px}
+.dm-resize-e{right:0;cursor:e-resize}.dm-resize-w{left:0;cursor:w-resize}
+.dm-resize-ne,.dm-resize-nw,.dm-resize-se,.dm-resize-sw{width:12px;height:12px}
+.dm-resize-ne{right:0;top:0;cursor:ne-resize}.dm-resize-nw{left:0;top:0;cursor:nw-resize}
+.dm-resize-se{right:0;bottom:0;cursor:se-resize}.dm-resize-sw{left:0;bottom:0;cursor:sw-resize}
+.dm-floating-window.maximized .dm-resize-handle,
+.dm-floating-window.minimized .dm-resize-handle{display:none!important}
+
+/* O conteúdo se reorganiza conforme o tamanho escolhido, sem zoom borrado. */
+@container avesso-chat (max-width:470px){
+  .dm-floating-window .dm-log{
+    padding:14px 64px 60px 64px!important;
+  }
+  .dm-floating-window .dm-msn-peer,
+  .dm-floating-window .dm-msn-self{
+    width:58px!important;
+    padding:6px 4px!important;
+  }
+  .dm-floating-window .dm-msn-peer{left:4px!important;top:5px!important}
+  .dm-floating-window .dm-msn-self{right:4px!important;bottom:5px!important}
+  .dm-floating-window .dm-msn-peer-avatar{width:46px!important;height:46px!important}
+  .dm-floating-window .dm-msn-self-avatar{width:42px!important;height:42px!important}
+  .dm-floating-window .dm-msn-peer>small,
+  .dm-floating-window .dm-msn-self>small{display:none!important}
+  .dm-floating-window .dm-tools{overflow-x:auto!important}
+  .dm-floating-window .dm-tools>button{flex:0 0 auto}
+  .dm-floating-window .dm-msn-era{display:none!important}
+}
+@container avesso-chat (min-width:760px){
+  .dm-floating-window .dm-log{
+    padding:22px 120px 82px 120px!important;
+  }
+  .dm-floating-window .dm-msn-peer,
+  .dm-floating-window .dm-msn-self{
+    width:108px!important;
+    padding:12px 8px!important;
+  }
+  .dm-floating-window .dm-msn-peer-avatar{width:82px!important;height:82px!important}
+  .dm-floating-window .dm-msn-self-avatar{width:70px!important;height:70px!important}
+  .dm-floating-window .dm-bubble{max-width:68%!important}
+}
+@container avesso-chat (max-height:440px){
+  .dm-floating-window .dm-floating-head{
+    height:58px!important;
+    flex-basis:58px!important;
+  }
+  .dm-floating-window .dm-tools{padding:4px 7px!important}
+  .dm-floating-window .dm-tools>button{padding:5px 7px!important}
+  .dm-floating-window #dm-form{padding:6px!important}
+}
+
+@media(max-width:760px){
+  #dm-maximize{display:none!important}
+  .dm-resize-handle{display:none!important}
+  .profile-media-upload{grid-template-columns:1fr}
+  .profile-media-upload button{padding:10px}
+  .profile-media-grid{grid-template-columns:1fr}
+  .post-media video{max-height:56vh}
+  .dm-floating-window .dm-bubble p{font-size:.78rem!important}
+  .dm-floating-window .dm-bubble small{font-size:.52rem!important}
+  .dm-floating-window .dm-conversation-label{font-size:.47rem!important}
+  .dm-floating-window .dm-peer-name{font-size:.86rem!important}
+  .dm-floating-window .dm-floating-head small{font-size:.52rem!important}
+}
