@@ -240,6 +240,89 @@ async function loadOwnModeration(){
   }
 }
 
+
+function ensureReportDialog(){
+  let dialog=$('#report-user-dialog');
+  if(dialog)return dialog;
+  dialog=document.createElement('dialog');
+  dialog.id='report-user-dialog';
+  dialog.className='report-user-dialog';
+  dialog.innerHTML=`<form id="report-user-form" method="dialog">
+    <button class="dialog-close" type="button" id="report-user-close" aria-label="Fechar">×</button>
+    <span class="section-code">DENÚNCIA // HUMANO → STAFF</span>
+    <h2>Denunciar usuário</h2>
+    <p id="report-user-target">carregando alvo...</p>
+    <label>Motivo<select id="report-user-reason">
+      <option value="assedio">assédio</option>
+      <option value="odio">ódio / discriminação</option>
+      <option value="spam">spam</option>
+      <option value="risco">risco / ameaça</option>
+      <option value="outro">outro</option>
+    </select></label>
+    <label>Detalhes<textarea id="report-user-details" maxlength="500" placeholder="explique o contexto. moderação sem contexto vira loteria."></textarea></label>
+    <div class="report-user-actions"><button type="button" id="report-user-cancel">cancelar</button><button type="submit" class="danger">enviar denúncia</button></div>
+  </form>`;
+  document.body.appendChild(dialog);
+  $('#report-user-close').onclick=()=>dialog.close();
+  $('#report-user-cancel').onclick=()=>dialog.close();
+  $('#report-user-form').onsubmit=submitUserReport;
+  return dialog;
+}
+async function openReportUser(userId){
+  if(!userId||!state.profile?.id)return;
+  if(userId===state.profile.id)return toast('Denunciar a si mesmo seria uma eficiência administrativa admirável, mas não.');
+  const profile=await profileById(userId);
+  if(!profile)return toast('Esse usuário não foi encontrado.');
+  const dialog=ensureReportDialog();
+  dialog.dataset.reportedProfileId=userId;
+  $('#report-user-target').innerHTML='Você está denunciando <b>'+escapeHtml(profile.display_name)+'</b> <small>@'+escapeHtml(profile.handle)+'</small>. A denúncia vai para a fila da Staff.';
+  $('#report-user-reason').value='outro';
+  $('#report-user-details').value='';
+  if(!dialog.open)dialog.showModal();
+}
+async function submitUserReport(e){
+  e.preventDefault();
+  const dialog=$('#report-user-dialog');
+  const reported_profile_id=dialog?.dataset.reportedProfileId;
+  const reason=$('#report-user-reason')?.value||'outro';
+  const details=String($('#report-user-details')?.value||'').trim().slice(0,500);
+  if(!reported_profile_id)return;
+  if(details.length<4)return toast('Inclua um pouco de contexto. Quatro caracteres já vencem a burocracia.');
+  const submit=$('#report-user-form button[type="submit"]');if(submit)submit.disabled=true;
+  const {error}=await supabase.from('reports').insert({
+    reporter_id:state.profile.id,
+    reported_profile_id,
+    post_id:null,
+    reason,
+    details,
+    status:'aberto',
+    priority:reason==='risco'?'alta':'normal'
+  });
+  if(submit)submit.disabled=false;
+  if(error){console.error('report user failed',error);return toast('A denúncia não conseguiu entrar na fila.');}
+  dialog.close();
+  toast('Denúncia enviada à Staff. Sem espetáculo público, como deve ser.');
+}
+async function loadStaffNotifications(){
+  if(!state.profile?.id)return;
+  const {data,error}=await supabase.from('staff_notifications').select('id,title,body,severity,created_at,read_at,sender_id').eq('recipient_id',state.profile.id).is('read_at',null).order('created_at',{ascending:true}).limit(20);
+  if(error)return;
+  for(const row of (data||[])){
+    socialNotify({title:row.title,body:row.body,kind:row.severity==='critical'?'world':'message',sound:row.severity!=='info'});
+    await supabase.from('staff_notifications').update({read_at:new Date().toISOString()}).eq('id',row.id).eq('recipient_id',state.profile.id);
+  }
+}
+function startStaffNotificationRealtime(){
+  if(state.staffNotificationChannel){supabase.removeChannel(state.staffNotificationChannel);state.staffNotificationChannel=null;}
+  if(!state.profile?.id)return;
+  state.staffNotificationChannel=supabase.channel('staff-notice-'+state.profile.id+'-'+Date.now())
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_notifications',filter:'recipient_id=eq.'+state.profile.id},payload=>{
+      const row=payload.new||{};
+      socialNotify({title:row.title||'Mensagem da Staff',body:row.body||'',kind:row.severity==='critical'?'world':'message',sound:row.severity!=='info'});
+      supabase.from('staff_notifications').update({read_at:new Date().toISOString()}).eq('id',row.id).eq('recipient_id',state.profile.id).then(()=>{});
+    }).subscribe();
+}
+
 function hydrateStories(rows=[]){
   const ids=[...new Set(rows.map(x=>x.author_id).filter(Boolean))];
   return (async()=>{
