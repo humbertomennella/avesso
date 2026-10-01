@@ -218,6 +218,10 @@ function applySiteSettings(settings=state.siteSettings||{}){
   const announcement=String(settings.announcement||'').trim();
   bar.textContent=announcement;
   bar.classList.toggle('hidden',!announcement);
+  const layout=settings.layout_config||{};
+  document.documentElement.dataset.avessoDensity=layout.density||'compact';
+  document.documentElement.dataset.avessoFeedWidth=layout.feed_width||'normal';
+  document.documentElement.dataset.avessoSidebar=layout.sidebar_mode||'fixed';
 }
 async function loadSiteSettings(){
   const {data,error}=await supabase.from('site_settings').select('*').eq('id','global').maybeSingle();
@@ -361,14 +365,15 @@ function storyCardHtml(story,{compact=false}={}){
 
 async function loadStoriesStrip(){
   const host=$('#stories-zone');
-  if(!host||!state.profile||state.tab!=='feed'){host?.classList.add('hidden');return;}
+  if(!host||!state.profile||state.tab!=='feed'||state.siteSettings?.feed_config?.show_stories===false){host?.classList.add('hidden');return;}
   host.classList.remove('hidden');
   const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,media_type,visibility,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(60);
   if(error){host.innerHTML='<div class="stories-error">stories deram tela azul.</div>';return;}
   const stories=await hydrateStories((data||[]).filter(s=>!isPeerBlocked(s.author_id)));
   const latestByAuthor=[],seen=new Set();
   for(const s of stories){if(!seen.has(s.author_id)){seen.add(s.author_id);latestByAuthor.push(s);}}
-  host.innerHTML=`<div class="stories-head"><div><span class="section-code">STORIES // 24H</span><b>temporário, como toda boa decisão na internet</b></div><button id="story-create-feed">＋ postar story</button></div><div class="stories-strip"><button class="story-new-card" id="story-create-feed-card"><span class="story-ring self"><i>${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</i><em>＋</em></span><b>seu story</b><small>24h e acabou</small></button>${latestByAuthor.map(s=>storyCardHtml(s,{compact:true})).join('')}</div>`;
+  const storyHours=Math.max(1,Math.min(24,Number(state.siteSettings?.story_config?.duration_hours)||24));
+  host.innerHTML=`<div class="stories-head"><div><span class="section-code">STORIES // ${storyHours}H</span><b>temporário, como toda boa decisão na internet</b></div><button id="story-create-feed">＋ postar story</button></div><div class="stories-strip"><button class="story-new-card" id="story-create-feed-card"><span class="story-ring self"><i>${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</i><em>＋</em></span><b>seu story</b><small>${storyHours}h e acabou</small></button>${latestByAuthor.map(s=>storyCardHtml(s,{compact:true})).join('')}</div>`;
   $('#story-create-feed')?.addEventListener('click',openStoryCreate);
   $('#story-create-feed-card')?.addEventListener('click',openStoryCreate);
   const storySequence=latestByAuthor.map(s=>s.id);
@@ -496,8 +501,10 @@ function toggleStoryRecording(){
   state.storyCameraRecording=true;
   const button=$('#story-camera-record');
   if(button){button.classList.add('recording');button.textContent='■ parar gravação';}
-  const status=$('#story-camera-status');if(status)status.textContent='REC // máximo 15 segundos';
-  state.storyRecordStopTimer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();},15000);
+  const status=$('#story-camera-status');
+  const maxSeconds=Math.max(5,Math.min(30,Number(state.siteSettings?.story_config?.max_video_seconds)||15));
+  if(status)status.textContent='REC // máximo '+maxSeconds+' segundos';
+  state.storyRecordStopTimer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();},maxSeconds*1000);
 }
 function openStoryCreate(){
   const dialog=$('#story-create-dialog');if(!dialog)return;
@@ -507,7 +514,10 @@ function openStoryCreate(){
   $('#story-create-message').textContent='';
   $('#story-body').value='';
   $('#story-image').value='';
-  $('#story-visibility').value='publico';
+  const storyCfg=state.siteSettings?.story_config||{};
+  $('#story-visibility').value=storyCfg.default_visibility==='amigos'?'amigos':'publico';
+  const camera=$('#story-camera-open');if(camera){camera.classList.toggle('hidden',storyCfg.camera_enabled===false);camera.disabled=storyCfg.camera_enabled===false;}
+  const publish=$('#story-publish');if(publish)publish.textContent='publicar por '+Math.max(1,Math.min(24,Number(storyCfg.duration_hours)||24))+'h';
   if(!dialog.open)dialog.showModal();
   setTimeout(()=>$('#story-body')?.focus(),40);
 }
@@ -527,7 +537,9 @@ async function publishStory(){
   const btn=$('#story-publish');if(btn){btn.disabled=true;btn.textContent='subindo para a internet...';}
   let created=null,mediaPath=null;
   try{
-    const ins=await supabase.from('stories').insert({author_id:state.profile.id,body,visibility,media_type:mediaType}).select().single();
+    const storyHours=Math.max(1,Math.min(24,Number(state.siteSettings?.story_config?.duration_hours)||24));
+    const expires_at=new Date(Date.now()+storyHours*3600000).toISOString();
+    const ins=await supabase.from('stories').insert({author_id:state.profile.id,body,visibility,media_type:mediaType,expires_at}).select().single();
     if(ins.error)throw ins.error;
     created=ins.data;
     if(file){
@@ -541,7 +553,7 @@ async function publishStory(){
     clearStoryPreview();
     state.storyCapturedFile=null;
     $('#story-create-dialog')?.close();
-    toast(mediaType==='video'?'Vídeo no story. Ele tem 24 horas antes do esquecimento institucional.':'Story publicado. O relógio de 24h já está julgando.');
+    toast('Story publicado. O relógio de '+storyHours+'h já começou.');
     trackAction('story_posted','stories',{visibility,media_type:mediaType||'text'});
     await loadStoriesStrip();
     if(state.tab==='profile')loadProfileStories(state.profile.id,'#profile-story-list');
@@ -552,7 +564,7 @@ async function publishStory(){
     toast('O story caiu antes de completar 24 horas.');
   }finally{
     state.storyBusy=false;
-    if(btn){btn.disabled=false;btn.textContent='publicar por 24h';}
+    if(btn){btn.disabled=false;btn.textContent='publicar por '+Math.max(1,Math.min(24,Number(state.siteSettings?.story_config?.duration_hours)||24))+'h';}
   }
 }
 
@@ -2205,7 +2217,8 @@ async function loadFeed(){
   if(requestedTab==='quiet')query=query.eq('response_count',0);
   if(requestedTab==='sent')query=query.eq('author_id',state.profile.id);
 
-  const {data,error}=await query.order('created_at',{ascending:false}).limit(40);
+  const feedLimit=Math.max(10,Math.min(60,Number(state.siteSettings?.feed_config?.page_size)||40));
+  const {data,error}=await query.order('created_at',{ascending:false}).limit(feedLimit);
 
   // O usuário pode ter mudado de página enquanto o banco respondia.
   if(viewVersion!==state.viewVersion||state.tab!==requestedTab||!isFeedTab())return;
