@@ -5312,3 +5312,454 @@ body:has(.dm-floating-window:not(.hidden):not(.minimized)) .online-friends-dock{
 .public-profile header #public-now-playing .now-playing-status small{
   font-size:.55rem;
 }
+
+
+/* AVESSO SOCIAL POLISH // 2026-10-01 */
+
+/* Curtidas boas sem virar coração genérico de aplicativo bancário. */
+.acid-reaction{
+  position:relative;
+  overflow:hidden;
+  transition:border-color .16s,background .16s,color .16s,transform .16s,box-shadow .16s;
+}
+.acid-reaction:before{
+  content:"";
+  position:absolute;
+  inset:auto 0 0;
+  height:1px;
+  background:linear-gradient(90deg,transparent,var(--acid),transparent);
+  opacity:.18;
+}
+.acid-reaction:nth-child(-n+5) span{
+  text-shadow:0 0 8px #d8ff3e55;
+}
+.acid-reaction:nth-child(-n+5):hover{
+  background:linear-gradient(90deg,#d8ff3e10,#22d9ee08);
+  border-color:var(--acid);
+  color:#e8f0ed;
+  transform:translateY(-1px);
+  box-shadow:0 3px 0 #020405;
+}
+.acid-reaction:nth-child(-n+5).active{
+  background:
+    repeating-linear-gradient(90deg,#d8ff3e15 0 7px,#22d9ee0d 7px 8px),
+    #0b100b;
+  border-color:var(--acid);
+  color:var(--acid);
+  box-shadow:inset 3px 0 0 var(--cyan),0 0 12px #d8ff3e18;
+}
+.acid-reaction:nth-child(-n+5).active:after{
+  content:"✓";
+  margin-left:5px;
+  color:var(--cyan);
+}
+
+/* O avatar respira só onde o usuário pediu. Sem transformar a lateral num Tamagotchi. */
+body.avesso-feed-home #nav-avatar,
+body.avesso-own-corner .profile-avatar-large{
+  animation:avesso-avatar-idle 6.2s ease-in-out infinite;
+  transform-origin:50% 70%;
+}
+body.avesso-feed-home #nav-avatar img,
+body.avesso-own-corner .profile-avatar-large img{
+  animation:avesso-avatar-scan 7.5s ease-in-out infinite;
+}
+@keyframes avesso-avatar-idle{
+  0%,100%{transform:translateY(0) scale(1);box-shadow:0 0 0 transparent}
+  46%{transform:translateY(-1px) scale(1.008);box-shadow:0 0 0 transparent}
+  50%{transform:translateY(-2px) scale(1.015);box-shadow:0 0 12px #22d9ee20}
+  54%{transform:translateY(-1px) scale(1.008)}
+}
+@keyframes avesso-avatar-scan{
+  0%,92%,100%{filter:none}
+  94%{filter:brightness(1.14) contrast(1.08)}
+  96%{filter:brightness(.94) contrast(1.14)}
+}
+@media(prefers-reduced-motion:reduce){
+  body.avesso-feed-home #nav-avatar,
+  body.avesso-own-corner .profile-avatar-large,
+  body.avesso-feed-home #nav-avatar img,
+  body.avesso-own-corner .profile-avatar-large img{
+    animation:none!important;
+  }
+}
+
+/* Menu de mensagem: só aparece quando chamado. A conversa continua sendo conversa. */
+.dm-bubble{
+  position:relative;
+}
+.dm-message-kebab{
+  position:absolute;
+  top:4px;
+  right:4px;
+  z-index:5;
+  width:27px;
+  height:24px;
+  display:grid;
+  place-items:center;
+  border:1px solid color-mix(in srgb,var(--dm-accent) 36%,#879a9d);
+  background:color-mix(in srgb,var(--dm-paper) 92%,var(--dm-accent));
+  color:color-mix(in srgb,var(--dm-ink) 72%,#53686c);
+  font:900 .62rem/1 var(--mono);
+  letter-spacing:1px;
+  cursor:pointer;
+  opacity:0;
+  transform:translateY(-2px);
+  transition:opacity .14s,transform .14s,border-color .14s;
+}
+.dm-bubble:hover .dm-message-kebab,
+.dm-bubble:focus-within .dm-message-kebab{
+  opacity:1;
+  transform:none;
+}
+.dm-message-menu{
+  position:absolute;
+  top:30px;
+  right:4px;
+  z-index:25;
+  min-width:188px;
+  padding:6px;
+  border:1px solid color-mix(in srgb,var(--dm-accent) 52%,#82979b);
+  background:#f4f8f7;
+  color:#172b30;
+  box-shadow:6px 6px 0 #0005;
+}
+.dm-message-menu.hidden{display:none}
+.dm-message-menu-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:3px;
+}
+.dm-message-menu-actions>button{
+  border:1px solid #b9c9cb;
+  background:#e7eeee;
+  color:#263f44;
+  padding:6px;
+  font:700 .48rem var(--mono);
+  cursor:pointer;
+}
+.dm-message-menu-actions>button:hover{
+  border-color:var(--dm-accent);
+  background:#fff;
+}
+.dm-message-menu-actions>button.danger{
+  color:#a33e38;
+}
+.dm-message-menu-actions>span{
+  grid-column:1/-1;
+  margin-top:3px;
+  padding-top:5px;
+  border-top:1px dashed #b7c5c7;
+  color:#667a7e;
+  font:700 .43rem var(--mono);
+  text-transform:uppercase;
+}
+.dm-message-react-choices{
+  display:grid;
+  grid-template-columns:repeat(6,1fr);
+  gap:3px;
+  margin-top:5px;
+}
+.dm-message-react-choices button{
+  min-width:0;
+  min-height:28px;
+  border:1px solid #bdcbcd;
+  background:#fff;
+  color:#17272b;
+  cursor:pointer;
+  font-size:.86rem;
+}
+.dm-message-react-choices button:hover{
+  border-color:var(--acid);
+  background:#f5ffd9;
+}
+.dm-message-reactions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:3px;
+  margin-top:6px;
+}
+.dm-reaction-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+  min-width:27px;
+  height:24px;
+  border:1px solid color-mix(in srgb,var(--dm-accent) 35%,#a8b7b9);
+  background:color-mix(in srgb,var(--dm-paper) 92%,var(--dm-accent));
+  color:var(--dm-ink);
+  padding:2px 5px;
+  cursor:pointer;
+  font-size:.72rem;
+}
+.dm-reaction-chip.active{
+  border-color:var(--dm-accent);
+  box-shadow:inset 0 -2px 0 var(--dm-accent-2);
+}
+.dm-reaction-chip b{
+  font:700 .43rem var(--mono);
+}
+.dm-inline-edit textarea{
+  min-height:72px;
+  resize:vertical;
+  background:#fff;
+  color:#16282c;
+  border:1px solid var(--dm-accent);
+  padding:7px;
+  font:500 .78rem/1.4 var(--sans);
+}
+.dm-inline-edit>div{
+  display:flex;
+  gap:4px;
+  justify-content:flex-end;
+  margin-top:5px;
+}
+.dm-inline-edit button{
+  border:1px solid #a7b9bc;
+  background:#edf2f2;
+  color:#223b40;
+  padding:5px 7px;
+  font:700 .45rem var(--mono);
+  cursor:pointer;
+}
+.dm-message-deleted{
+  color:#7b8987!important;
+  font-style:italic;
+  font-family:var(--mono)!important;
+  font-size:.65rem!important;
+}
+.dm-bubble.deleted{
+  opacity:.68;
+  border-style:dashed!important;
+}
+
+/* O status musical precisa caber de verdade no cabeçalho da conversa. */
+.dm-floating-window>header.dm-floating-head{
+  height:auto!important;
+  min-height:78px!important;
+  flex:0 0 auto!important;
+  grid-template-columns:52px minmax(0,1fr) auto!important;
+  align-items:start!important;
+}
+.dm-floating-window>header.dm-floating-head .dm-peer-heading{
+  overflow:visible!important;
+  padding-top:1px;
+}
+.dm-floating-window>header.dm-floating-head #dm-peer-listening{
+  display:block!important;
+  width:100%;
+  margin-top:3px;
+}
+.dm-floating-window>header.dm-floating-head #dm-peer-listening:empty{
+  display:none!important;
+}
+.dm-floating-window>header.dm-floating-head #dm-peer-listening .now-playing-status{
+  display:flex!important;
+  width:min(100%,360px)!important;
+  max-width:100%!important;
+  margin:3px 0 0!important;
+  padding:4px 6px!important;
+}
+.dm-floating-window>header.dm-floating-head #dm-peer-listening .now-playing-status b{
+  font-size:.39rem!important;
+}
+.dm-floating-window>header.dm-floating-head #dm-peer-listening .now-playing-status small{
+  font-size:.45rem!important;
+}
+
+/* Ausência configurável dentro do próprio chat. */
+.dm-away-setting{
+  display:block;
+  margin:7px 0 5px;
+  padding:8px;
+  border-top:1px solid #c5d6da;
+  border-bottom:1px solid #c5d6da;
+}
+.dm-away-setting>span{
+  display:block;
+  margin-bottom:5px;
+  color:#657c81;
+  font:700 .47rem var(--mono);
+}
+.dm-away-setting select{
+  width:100%;
+  margin:0;
+  padding:6px;
+  border:1px solid #a9c0c5;
+  background:#fff;
+  color:#20363b;
+  font:600 .52rem var(--mono);
+}
+
+/* Amigos online/ausentes: mais informação, ainda sem virar CRM. */
+@media(min-width:761px){
+  .app-nav .online-friends-dock{
+    bottom:10px!important;
+  }
+  .app-nav .online-friends-list{
+    max-height:270px!important;
+  }
+  body:has(.dm-floating-window:not(.hidden).minimized) .online-friends-dock,
+  body:has(.dm-floating-window:not(.hidden):not(.minimized)) .online-friends-dock{
+    bottom:10px!important;
+  }
+}
+.online-friend-item{
+  grid-template-columns:46px minmax(0,1fr)!important;
+  gap:9px!important;
+  min-height:64px;
+  padding:8px!important;
+}
+.online-friend-avatar{
+  width:46px!important;
+  height:46px!important;
+}
+.online-friend-copy b{
+  font-size:.58rem!important;
+}
+.online-friend-copy small{
+  margin-top:1px;
+}
+.online-friend-copy strong{
+  display:block;
+  margin-top:4px;
+  color:#b8c4c1;
+  font:700 .46rem/1.2 var(--mono);
+}
+.online-friend-copy strong .presence-dot{
+  width:6px;
+  height:6px;
+}
+.online-friend-copy em{
+  display:block;
+  margin-top:4px!important;
+  color:var(--acid)!important;
+  font:600 .45rem/1.25 var(--mono)!important;
+}
+.online-friend-item.away{
+  opacity:.74;
+}
+.online-friend-item.away .online-friend-copy em{
+  color:#9ca7a4!important;
+}
+
+/* Sair agora vive no alto à direita, perto da Torre. */
+.aside-session-row{
+  display:flex;
+  justify-content:flex-end;
+  margin:0 0 9px;
+}
+.app-logout{
+  border:1px solid #6d3334;
+  background:#15090a;
+  color:#ff766d;
+  padding:7px 9px;
+  font:700 .51rem var(--mono);
+  cursor:pointer;
+  box-shadow:3px 3px 0 #020405;
+}
+.app-logout:hover{
+  border-color:#ff766d;
+  background:#220c0d;
+}
+
+/* O Rei agora publica boletins persistentes em vez de berrar na tela. */
+.tower-event-cta{
+  display:block;
+  margin:8px 0 10px;
+  color:var(--acid);
+  font:700 .48rem/1.35 var(--mono);
+}
+.tower-event-feed{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.tower-event-card{
+  position:relative;
+  overflow:hidden;
+  border:1px solid #52395b;
+  background:
+    linear-gradient(135deg,#1a0f1d,#0b0d0f 70%);
+  padding:16px;
+  min-height:150px;
+}
+.tower-event-card:after{
+  content:"AD.EXE";
+  position:absolute;
+  right:7px;
+  top:6px;
+  color:#ff71f133;
+  font:900 .42rem var(--mono);
+}
+.tower-event-card b{
+  color:var(--acid);
+  font:800 .52rem var(--mono);
+}
+.tower-event-card h3{
+  color:#ff71f1;
+  margin:9px 0 7px;
+  font-size:1.15rem;
+}
+.tower-event-card p{
+  color:#adb7b4;
+  font-size:.78rem;
+  line-height:1.5;
+}
+.tower-event-card small{
+  color:var(--cyan);
+  font:700 .49rem var(--mono);
+}
+
+@media(max-width:1050px){
+  .app-aside{
+    display:block!important;
+    position:fixed!important;
+    top:10px!important;
+    right:10px!important;
+    width:auto!important;
+    height:auto!important;
+    z-index:12100!important;
+  }
+  .app-aside>.aside-card,
+  .app-aside>#algo-line{
+    display:none!important;
+  }
+  .app-aside .aside-session-row{
+    margin:0;
+  }
+}
+@media(max-width:760px){
+  .dm-message-kebab{
+    display:none!important;
+  }
+  .dm-message-menu{
+    position:fixed!important;
+    left:12px!important;
+    right:12px!important;
+    top:auto!important;
+    bottom:calc(88px + env(safe-area-inset-bottom))!important;
+    width:auto!important;
+    z-index:12500!important;
+    padding:10px!important;
+    box-shadow:0 -5px 0 #0005,0 0 0 1px var(--dm-accent)!important;
+  }
+  .dm-message-menu-actions>span{
+    margin-top:6px;
+  }
+  .dm-message-react-choices button{
+    min-height:38px;
+    font-size:1rem;
+  }
+  .dm-floating-window>header.dm-floating-head{
+    min-height:72px!important;
+    grid-template-columns:44px minmax(0,1fr) auto!important;
+  }
+  .tower-event-feed{
+    grid-template-columns:1fr;
+  }
+  .app-logout{
+    padding:7px 8px;
+    font-size:.47rem;
+  }
+}
