@@ -1658,3 +1658,273 @@
     margin-right:8px!important;
   }
 }
+
+
+/* =========================================================
+   MOBILE NAV + REACTION HOTFIX 2026-10-01
+   ========================================================= */
+@media (max-width:820px){
+  /* Cinco alvos fixos, sem caça ao tesouro horizontal. */
+  .avesso-mobile-nav{
+    overflow:visible!important;
+    gap:4px!important;
+    padding-left:6px!important;
+    padding-right:6px!important;
+  }
+
+  .avesso-mobile-nav .mobile-extra-tab{
+    display:none!important;
+  }
+
+  .avesso-mobile-nav .mobile-primary-tab,
+  .avesso-mobile-nav .mobile-nav-more{
+    position:relative!important;
+    flex:1 1 20%!important;
+    width:auto!important;
+    min-width:0!important;
+    max-width:none!important;
+    min-height:54px!important;
+    padding:7px 3px!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:3px!important;
+    border-radius:10px!important;
+    font-size:.54rem!important;
+    line-height:1.05!important;
+    overflow:visible!important;
+  }
+
+  .avesso-mobile-nav .mobile-primary-tab.active,
+  .avesso-mobile-nav .mobile-nav-more.active{
+    box-shadow:inset 0 3px 0 var(--acid)!important;
+    border-color:#d8ff3e44!important;
+  }
+
+  .avesso-mobile-nav .mobile-nav-more > span{
+    color:var(--acid)!important;
+    font:900 .78rem/1 var(--mono)!important;
+  }
+
+  .avesso-mobile-nav .mobile-nav-more > b{
+    max-width:100%!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+    font:700 .52rem/1 var(--mono)!important;
+  }
+
+  .mobile-nav-badge{
+    position:absolute!important;
+    top:4px!important;
+    right:7px!important;
+    min-width:18px!important;
+    height:18px!important;
+    display:grid!important;
+    place-items:center!important;
+    padding:0 4px!important;
+    border-radius:999px!important;
+    background:var(--coral)!important;
+    color:#fff!important;
+    box-shadow:0 0 0 2px #080b0c!important;
+    font:800 .48rem var(--mono)!important;
+    font-style:normal!important;
+  }
+
+  .mobile-nav-badge.hidden{
+    display:none!important;
+  }
+
+  .mobile-nav-more-dot{
+    position:absolute!important;
+    top:5px!important;
+    right:8px!important;
+    width:8px!important;
+    height:8px!important;
+    border-radius:50%!important;
+    background:var(--acid)!important;
+    opacity:0;
+    box-shadow:0 0 0 2px #080b0c!important;
+  }
+
+  .mobile-nav-more.has-notice .mobile-nav-more-dot{
+    opacity:1;
+  }
+
+  /* Menu "Mais" acima da barra, no padrão bottom-sheet dos celulares. */
+  .avesso-mobile-more-sheet{
+    position:fixed!important;
+    z-index:49950!important;
+    left:8px!important;
+    right:8px!important;
+    bottom:calc(var(--av-mobile-nav-h) + env(safe-area-inset-bottom) + 8px)!important;
+    width:auto!important;
+    max-height:min(62dvh,520px)!important;
+    display:flex!important;
+    flex-direction:column!important;
+    gap:8px!important;
+    padding:10px!important;
+    border:1px solid #3a4c50!important;
+    border-radius:14px!important;
+    background:rgba(7,11,13,.985)!important;
+    box-shadow:0 18px 56px #000e!important;
+    backdrop-filter:blur(18px)!important;
+    -webkit-backdrop-filter:blur(18px)!important;
+    overflow:auto!important;
+    transform:translateY(18px) scale(.985);
+    opacity:0;
+    transition:transform .16s ease,opacity .16s ease;
+  }
+
+  .avesso-mobile-more-sheet.hidden{
+    display:none!important;
+  }
+
+  .avesso-mobile-more-sheet.open{
+    transform:translateY(0) scale(1);
+    opacity:1;
+  }
+
+  .avesso-mobile-more-sheet > header{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:12px!important;
+    padding:2px 2px 8px!important;
+    border-bottom:1px solid #263438!important;
+  }
+
+  .avesso-mobile-more-sheet > header small{
+    display:block!important;
+    color:var(--cyan)!important;
+    font:700 .52rem var(--mono)!important;
+    letter-spacing:.08em!important;
+  }
+
+  .avesso-mobile-more-sheet > header b{
+    display:block!important;
+    margin-top:3px!important;
+    color:var(--ink)!important;
+    font:700 .78rem var(--mono)!important;
+  }
+
+  .avesso-mobile-more-sheet > header button{
+    flex:0 0 42px!important;
+    width:42px!important;
+    height:42px!important;
+    border:1px solid #425154!important;
+    border-radius:9px!important;
+    background:#111719!important;
+    color:var(--ink)!important;
+    font-size:1.15rem!important;
+  }
+
+  .mobile-more-grid{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:7px!important;
+  }
+
+  .mobile-more-item{
+    min-width:0!important;
+    min-height:50px!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    align-items:center!important;
+    gap:8px!important;
+    padding:9px 10px!important;
+    border:1px solid #2c393d!important;
+    border-radius:9px!important;
+    background:#0d1315!important;
+    color:#aab4b1!important;
+    text-align:left!important;
+    font:700 .61rem/1.25 var(--mono)!important;
+  }
+
+  .mobile-more-item.active{
+    border-color:#d8ff3e66!important;
+    background:#d8ff3e0d!important;
+    color:var(--acid)!important;
+  }
+
+  .mobile-more-item > span{
+    min-width:0!important;
+    overflow-wrap:anywhere!important;
+  }
+
+  .mobile-more-item > i{
+    color:var(--acid)!important;
+    font-style:normal!important;
+  }
+
+  .mobile-notification-row{
+    width:100%!important;
+    min-height:46px!important;
+    display:flex!important;
+    align-items:center!important;
+    gap:9px!important;
+    padding:9px 11px!important;
+    border:1px solid #334247!important;
+    border-radius:9px!important;
+    background:#111719!important;
+    color:#c8d0cd!important;
+    text-align:left!important;
+    font:700 .59rem var(--mono)!important;
+  }
+
+  .mobile-notification-row i{
+    color:#ffbf3f!important;
+    font-style:normal!important;
+  }
+
+  .mobile-notification-row.active{
+    border-color:#d8ff3e66!important;
+    color:var(--acid)!important;
+  }
+
+  .mobile-notification-row.active i{
+    color:var(--acid)!important;
+  }
+
+  /* A bandeja de reação entra no fluxo do post. Nada de popup invisível. */
+  .reaction-shell > .acid-reactions{
+    position:static!important;
+    left:auto!important;
+    right:auto!important;
+    top:auto!important;
+    bottom:auto!important;
+    z-index:auto!important;
+    width:100%!important;
+    max-width:100%!important;
+    margin-top:7px!important;
+    box-shadow:none!important;
+  }
+
+  .reaction-shell.open > .reaction-trigger{
+    border-color:#d8ff3e77!important;
+    background:#d8ff3e12!important;
+  }
+
+  .reaction-shell.open > .acid-reactions{
+    display:grid!important;
+    animation:avesso-reaction-open .14s ease-out both;
+  }
+
+  @keyframes avesso-reaction-open{
+    from{opacity:0;transform:translateY(-5px)}
+    to{opacity:1;transform:translateY(0)}
+  }
+}
+
+@media (max-width:390px){
+  .mobile-more-grid{
+    grid-template-columns:1fr!important;
+  }
+
+  .avesso-mobile-nav .mobile-primary-tab,
+  .avesso-mobile-nav .mobile-nav-more{
+    min-height:52px!important;
+    font-size:.50rem!important;
+  }
+}
