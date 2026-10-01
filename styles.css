@@ -9182,3 +9182,10 @@ html[data-avesso-density="comfortable"] body{line-height:1.72}
   .report-controls select:last-child{grid-column:auto}
   .asset-grid,.badge-catalog{grid-template-columns:1fr}
 }
+
+.override-editor{display:grid;grid-template-columns:.65fr 1.35fr .65fr 1.6fr 80px auto auto;gap:6px;align-items:center}
+.override-editor textarea{min-height:62px;resize:vertical}
+.override-list article>div:first-child{min-width:0}
+.override-list article>div:last-child{display:flex;gap:5px;align-items:flex-start}
+@media(max-width:1180px){.override-editor{grid-template-columns:1fr 1fr 1fr}.override-editor textarea{grid-column:1/-1}}
+@media(max-width:760px){.override-editor{grid-template-columns:1fr}.override-editor textarea{grid-column:auto}}
