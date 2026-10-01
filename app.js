@@ -82,7 +82,7 @@ function decorateStaffIdentity(root=document){
   if(!root?.querySelectorAll)return;
   root.querySelectorAll('[data-profile-id]').forEach(el=>{
     const id=el.dataset.profileId;
-    if(!id||el.querySelector(':scope > .identity-extra'))return;
+    if(!id||el.querySelector(':scope > .identity-extra')||el.querySelector('.admin-crown-pixel,.staff-role-badge,.user-badge-icon'))return;
     const html=identityExtrasHtml(id);if(!html)return;
     const span=document.createElement('span');span.className='identity-extra';span.innerHTML=html;el.appendChild(span);
   });
