@@ -1654,6 +1654,7 @@ function leaveApp(){
   state.pendingAttentionPeerId=null;
   stopPlazaRealtime();
   stopDirectRealtime();
+  stopStaffChatRealtime();
   stopStoryRealtime();
   stopCornerMusic();
   closeStoryViewer();
@@ -2687,6 +2688,7 @@ async function renderStaffDashboard({reload=true}={}){
   host.innerHTML=dashboardShellHtml(body);
   bindDashboardNav();
   bindDashboardSectionActions();
+  if(state.dashboardSection==='staff-chat')startStaffChatRealtime();else stopStaffChatRealtime();
 }
 
 function dashboardOverviewHtml(){
@@ -2798,6 +2800,17 @@ function dashboardStaffHtml(){
     '<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Advertências</h3></div><div class="staff-warning-list">'+(warnings.map(w=>'<article><b>@'+escapeHtml(w.staff_handle||'...')+'</b><span>'+escapeHtml(w.severity||'aviso')+'</span><p>'+escapeHtml(w.reason||'')+'</p><small>por @'+escapeHtml(w.issuer_handle||'...')+' · '+ago(w.created_at)+'</small></article>').join('')||dashboardEmpty('Nenhuma advertência registrada.'))+'</div></section>';
 }
 
+function stopStaffChatRealtime(){
+  if(state.staffChatRealtime){supabase.removeChannel(state.staffChatRealtime);state.staffChatRealtime=null;}
+}
+function startStaffChatRealtime(){
+  stopStaffChatRealtime();
+  if(!state.profile?.id||state.tab!=='admin'||state.dashboardSection!=='staff-chat')return;
+  state.staffChatRealtime=supabase.channel('avesso-staff-chat-'+state.profile.id+'-'+Date.now())
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_chat_messages'},()=>{
+      if(state.tab==='admin'&&state.dashboardSection==='staff-chat')renderStaffDashboard({reload:false});
+    }).subscribe();
+}
 async function dashboardStaffChatHtml(){
   const staff=state.adminSnapshot?.staff||[];
   const role=state.adminRole;
