@@ -1922,15 +1922,17 @@ function applyChatGeometry(){
   const win=$('#dm-floating-window');if(!win)return;
   if(!chatDesktopEnabled()){
     ['left','top','right','bottom','width','height'].forEach(prop=>win.style.removeProperty(prop));
-    win.classList.remove('maximized','desktop-windowed');
+    win.classList.remove('maximized','desktop-windowed','docked-minimized');
     return;
   }
   win.classList.add('desktop-windowed');
   if(state.chatWindowMinimized){
     win.classList.remove('maximized');
+    win.classList.add('docked-minimized');
     Object.assign(win.style,{left:'auto',top:'auto',right:'16px',bottom:'16px',width:'min(320px, calc(100vw - 24px))',height:'58px'});
     return;
   }
+  win.classList.remove('docked-minimized');
   if(state.chatMaximized){
     win.classList.add('maximized');
     Object.assign(win.style,{left:'6px',top:'6px',right:'auto',bottom:'auto',width:'calc(100vw - 12px)',height:'calc(100vh - 12px)'});
