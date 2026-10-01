@@ -1536,22 +1536,39 @@ async function loadDirectConversation(peerId){
   if(error)return[];
   await supabase.from('direct_messages').update({read_at:new Date().toISOString()})
     .eq('sender_id',peerId).eq('recipient_id',me).is('read_at',null);
-  return Promise.all((data||[]).map(async m=>{
-    if(!m.attachment_path)return m;
-    const {data:signed}=await supabase.storage.from('avesso-chat').createSignedUrl(m.attachment_path,3600);
-    return {...m,attachment_url:signed?.signedUrl||''};
-  }));
+  const rows=data||[];
+  rows.forEach(m=>{if(m.recipient_id===me)rememberDirectMessage(m.id);});
+  return Promise.all(rows.map(hydrateDirectMessage));
 }
 function dmMessageHtml(m){
   const mine=m.sender_id===state.profile.id;
-  if(m.message_kind==='attention')return `<article class="dm-attention-event">⚡ ${escapeHtml(m.body||'CHAMAR ATENÇÃO')} <small>${ago(m.created_at)}</small></article>`;
+  const messageId=escapeAttr(String(m.id||`local-${Date.now()}`));
+  if(m.message_kind==='attention')return `<article class="dm-attention-event" data-dm-id="${messageId}">⚡ ${escapeHtml(m.body||'CHAMAR ATENÇÃO')} <small>${ago(m.created_at)}</small></article>`;
+  const voiceDuration=m.message_kind==='audio'?String(m.body||'').match(/(\d+)s/)?.[1]:null;
   const attachment=m.attachment_url?(m.message_kind==='image'
-    ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}"></a>`
+    ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}" loading="eager" decoding="async"></a>`
     :m.message_kind==='audio'
-      ?`<div class="dm-audio-card"><span>VOICE.MSG</span><audio controls preload="metadata" src="${escapeAttr(m.attachment_url)}"></audio></div>`
+      ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio controls preload="auto" src="${escapeAttr(m.attachment_url)}"></audio></div>`
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
-  return `<article class="dm-bubble ${mine?'mine':'theirs'}">${m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p>${escapeHtml(m.body)}</p>`:''}${attachment}<small>${ago(m.created_at)}${mine&&m.read_at?' · lida':''}</small></article>`;
+  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p>${escapeHtml(m.body)}</p>`:'');
+  return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}${mine&&m.read_at?' · lida':''}</small></article>`;
 }
+function updateChatPeerHeader(peer){
+  if(!peer||state.directPeerId!==peer.id)return;
+  const p=presenceView(peer);
+  const muted=isPeerMuted(peer.id);
+  const title=$('#dm-restore-name');
+  if(title){
+    title.innerHTML=`<i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}`;
+    title.title=`Abrir conversa com ${peer.display_name}`;
+  }
+  const name=$('#dm-peer-profile-name');if(name)name.textContent=peer.display_name;
+  const small=$('.dm-peer-heading small');
+  if(small)small.innerHTML=`<i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}`;
+  const orb=$('.dm-msn-status-orb');
+  if(orb){orb.className=`dm-msn-status-orb ${p.mode}`;orb.title=p.label;}
+}
+
 async function renderMessagesPage(){
   if(state.tab!=='messages')return;
   const friends=await acceptedFriendProfiles();
