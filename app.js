@@ -3682,7 +3682,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   win.dataset.chatWallpaper=chatWallpaper;
   win.innerHTML=`<div class="dm-msn-titlebar" id="dm-floating-head">
       <span class="dm-msn-appmark">▓ AVESSO.MSG</span>
-      <button id="dm-restore-name" class="dm-title-peer" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}</button>
+      <button id="dm-restore-name" class="dm-title-peer" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${userDisplayNameHtml(peer)}${muted?' · 🔇':''}</button>
       <span class="dm-msn-era">56K // 2026</span>
       <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'↥':'_'}</button><button id="dm-maximize" title="${state.chatMaximized?'Restaurar tamanho':'Maximizar'}">${state.chatMaximized?'❐':'□'}</button><button id="dm-close" title="Fechar">×</button></div>
     </div>
@@ -3691,7 +3691,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
       <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><div class="dm-peer-identity-row"><button class="dm-peer-name" id="dm-peer-profile-name" data-profile-id="${peer.id}">${userDisplayNameHtml(peer)}</button><span id="dm-peer-status" class="dm-user-status ${peer.status_message?'':'hidden'}" title="${escapeAttr(peer.status_message||'')}">${escapeHtml(peer.status_message||'')}</span><div id="dm-peer-listening" class="dm-listening-inline">${chatNowPlayingHtml(peer,{compact:true})}</div></div><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
       <div class="dm-head-actions"><span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span><button id="dm-options" class="dm-kebab" aria-label="Opções da conversa" title="Opções da conversa">•••</button></div>
       <div id="dm-options-menu" class="dm-options-menu dm-options-menu-head hidden">
-        <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${escapeHtml(peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
+        <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${userDisplayNameHtml(peer)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
         <button id="dm-visit-profile">↗ visitar o Canto</button>
         <button id="dm-mute-peer">${muted?'🔊 desmutar':'🔇 mutar'} notificações</button>
         <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
