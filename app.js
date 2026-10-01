@@ -627,7 +627,7 @@ async function saveAIBrowserContextVisibility(){
   toast(enabled?'Aquele pode notar trocas de aba. Não ganhou raio-X, felizmente.':'Contexto de outras abas desligado.');
 }
 
-function awayThresholdMs(profile){function awayThresholdMs(profile){
+function awayThresholdMs(profile){
   const minutes=Number(profile?.away_after_minutes);
   if(minutes===0)return Infinity;
   return (Number.isFinite(minutes)&&[5,10,15,20,30].includes(minutes)?minutes:10)*60*1000;
@@ -2502,7 +2502,7 @@ function updateChatPeerHeader(peer){
   if(orb){orb.className=`dm-msn-status-orb ${p.mode}`;orb.title=p.label;}
 }
 
-async function renderMessagesPage(){async function renderMessagesPage(){
+async function renderMessagesPage(){
   if(state.tab!=='messages')return;
   const friends=await acceptedFriendProfiles();
   if(state.tab!=='messages')return;
