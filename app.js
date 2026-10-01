@@ -765,7 +765,7 @@ function socialNotify({title='AVESSO',body='',avatar='',kind='message',action=nu
   state.socialNotificationQueue.push(item);
   if(state.socialNotificationQueue.length>6)state.socialNotificationQueue.shift();
   try{
-    window.dispatchEvent(new CustomEvent('avesso:notification',{detail:{kind,title,body}}));
+    window.dispatchEvent(new CustomEvent('avesso:notification',{detail:{kind,title,body,avatar,createdAt:Date.now()}}));
     if(typeof navigator.setAppBadge==='function')navigator.setAppBadge(1).catch(()=>{});
   }catch{}
   browserNotify(item);
@@ -1678,6 +1678,7 @@ async function enterApp(){
   $('#nav-handle').textContent='@'+data.handle;
   renderNavAvatar();
   applyAppWallpaper();
+  applyAppTabLayout();
   setupOnlineFriendsDock();
   markPresenceActivity({force:true});
   startPresenceHeartbeat();
@@ -3552,7 +3553,7 @@ async function notifyPhotoInteraction(row,kind){
       ?`${actor?.display_name||'Alguém'} reagiu a uma foto do seu Canto.`
       :`${actor?.display_name||'Alguém'} comentou: ${String(row.body||'').slice(0,90)}`,
     avatar:actor?.avatar_url||'',
-    kind:'interaction',
+    kind:'photo',
     action:()=>openAlbumPhotoViewer(photoId)
   });
 }
