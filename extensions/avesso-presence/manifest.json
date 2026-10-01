@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AVESSO Presence",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Ponte opcional para presença musical em tempo real e contexto de abas autorizado pelo usuário.",
   "permissions": ["tabs"],
   "host_permissions": [
