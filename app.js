@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -82,7 +82,7 @@ const CHAT_THEMES=[
   ['win95_future','Windows 95½','#00a7a7'],
   ['icq_neon','ICQ Neon','#8cff3f'],
   ['winamp_2026','Winamp 2026','#ffb000'],
-  ['web98_glass','Web 98 Glass','#5a8cff'],
+  ['msn_classic','MSN Messenger 7.5','#62a9e8'],
   ['crt_void','CRT Vazio','#75ff91'],
   ['arcade_os','Arcade OS','#ff4fd8']
 ];
@@ -1410,6 +1410,18 @@ $('#nav-home-link').onclick=e=>{e.preventDefault();e.stopPropagation();goToFeedH
 $('#nav-profile-link').onclick=()=>document.querySelector('[data-app-tab="profile"]')?.click();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
+async function loadAdminAccess(){
+  if(!state.profile?.id){
+    state.isAdmin=false;state.adminRole=null;
+    return false;
+  }
+  const {data,error}=await supabase.from('admin_users').select('role').eq('user_id',state.profile.id).maybeSingle();
+  state.isAdmin=!error&&Boolean(data?.role);
+  state.adminRole=state.isAdmin?data.role:null;
+  const nav=$('#admin-nav-button');
+  if(nav)nav.classList.toggle('hidden',!state.isAdmin);
+  return state.isAdmin;
+}
 async function enterApp(){
   $('#marketing-view').classList.add('hidden');
   $('.site-header').classList.add('hidden');
@@ -1418,7 +1430,8 @@ async function enterApp(){
   const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();
   state.profile=data;
   if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return;}
-  $('#nav-name').textContent=data.display_name;
+  await loadAdminAccess();
+  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?'<span class="nav-admin-crown" title="Administrador">♛</span>':'');
   $('#nav-handle').textContent='@'+data.handle;
   renderNavAvatar();
   applyAppWallpaper();
@@ -1463,6 +1476,8 @@ function leaveApp(){
   document.body.classList.remove('avesso-app-active');
   $('#online-friends-dock')?.classList.add('hidden');
   state.profile=null;
+  state.isAdmin=false;state.adminRole=null;state.adminSnapshot=null;
+  $('#admin-nav-button')?.classList.add('hidden');
   $('#app-view').classList.add('hidden');
   $('#marketing-view').classList.remove('hidden');
   $('.site-header').classList.remove('hidden');
@@ -2119,8 +2134,121 @@ async function sendReply(post_id){
 }
 
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
+function adminPresenceLabel(profile){
+  const view=presenceView(profile||{});
+  return view.mode==='online'?'online':view.mode==='away'?'ausente':'offline';
+}
+function adminReportStatusOptions(current){
+  return ['aberto','em_analise','resolvido','descartado'].map(value=>{
+    const label={aberto:'aberto',em_analise:'em análise',resolvido:'resolvido',descartado:'descartado'}[value];
+    return '<option value="'+value+'" '+(current===value?'selected':'')+'>'+label+'</option>';
+  }).join('');
+}
+async function setAdminReportStatus(reportId,status){
+  if(!state.isAdmin||!reportId)return;
+  const {error}=await supabase.rpc('admin_set_report_status',{p_report_id:reportId,p_status:status});
+  if(error)return toast('O status da denúncia não foi salvo.');
+  toast('Denúncia atualizada.');
+  renderAdminDashboard();
+}
+async function saveAdminWorldControls(){
+  if(!state.isAdmin)return;
+  const events=Boolean($('#admin-world-events')?.checked);
+  const interventions=Boolean($('#admin-world-interventions')?.checked);
+  const message=String($('#admin-world-message')?.value||'').trim().slice(0,240);
+  const button=$('#admin-world-save');if(button)button.disabled=true;
+  const {data,error}=await supabase.rpc('admin_set_world_controls',{
+    p_events:events,
+    p_interventions:interventions,
+    p_message:message
+  });
+  if(button)button.disabled=false;
+  if(error)return toast('Os controles do mundo recusaram autoridade. Poético, mas inadequado.');
+  state.world.settings=data||state.world.settings;
+  toast('Controles do Mundo do AVESSO atualizados.');
+  renderAdminDashboard();
+}
+async function renderAdminDashboard(){
+  if(state.tab!=='admin')return;
+  if(!state.isAdmin){
+    await goToFeedHome();
+    return;
+  }
+  $('#feed-status').classList.add('hidden');
+  const host=$('#feed-list');
+  host.innerHTML='<section class="admin-shell"><div class="admin-loading">ADMIN.SYS // carregando privilégios sem transformar isso em LinkedIn...</div></section>';
+  const {data,error}=await supabase.rpc('admin_dashboard_snapshot');
+  if(state.tab!=='admin')return;
+  if(error){
+    console.error('admin dashboard',error);
+    host.innerHTML='<section class="admin-shell"><div class="admin-error">A dashboard não conseguiu provar que você manda aqui.</div></section>';
+    return;
+  }
+  state.adminSnapshot=data||{};
+  const counts=data?.counts||{};
+  const users=Array.isArray(data?.recent_users)?data.recent_users:[];
+  const reports=Array.isArray(data?.reports)?data.reports:[];
+  const world=data?.world||{};
+  const statCards=[
+    ['habitantes',counts.users??0,'contas registradas'],
+    ['novos // 7d',counts.users_7d??0,'entraram nesta semana'],
+    ['online',counts.online_now??0,'presenças agora'],
+    ['publicações',counts.posts??0,'posts no sistema'],
+    ['respostas',counts.responses??0,'respostas humanas'],
+    ['stories',counts.stories_active??0,'ativos agora'],
+    ['mensagens',counts.direct_messages??0,'mensagens diretas'],
+    ['amizades',counts.friendships??0,'conexões aceitas'],
+    ['denúncias',counts.reports_open??0,'abertas']
+  ].map(([label,value,detail])=>'<article><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(String(value))+'</strong><small>'+escapeHtml(detail)+'</small></article>').join('');
+  const usersHtml=users.map(user=>{
+    const presence=adminPresenceLabel(user);
+    return '<button class="admin-user-row" data-profile-id="'+escapeAttr(user.id)+'">'+
+      '<span class="admin-user-avatar">'+avatarHtml(user.avatar_url,user.display_name||'?')+'</span>'+
+      '<span><b>'+escapeHtml(user.display_name||'sem nome')+'</b><small>@'+escapeHtml(user.handle||'...')+'</small></span>'+
+      '<em class="'+presence+'">'+presence+'</em>'+
+      '<time>'+ago(user.created_at)+'</time>'+
+    '</button>';
+  }).join('')||'<p class="admin-empty">Nenhum perfil. A administração alcançou eficiência absoluta por falta de cidadãos.</p>';
+  const reportsHtml=reports.map(report=>{
+    const target=report.reported_profile?.handle?'@'+report.reported_profile.handle:(report.post_id?'post '+String(report.post_id).slice(0,8):'conteúdo');
+    return '<article class="admin-report-card">'+
+      '<header><div><b>'+escapeHtml(String(report.reason||'denúncia'))+'</b><small>'+escapeHtml(report.reporter?.handle?'@'+report.reporter.handle:'reportante')+' · '+ago(report.created_at)+'</small></div><select data-admin-report-status="'+escapeAttr(report.id)+'">'+adminReportStatusOptions(report.status)+'</select></header>'+
+      '<p>'+escapeHtml(report.details||'sem detalhes')+'</p>'+
+      '<footer><span>alvo: '+escapeHtml(target)+'</span>'+(report.post_id?'<code>'+escapeHtml(String(report.post_id))+'</code>':'')+'</footer>'+
+    '</article>';
+  }).join('')||'<p class="admin-empty">Nenhuma denúncia na fila. Ou todos amadureceram, hipótese estatisticamente ousada.</p>';
+  host.innerHTML=\`<section class="admin-shell">
+    <header class="admin-hero">
+      <div><span class="section-code">ADMIN.SYS // ACESSO \${escapeHtml((state.adminRole||'admin').toUpperCase())}</span><h2>Painel do AVESSO <span>♛</span></h2><p>Visão operacional da rede. Sem gráfico 3D, porque ainda temos algum respeito por computadores.</p></div>
+      <button id="admin-refresh" type="button">↻ atualizar</button>
+    </header>
+    <div class="admin-stats">\${statCards}</div>
+    <div class="admin-grid">
+      <section class="admin-panel">
+        <div class="admin-panel-head"><div><span class="section-code">CONTAS // RECENTES</span><h3>Novos habitantes</h3></div><small>\${users.length} exibidos</small></div>
+        <div class="admin-user-list">\${usersHtml}</div>
+      </section>
+      <section class="admin-panel admin-world-panel">
+        <div class="admin-panel-head"><div><span class="section-code">MUNDO // CONTROLES</span><h3>Estado global</h3></div><strong>\${world.world_events_enabled?'ONLINE':'PAUSADO'}</strong></div>
+        <label class="admin-switch"><input id="admin-world-events" type="checkbox" \${world.world_events_enabled?'checked':''}><span><b>eventos do mundo</b><small>habilita os acontecimentos gerais dos habitantes</small></span></label>
+        <label class="admin-switch"><input id="admin-world-interventions" type="checkbox" \${world.world_interventions_enabled?'checked':''}><span><b>interferências visuais</b><small>libera intervenções de interface quando a regra permitir</small></span></label>
+        <label class="admin-world-message">mensagem do sistema<textarea id="admin-world-message" maxlength="240">\${escapeHtml(world.message||'')}</textarea></label>
+        <button id="admin-world-save" type="button">salvar controles</button>
+      </section>
+    </div>
+    <section class="admin-panel admin-reports-panel">
+      <div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // DENÚNCIAS</span><h3>Fila de revisão</h3></div><small>\${reports.length} carregadas</small></div>
+      <div class="admin-report-list">\${reportsHtml}</div>
+    </section>
+  </section>\`;
+  $('#admin-refresh')?.addEventListener('click',renderAdminDashboard);
+  $('#admin-world-save')?.addEventListener('click',saveAdminWorldControls);
+  host.querySelectorAll('[data-admin-report-status]').forEach(select=>select.onchange=()=>setAdminReportStatus(select.dataset.adminReportStatus,select.value));
+  bindProfileLinks();
+}
+
 function applyAppTabLayout(){
-  const worldOpen=['residents','plaza','tower','profile','public_profile','messages'].includes(state.tab);
+  const worldOpen=['residents','plaza','tower','profile','public_profile','messages','admin'].includes(state.tab);
   document.body.classList.toggle('avesso-feed-home',state.tab==='feed');
   document.body.classList.toggle('avesso-own-corner',state.tab==='profile');
   $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
@@ -2133,6 +2261,7 @@ function applyAppTabLayout(){
 document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   const previousTab=state.tab;
   const nextTab=b.dataset.appTab;
+  if(nextTab==='admin'&&!state.isAdmin){toast('Painel administrativo restrito. O porteiro digital finalmente tem uma função.');return;}
   if(previousTab==='plaza'&&nextTab!=='plaza')stopPlazaRealtime();
   if(previousTab==='public_profile'&&nextTab!=='public_profile')stopCornerMusic();
   if(nextTab!=='messages')autoMinimizeChat();
@@ -2140,7 +2269,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   applyAppWallpaper();
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
-  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Amigos & cúmplices'};
+  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Amigos & cúmplices',admin:'Painel do administrador'};
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
   trackAction('tab_view',state.tab,{tab:state.tab});
@@ -2150,6 +2279,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   else if(state.tab==='plaza')await renderPlaza();
   else if(state.tab==='tower')await renderTowerPage();
   else if(state.tab==='messages')await renderMessagesPage();
+  else if(state.tab==='admin')await renderAdminDashboard();
   else {if(state.tab==='feed')await loadStoriesStrip();loadFeed();}
 });
 async function renderInhabitantsPage(){
@@ -3255,12 +3385,18 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
       </div>
       <div class="dm-tools">
         <button id="dm-attention" title="Chamar atenção">⚡ chamar atenção</button>
-        <button id="dm-emoticons" title="Emoticons">☺ emoticons</button>
         <button id="dm-attach" title="Enviar arquivo ou imagem">📎 arquivo</button>
         <input id="dm-file-input" type="file" hidden accept="image/*,audio/*,.pdf,.txt,.zip,.docx">
-        <div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${avessoEmoticonButtons('data-emoticon')}</div>
       </div>
-      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem..."><button id="dm-send-action" class="dm-send-action" type="button" aria-label="Segure para gravar áudio"></button></form>
+      <form id="dm-form">
+        <button id="dm-emoticons" class="dm-emoticon-trigger" type="button" title="Escolher emoticon" aria-label="Escolher emoticon">☺</button>
+        <input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem...">
+        <button id="dm-send-action" class="dm-send-action" type="button" aria-label="Segure para gravar áudio"></button>
+        <div id="dm-emoticon-palette" class="dm-emoticon-palette dm-emoticon-window hidden">
+          <div class="dm-emoticon-window-head"><b>Emoticons</b><button id="dm-emoticon-close" type="button" aria-label="Fechar emoticons">×</button></div>
+          <div class="dm-emoticon-grid">${avessoEmoticonButtons('data-emoticon')}</div>
+        </div>
+      </form>
     </div>`;
   $('#dm-minimize').onclick=toggleChatMinimize;
   $('#dm-maximize').onclick=toggleChatMaximize;
@@ -3270,8 +3406,9 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('#dm-peer-profile-name').onclick=()=>openPublicProfile(peerId);
   $('#dm-form').onsubmit=sendDirectMessage;
   $('#dm-attention').onclick=sendAttention;
-  $('#dm-emoticons').onclick=()=>{$('#dm-emoticon-palette').classList.toggle('hidden');$('#dm-options-menu')?.classList.add('hidden');};
-  $$('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();syncDmComposerAction();});
+  $('#dm-emoticons').onclick=e=>{e.stopPropagation();$('#dm-emoticon-palette').classList.toggle('hidden');$('#dm-options-menu')?.classList.add('hidden');};
+  $('#dm-emoticon-close').onclick=e=>{e.stopPropagation();$('#dm-emoticon-palette').classList.add('hidden');$('#dm-input')?.focus();};
+  $('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();syncDmComposerAction();});
   $('#dm-attach').onclick=()=>$('#dm-file-input').click();
   $('#dm-file-input').onchange=e=>{const file=e.target.files?.[0];if(file)sendDirectAttachment(file);};
   bindHoldToTalk();
@@ -3754,7 +3891,7 @@ async function renderProfile(){
   $('#feed-list').innerHTML=`<section class="profile-control" style="--profile-wallpaper:url('${wallpaperUrl(state.profile.profile_wallpaper)}')">
     <header class="profile-control-hero">
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
-      <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${escapeHtml(state.profile.display_name)}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
+      <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${escapeHtml(state.profile.display_name)}${state.isAdmin?'<span class="admin-crown" title="Administrador do AVESSO" aria-label="Administrador">♛</span>':''}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
