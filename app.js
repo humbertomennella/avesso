@@ -898,7 +898,7 @@ function parseExternalMediaLink(raw){
   try{url=new URL(value);}catch{return null;}
   if(url.protocol!=='https:'&&url.protocol!=='http:')return null;
   const host=url.hostname.toLowerCase().replace(/^www\./,'');
-  if(['youtube.com','m.youtube.com','music.youtube.com','youtu.be'].includes(host)){
+  if(['youtube.com','m.youtube.com','music.youtube.com','youtu.be','youtube-nocookie.com'].includes(host)){
     let id='';
     if(host==='youtu.be')id=url.pathname.split('/').filter(Boolean)[0]||'';
     else if(url.pathname==='/watch')id=url.searchParams.get('v')||'';
@@ -911,7 +911,8 @@ function parseExternalMediaLink(raw){
   }
   if(host==='open.spotify.com'){
     const parts=url.pathname.split('/').filter(Boolean);
-    const type=parts[0],id=parts[1];
+    const offset=parts[0]==='embed'?1:0;
+    const type=parts[offset],id=parts[offset+1];
     if(!['track','album','playlist','episode','show','artist'].includes(type)||!/^[A-Za-z0-9]+$/.test(id||''))return null;
     return {kind:'spotify',provider:'Spotify',url:`https://open.spotify.com/embed/${type}/${id}`,canonical:`https://open.spotify.com/${type}/${id}`,spotifyType:type};
   }
