@@ -650,3 +650,50 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     margin:9px 0;
   }
 }
+
+
+/* HEALTH.EXE */
+.health-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;
+  margin-top:12px;
+}
+.health-grid article{
+  min-width:0;
+  padding:11px;
+  border:1px solid #2d3b3f;
+  border-radius:9px;
+  background:#0c1214;
+}
+.health-grid span,.health-grid b,.health-grid small{display:block}
+.health-grid span{color:#76837f;font:800 .47rem var(--mono)}
+.health-grid b{
+  margin-top:7px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  color:var(--acid);
+  font:800 1.05rem/1 var(--mono);
+}
+.health-grid small{margin-top:4px;color:#83908d;font:600 .47rem var(--mono)}
+.health-error-list{display:grid;gap:5px}
+.health-error-list article{
+  padding:8px 9px;
+  border:1px solid #263438;
+  border-radius:7px;
+  background:#0b1113;
+}
+.health-error-list b,.health-error-list small{display:block}
+.health-error-list b{
+  color:#c9d1ce;
+  font:650 .58rem/1.35 var(--mono);
+  overflow-wrap:anywhere;
+}
+.health-error-list small{
+  margin-top:4px;color:#6f7d79;font:600 .46rem var(--mono);
+}
+.mobile-ux-health-link i{color:var(--cyan)!important}
+
+@media (max-width:540px){
+  .health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
