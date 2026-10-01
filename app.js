@@ -1106,14 +1106,16 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       const active=rows.some(x=>x.user_id===state.profile.id);
       return `<button class="acid-reaction ${active?'active':''}" data-react-post="${p.id}" data-reaction="${id}" aria-pressed="${active}"><span>${icon}</span>${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`;
     }).join('');
+    const ownerActions=p.author_id===state.profile.id?`<div class="post-owner-actions"><button data-post-edit="${p.id}">editar</button><button class="danger" data-post-delete="${p.id}">apagar</button></div>`:'';
     return `<article class="post-card" data-post-card="${p.id}">
       <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
-      <p class="post-body">${escapeHtml(p.body)}</p>
+      <p class="post-body" data-post-body="${p.id}">${escapeHtml(p.body)}</p>
+      ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea><div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
       ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
       ${feedMediaHtml(p.media_url,p.media_kind)}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
       ${conversationHtml}
-      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
+      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${ownerActions}${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
       <div class="inline-reply hidden" data-reply-box="${p.id}"><label>RESPOSTA // fale com a pessoa, não com a métrica</label><textarea maxlength="420" placeholder="Escreva algo que valha o espaço que ocupa."></textarea><div class="reply-emoticon-row"><button type="button" data-reply-emoticons="${p.id}">☻ avessícones</button><div class="feed-emoticon-palette hidden" data-reply-emoticon-palette="${p.id}">${avessoEmoticonButtons('data-reply-emoticon')}</div></div><div><button data-reply-send="${p.id}">publicar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
     </article>`;
   }).join('');
@@ -1125,7 +1127,46 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
   $('[data-reply-emoticons]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-emoticon-palette="${b.dataset.replyEmoticons}"]`)?.classList.toggle('hidden'));
   $('[data-reply-emoticon]').forEach(b=>b.onclick=()=>{const box=b.closest('[data-reply-box]'),input=box?.querySelector('textarea');if(input){input.value+=`${input.value?' ':''}${b.dataset.replyEmoticon}`;input.focus();}});
   $('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
-  $$('[data-react-post]').forEach(b=>b.onclick=()=>toggleReaction(b.dataset.reactPost,b.dataset.reaction,b.classList.contains('active')));
+  $('[data-react-post]').forEach(b=>b.onclick=()=>toggleReaction(b.dataset.reactPost,b.dataset.reaction,b.classList.contains('active')));
+  $('[data-post-edit]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postEdit}"]`)?.classList.remove('hidden'));
+  $('[data-post-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postCancel}"]`)?.classList.add('hidden'));
+  $('[data-post-save]').forEach(b=>b.onclick=()=>savePostEdit(b.dataset.postSave));
+  $('[data-post-delete]').forEach(b=>b.onclick=()=>deleteOwnPost(b.dataset.postDelete));
+}
+async function savePostEdit(postId){
+  const panel=document.querySelector(`[data-post-edit-panel="${CSS.escape(postId)}"]`);
+  const body=String(panel?.querySelector('textarea')?.value||'').trim();
+  if(body.length<12)return toast('A edição precisa manter pelo menos 12 caracteres.');
+  if(body.length>420)return toast('Até 420 caracteres. A parede do AVESSO não virou tese.');
+  const {error}=await supabase.from('posts').update({body,edited_at:new Date().toISOString()}).eq('id',postId).eq('author_id',state.profile.id);
+  if(error)return toast('A edição não foi salva.');
+  toast('Post editado. A internet aceitou uma rara correção.');
+  if(isFeedTab())loadFeed();
+}
+function storagePathFromPublicUrl(raw,bucket){
+  try{
+    const url=new URL(raw);
+    const marker=`/storage/v1/object/public/${bucket}/`;
+    const index=url.pathname.indexOf(marker);
+    if(index<0)return null;
+    return decodeURIComponent(url.pathname.slice(index+marker.length));
+  }catch{return null;}
+}
+async function deleteOwnPost(postId){
+  if(!postId||!confirm('Apagar esta postagem? Respostas e reações ligadas a ela também podem desaparecer.'))return;
+  const {data:post,error:fetchError}=await supabase.from('posts').select('id,author_id,image_url,media_url,media_kind').eq('id',postId).eq('author_id',state.profile.id).maybeSingle();
+  if(fetchError||!post)return toast('Não encontrei essa postagem como sua.');
+  const {error}=await supabase.from('posts').delete().eq('id',postId).eq('author_id',state.profile.id);
+  if(error)return toast('A postagem se recusou a desaparecer.');
+  const imagePath=storagePathFromPublicUrl(post.image_url,'post-images');
+  if(imagePath?.startsWith(`${state.profile.id}/`))supabase.storage.from('post-images').remove([imagePath]).catch(()=>{});
+  if(['audio','video'].includes(post.media_kind)){
+    const mediaPath=storagePathFromPublicUrl(post.media_url,'avesso-media');
+    if(mediaPath?.startsWith(`${state.profile.id}/`))supabase.storage.from('avesso-media').remove([mediaPath]).catch(()=>{});
+  }
+  toast('Postagem apagada. Sem cerimônia de despedida.');
+  if(isFeedTab())loadFeed();
+  loadImpact();
 }
 async function toggleReaction(postId,reaction,active){
   if(!ACID_REACTIONS.some(x=>x[0]===reaction))return;
