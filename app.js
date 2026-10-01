@@ -2508,18 +2508,48 @@ async function deleteOwnPost(postId){
   if(isFeedTab())loadFeed();
   loadImpact();
 }
+function optimisticPostReaction(postId,reaction,wasActive){
+  const shell=document.querySelector(`[data-post-card="${CSS.escape(String(postId))}"] .reaction-shell`);
+  if(!shell)return;
+  const buttons=[...shell.querySelectorAll('[data-react-post]')];
+  const target=buttons.find(b=>b.dataset.reaction===reaction);
+  const prior=buttons.find(b=>b.classList.contains('active'));
+  if(prior&&prior!==target){
+    prior.classList.remove('active');prior.setAttribute('aria-pressed','false');
+    const count=prior.querySelector('b');if(count){const next=Math.max(0,Number(count.textContent||0)-1);count.textContent=next||'';if(!next)count.remove();}
+  }
+  if(target){
+    const nextActive=!wasActive;
+    target.classList.toggle('active',nextActive);
+    target.setAttribute('aria-pressed',String(nextActive));
+    let count=target.querySelector('b');
+    const current=Number(count?.textContent||0);
+    const next=Math.max(0,current+(nextActive?1:-1));
+    if(next&&!count){count=document.createElement('b');target.appendChild(count);}
+    if(count){count.textContent=next||'';if(!next)count.remove();}
+    const meta=ACID_REACTIONS.find(x=>x[0]===reaction);
+    const trigger=shell.querySelector('.reaction-trigger');
+    if(trigger){
+      trigger.innerHTML=nextActive?`<span>${meta?.[1]||'♥'}</span><b>${escapeHtml(meta?.[2]||'reagiu')}</b>`:'<span>♥</span><b>reagir</b>';
+      shell.classList.toggle('has-reaction',nextActive);
+    }
+  }
+}
 async function toggleReaction(postId,reaction,active){
   if(!ACID_REACTIONS.some(x=>x[0]===reaction))return;
+  optimisticPostReaction(postId,reaction,active);
   let error;
   if(active){
     ({error}=await supabase.from('post_reactions').delete().eq('post_id',postId).eq('user_id',state.profile.id));
   }else{
     ({error}=await supabase.from('post_reactions').upsert({post_id:postId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'post_id,user_id'}));
   }
-  if(error)return toast('A reação teve uma reação adversa.');
+  if(error){
+    optimisticPostReaction(postId,reaction,!active);
+    return toast('A reação teve uma reação adversa.');
+  }
   if(!active)dispatchPush('post_reaction',postId);
   trackAction('acid_reaction','feed',{post_id:postId,reaction:active?'remove':reaction});
-  if(isFeedTab())loadFeed();
 }
 async function sendReply(post_id){
   const box=document.querySelector(`[data-reply-box="${post_id}"]`);
