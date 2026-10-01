@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -32,13 +32,40 @@ const WALLPAPER_OPTIONS=[
   ['humano-nao-encontrado','Humano Não Encontrado','http 418 // continue tentando']
 ];
 const ACID_REACTIONS=[
-  ['suspeito','◉','isso tá suspeito'],
-  ['merece_cafe','☕','merece café'],
-  ['caos_aprovado','⚠','caos aprovado'],
   ['li_me_arrependi','↩','li e me arrependi'],
-  ['isso_escalou','↗','isso escalou'],
-  ['humano_detectado','♡','humano detectado']
+  ['infelizmente_concordo','≋','infelizmente eu concordo'],
+  ['modem_julgou','⌁','meu modem julgou'],
+  ['melhor_offline','□','era melhor ter ficado offline'],
+  ['fingir_nao_vi','◌','vou fingir que não vi'],
+  ['argumento_carregando','…','argumento carregando...'],
+  ['virou_reuniao','▦','isso virou reunião']
 ];
+const AVESSO_EMOTICONS=[
+  '☻','☺','ಠ_ಠ','¬_¬','(ง •̀_•́)ง','¯\\_(ツ)_/¯','(╯°□°）╯︵ ┻━┻','┬─┬ ノ( ゜-゜ノ)',
+  '[404]','[56K]','[AFK]','[PING?]','[ERRO HUMANO]','<3.exe','...','?!','⚡','⌁','◉','◌','▣','✦',
+  '👀','🤨','🫠','🙃','😂','😅','☕','⚠️','🖥️','💾','📟','📼','🌀','🫥','🔥','❤️','🐈','⌛'
+];
+const STORY_REACTIONS=[
+  ['curti','♥','curti sem querer'],
+  ['vi','◉','vi. infelizmente'],
+  ['modem','⌁','meu modem aprovou'],
+  ['pane','⚡','deu pane'],
+  ['quatro_zero_quatro','404','isso merece um 404']
+];
+function avessoEmoticonButtons(attribute='data-emoticon-value'){
+  return AVESSO_EMOTICONS.map(value=>`<button type="button" ${attribute}="${escapeAttr(value)}" title="inserir ${escapeAttr(value)}">${escapeHtml(value)}</button>`).join('');
+}
+function setupFeedEmoticons(){
+  const palette=$('#post-emoticon-palette');
+  if(!palette)return;
+  palette.innerHTML=avessoEmoticonButtons('data-post-emoticon');
+  $('#post-emoticons')?.addEventListener('click',e=>{e.stopPropagation();palette.classList.toggle('hidden');});
+  palette.querySelectorAll('[data-post-emoticon]').forEach(b=>b.onclick=()=>{
+    const input=$('#post-body'); if(!input)return;
+    input.value+=`${input.value?' ':''}${b.dataset.postEmoticon}`;
+    input.dispatchEvent(new Event('input')); input.focus();
+  });
+}
 const CHAT_THEMES=[
   ['bbs_cyan','BBS Ciano','#22d9ee'],
   ['phosphor_green','Fósforo Verde','#74ff4b'],
@@ -49,7 +76,13 @@ const CHAT_THEMES=[
   ['janela_95','Janela 95','#8aa8b0'],
   ['midnight_modem','Modem Noturno','#4268a8'],
   ['magenta_crt','CRT Magenta','#ff59d6'],
-  ['graphite_dos','Grafite DOS','#7b8588']
+  ['graphite_dos','Grafite DOS','#7b8588'],
+  ['win95_future','Windows 95½','#00a7a7'],
+  ['icq_neon','ICQ Neon','#8cff3f'],
+  ['winamp_2026','Winamp 2026','#ffb000'],
+  ['web98_glass','Web 98 Glass','#5a8cff'],
+  ['crt_void','CRT Vazio','#75ff91'],
+  ['arcade_os','Arcade OS','#ff4fd8']
 ];
 const CHAT_WALLPAPERS=[['none','Sem fundo','o vazio também é um layout'],...WALLPAPER_OPTIONS];
 function chatThemeClass(theme=state.profile?.chat_theme||'bbs_cyan'){
@@ -65,6 +98,209 @@ function applyAppWallpaper(){
   document.documentElement.style.setProperty('--avesso-app-wallpaper',`url("${wallpaperUrl(slug)}")`);
   document.documentElement.dataset.wallpaperSurface=useProfileWallpaper?'profile':'app';
   document.body.classList.add('avesso-app-active');
+}
+
+function hydrateStories(rows=[]){
+  const ids=[...new Set(rows.map(x=>x.author_id).filter(Boolean))];
+  return (async()=>{
+    let profiles={};
+    if(ids.length){
+      const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',ids);
+      profiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));
+    }
+    return Promise.all(rows.map(async row=>{
+      let image_url='';
+      if(row.image_path){
+        const {data}=await supabase.storage.from('avesso-stories').createSignedUrl(row.image_path,300);
+        image_url=data?.signedUrl||'';
+      }
+      return {...row,author:profiles[row.author_id]||{},image_url};
+    }));
+  })();
+}
+
+function storyTimeLeft(expiresAt){
+  const ms=Math.max(0,new Date(expiresAt)-Date.now());
+  const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);
+  return h>0?`${h}h ${m}m`:`${Math.max(1,m)}min`;
+}
+
+function storyCardHtml(story,{compact=false}={}){
+  const a=story.author||{};
+  return `<button class="story-card ${compact?'compact':''}" data-story-open="${story.id}" style="${story.image_url?`--story-thumb:url('${escapeAttr(story.image_url)}')`:''}">
+    <span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span>
+    <span class="story-card-copy"><b>${escapeHtml(a.display_name||'humano')}</b><small>${story.visibility==='amigos'?'amigos':'público'} · ${storyTimeLeft(story.expires_at)}</small></span>
+  </button>`;
+}
+
+async function loadStoriesStrip(){
+  const host=$('#stories-zone');
+  if(!host||!state.profile||state.tab!=='feed'){host?.classList.add('hidden');return;}
+  host.classList.remove('hidden');
+  const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(60);
+  if(error){host.innerHTML='<div class="stories-error">stories deram tela azul.</div>';return;}
+  const stories=await hydrateStories(data||[]);
+  const latestByAuthor=[],seen=new Set();
+  for(const s of stories){if(!seen.has(s.author_id)){seen.add(s.author_id);latestByAuthor.push(s);}}
+  host.innerHTML=`<div class="stories-head"><div><span class="section-code">STORIES // 24H</span><b>temporário, como toda boa decisão na internet</b></div><button id="story-create-feed">＋ postar story</button></div><div class="stories-strip"><button class="story-new-card" id="story-create-feed-card"><span class="story-ring self"><i>${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</i><em>＋</em></span><b>seu story</b><small>24h e acabou</small></button>${latestByAuthor.map(s=>storyCardHtml(s,{compact:true})).join('')}</div>`;
+  $('#story-create-feed')?.addEventListener('click',openStoryCreate);
+  $('#story-create-feed-card')?.addEventListener('click',openStoryCreate);
+  host.querySelectorAll('[data-story-open]').forEach(b=>b.onclick=()=>openStory(b.dataset.storyOpen));
+}
+
+function openStoryCreate(){
+  const dialog=$('#story-create-dialog');if(!dialog)return;
+  $('#story-create-message').textContent='';
+  $('#story-body').value='';
+  $('#story-image').value='';
+  $('#story-visibility').value='publico';
+  $('#story-image-preview').classList.add('hidden');
+  $('#story-image-preview').innerHTML='';
+  if(!dialog.open)dialog.showModal();
+  setTimeout(()=>$('#story-body')?.focus(),40);
+}
+
+async function publishStory(){
+  if(state.storyBusy)return;
+  const body=String($('#story-body')?.value||'').trim().slice(0,420);
+  const file=$('#story-image')?.files?.[0]||null;
+  const visibility=$('#story-visibility')?.value==='amigos'?'amigos':'publico';
+  if(!body&&!file)return toast('Story vazio dura zero horas. Eficiência admirável, utilidade discutível.');
+  if(file&&file.size>8*1024*1024)return toast('Imagem de story: até 8 MB. A fita VHS agradece.');
+  if(file&&!/^image\/(jpeg|png|webp|gif)$/i.test(file.type))return toast('Story aceita JPG, PNG, WEBP ou GIF.');
+  state.storyBusy=true;
+  const btn=$('#story-publish');if(btn){btn.disabled=true;btn.textContent='subindo para a internet...';}
+  let created=null,imagePath=null;
+  try{
+    const ins=await supabase.from('stories').insert({author_id:state.profile.id,body,visibility}).select().single();
+    if(ins.error)throw ins.error;
+    created=ins.data;
+    if(file){
+      imagePath=`${state.profile.id}/${created.id}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
+      const up=await supabase.storage.from('avesso-stories').upload(imagePath,file,{cacheControl:'3600',upsert:false,contentType:file.type});
+      if(up.error)throw up.error;
+      const upd=await supabase.from('stories').update({image_path:imagePath}).eq('id',created.id);
+      if(upd.error)throw upd.error;
+    }
+    $('#story-create-dialog')?.close();
+    toast('Story publicado. O relógio de 24h já está julgando.');
+    trackAction('story_posted','stories',{visibility,has_image:Boolean(file)});
+    await loadStoriesStrip();
+    if(state.tab==='profile')loadProfileStories(state.profile.id,'#profile-story-list');
+  }catch(err){
+    if(imagePath)await supabase.storage.from('avesso-stories').remove([imagePath]);
+    if(created?.id)await supabase.from('stories').delete().eq('id',created.id);
+    console.error('story publish',err);
+    toast('O story caiu antes de completar 24 horas.');
+  }finally{
+    state.storyBusy=false;if(btn){btn.disabled=false;btn.textContent='publicar por 24h';}
+  }
+}
+
+async function loadProfileStories(userId,selector){
+  const host=$(selector);if(!host||!userId)return;
+  const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').eq('author_id',userId).gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(20);
+  if(error){host.innerHTML='<p class="story-empty">Os stories se perderam no cache.</p>';return;}
+  const stories=await hydrateStories(data||[]);
+  host.innerHTML=stories.map(s=>storyCardHtml(s)).join('')||'<p class="story-empty">Nenhum story ativo. A internet sobreviveu.</p>';
+  host.querySelectorAll('[data-story-open]').forEach(b=>b.onclick=()=>openStory(b.dataset.storyOpen));
+}
+
+async function openStory(storyId){
+  const {data:story,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').eq('id',storyId).gt('expires_at',new Date().toISOString()).maybeSingle();
+  if(error||!story)return toast('Este story expirou ou você não pode vê-lo. O tempo venceu outra vez.');
+  const [authorRes,reactionsRes,commentsRes]=await Promise.all([
+    supabase.from('profiles').select('id,display_name,handle,avatar_url').eq('id',story.author_id).maybeSingle(),
+    supabase.from('story_reactions').select('story_id,user_id,reaction,created_at').eq('story_id',story.id),
+    supabase.from('story_comments').select('id,story_id,user_id,body,created_at').eq('story_id',story.id).order('created_at',{ascending:true}).limit(120)
+  ]);
+  let image_url='';
+  if(story.image_path){
+    const signed=await supabase.storage.from('avesso-stories').createSignedUrl(story.image_path,300);
+    image_url=signed.data?.signedUrl||'';
+  }
+  const comments=commentsRes.data||[],commentIds=[...new Set(comments.map(x=>x.user_id))];
+  let commentProfiles={};
+  if(commentIds.length){
+    const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',commentIds);
+    commentProfiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));
+  }
+  const reactions=reactionsRes.data||[];
+  const reactionHtml=STORY_REACTIONS.map(([id,icon,label])=>{
+    const rows=reactions.filter(x=>x.reaction===id),active=rows.some(x=>x.user_id===state.profile.id);
+    return `<button class="story-reaction ${active?'active':''}" data-story-react="${id}"><span>${icon}</span>${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`;
+  }).join('');
+  const a=authorRes.data||{},canDelete=story.author_id===state.profile.id;
+  const commentsHtml=comments.map(row=>{const p=commentProfiles[row.user_id]||{};return `<article class="story-comment"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${escapeHtml(p.display_name||'alguém')}</b><small>@${escapeHtml(p.handle||'...')} · ${ago(row.created_at)}</small><p>${escapeHtml(row.body)}</p></div></article>`;}).join('')||'<p class="story-empty">Sem comentários. O silêncio também expira.</p>';
+  const host=$('#story-view-content');
+  host.innerHTML=`<article class="story-view-card">
+    <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${escapeHtml(a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
+    <div class="story-stage ${image_url?'has-image':''}" style="${image_url?`--story-image:url('${escapeAttr(image_url)}')`:''}">${image_url?`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||'usuário')}">`:''}${story.body?`<p>${escapeHtml(story.body)}</p>`:''}</div>
+    <div class="story-reactions">${reactionHtml}</div>
+    <section class="story-comments"><h3>respostas // sem plateia</h3><div class="story-comment-list">${commentsHtml}</div><div class="story-comment-compose"><textarea id="story-comment-body" maxlength="420" placeholder="responda antes que isso desapareça..."></textarea><div><button id="story-comment-emoticons" type="button">☻ avessícones</button><button id="story-comment-send" type="button">responder</button></div><div id="story-comment-palette" class="feed-emoticon-palette hidden">${avessoEmoticonButtons('data-story-comment-emoticon')}</div></div></section>
+  </article>`;
+  const dialog=$('#story-view-dialog');if(!dialog.open)dialog.showModal();
+  host.querySelectorAll('[data-story-react]').forEach(b=>b.onclick=()=>toggleStoryReaction(story.id,b.dataset.storyReact));
+  $('#story-comment-send').onclick=()=>sendStoryComment(story.id);
+  $('#story-comment-emoticons').onclick=()=>$('#story-comment-palette').classList.toggle('hidden');
+  host.querySelectorAll('[data-story-comment-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#story-comment-body');if(input){input.value+=`${input.value?' ':''}${b.dataset.storyCommentEmoticon}`;input.focus();}});
+  if(canDelete)$('#story-delete').onclick=()=>deleteStory(story);
+}
+
+async function toggleStoryReaction(storyId,reaction){
+  if(!STORY_REACTIONS.some(x=>x[0]===reaction))return;
+  const {data:existing}=await supabase.from('story_reactions').select('reaction').eq('story_id',storyId).eq('user_id',state.profile.id).maybeSingle();
+  const result=existing?.reaction===reaction
+    ?await supabase.from('story_reactions').delete().eq('story_id',storyId).eq('user_id',state.profile.id)
+    :await supabase.from('story_reactions').upsert({story_id:storyId,user_id:state.profile.id,reaction},{onConflict:'story_id,user_id'});
+  if(result.error)return toast('A reação ao story teve uma reação adversa.');
+  trackAction('story_reaction','stories',{story_id:storyId,reaction});
+  openStory(storyId);
+}
+
+async function sendStoryComment(storyId){
+  const input=$('#story-comment-body'),body=String(input?.value||'').trim().slice(0,420);
+  if(!body)return toast('Resposta vazia é só telepatia com interface.');
+  const {error}=await supabase.from('story_comments').insert({story_id:storyId,user_id:state.profile.id,body});
+  if(error)return toast('A resposta não chegou ao story.');
+  input.value='';trackAction('story_reply','stories',{story_id:storyId});openStory(storyId);
+}
+
+async function deleteStory(story){
+  if(!confirm('Apagar este story agora? Ele já estava com os dias contados.'))return;
+  if(story.image_path)await supabase.storage.from('avesso-stories').remove([story.image_path]);
+  const {error}=await supabase.from('stories').delete().eq('id',story.id).eq('author_id',state.profile.id);
+  if(error)return toast('O story se recusou a morrer antes do prazo.');
+  $('#story-view-dialog')?.close();toast('Story apagado.');
+  loadStoriesStrip();
+  if(state.tab==='profile')loadProfileStories(state.profile.id,'#profile-story-list');
+}
+
+async function notifyStoryEvent(row){
+  if(!row||row.recipient_id!==state.profile?.id)return;
+  const actor=await profileById(row.actor_id);
+  const label=row.kind==='comment'?'respondeu ao seu story':`reagiu ao seu story: ${STORY_REACTIONS.find(x=>x[0]===row.reaction)?.[2]||'reação'}`;
+  socialNotify({title:'STORY.EXE',body:`${actor?.display_name||'Alguém'} ${label}.`,avatar:actor?.avatar_url||'',kind:'story',action:()=>openStory(row.story_id)});
+  await supabase.from('story_notifications').update({read_at:new Date().toISOString()}).eq('id',row.id).eq('recipient_id',state.profile.id);
+}
+
+async function loadStoryNotifications(){
+  if(!state.profile?.id)return;
+  const {data}=await supabase.from('story_notifications').select('*').eq('recipient_id',state.profile.id).is('read_at',null).order('created_at',{ascending:false}).limit(5);
+  for(const row of [...(data||[])].reverse())await notifyStoryEvent(row);
+}
+
+function startStoryRealtime(){
+  if(state.storyChannel||!state.profile?.id)return;
+  state.storyChannel=supabase.channel(`avesso-stories-${state.profile.id}-${Date.now()}`)
+    .on('postgres_changes',{event:'*',schema:'public',table:'stories'},()=>{if(isFeedTab())loadStoriesStrip();if(state.tab==='profile')loadProfileStories(state.profile.id,'#profile-story-list');})
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'story_notifications',filter:`recipient_id=eq.${state.profile.id}`},payload=>notifyStoryEvent(payload.new))
+    .subscribe();
+}
+
+function stopStoryRealtime(){
+  if(state.storyChannel)supabase.removeChannel(state.storyChannel);
+  state.storyChannel=null;
 }
 function audioContext(){
   try{
@@ -482,6 +718,16 @@ $('#encounter-close').onclick=()=>dismissEncounter();
 $('.dialog-close').onclick=()=>$('#auth-dialog').close();
 $('.avatar-dialog-close').onclick=()=>$('#avatar-dialog').close();
 $('.wallpaper-dialog-close').onclick=()=>$('#wallpaper-dialog').close();
+$('.story-create-close').onclick=()=>$('#story-create-dialog').close();
+$('.story-view-close').onclick=()=>$('#story-view-dialog').close();
+$('#story-publish').onclick=publishStory;
+$('#story-image').onchange=e=>{
+  const file=e.target.files?.[0]||null,box=$('#story-image-preview');
+  if(!file){box.classList.add('hidden');box.innerHTML='';return;}
+  const url=URL.createObjectURL(file);
+  box.innerHTML=`<img src="${url}" alt="prévia do story"><small>${escapeHtml(file.name)}</small>`;
+  box.classList.remove('hidden');
+};
 $$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
 function setAuthMode(mode){ state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
 
@@ -493,8 +739,8 @@ function humanError(m){const value=String(m||'');const lower=value.toLowerCase()
 $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(6);if(error)return toast('A busca tropeçou. Tente de novo.');const box=$('#recipient-results');box.innerHTML=(data||[]).map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -514,6 +760,7 @@ function updateComposerTarget(){
 }
 $('#post-target').addEventListener('change',updateComposerTarget);
 updateComposerTarget();
+setupFeedEmoticons();
 $('#post-body').addEventListener('input',e=>$('#char-count').textContent=420-e.target.value.length);
 $('#post-image').addEventListener('change',e=>{
   const file=e.target.files?.[0]||null;
@@ -668,15 +915,17 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
       ${conversationHtml}
       <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
-      <div class="inline-reply hidden" data-reply-box="${p.id}"><label>RESPOSTA // fale com a pessoa, não com a métrica</label><textarea maxlength="420" placeholder="Escreva algo que valha o espaço que ocupa."></textarea><div><button data-reply-send="${p.id}">publicar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
+      <div class="inline-reply hidden" data-reply-box="${p.id}"><label>RESPOSTA // fale com a pessoa, não com a métrica</label><textarea maxlength="420" placeholder="Escreva algo que valha o espaço que ocupa."></textarea><div class="reply-emoticon-row"><button type="button" data-reply-emoticons="${p.id}">☻ avessícones</button><div class="feed-emoticon-palette hidden" data-reply-emoticon-palette="${p.id}">${avessoEmoticonButtons('data-reply-emoticon')}</div></div><div><button data-reply-send="${p.id}">publicar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
     </article>`;
   }).join('');
   $$('[data-reply-toggle]').forEach(b=>b.onclick=()=>{
     const box=document.querySelector(`[data-reply-box="${b.dataset.replyToggle}"]`);
     box?.classList.toggle('hidden');box?.querySelector('textarea')?.focus();
   });
-  $$('[data-reply-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-box="${b.dataset.replyCancel}"]`)?.classList.add('hidden'));
-  $$('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
+  $('[data-reply-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-box="${b.dataset.replyCancel}"]`)?.classList.add('hidden'));
+  $('[data-reply-emoticons]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-emoticon-palette="${b.dataset.replyEmoticons}"]`)?.classList.toggle('hidden'));
+  $('[data-reply-emoticon]').forEach(b=>b.onclick=()=>{const box=b.closest('[data-reply-box]'),input=box?.querySelector('textarea');if(input){input.value+=`${input.value?' ':''}${b.dataset.replyEmoticon}`;input.focus();}});
+  $('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
   $$('[data-react-post]').forEach(b=>b.onclick=()=>toggleReaction(b.dataset.reactPost,b.dataset.reaction,b.classList.contains('active')));
 }
 async function toggleReaction(postId,reaction,active){
@@ -710,6 +959,7 @@ function applyAppTabLayout(){
   const worldOpen=['residents','plaza','tower','profile','public_profile','messages'].includes(state.tab);
   $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
   $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
+  $('#stories-zone')?.classList.toggle('hidden',state.tab!=='feed');
   $('.feed-header')?.classList.toggle('hidden',worldOpen);
   $('#refresh-feed')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
   applyAppWallpaper();
@@ -721,7 +971,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   applyAppWallpaper();
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
-  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Mensagens entre humanos'};
+  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Amigos & cúmplices'};
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
   trackAction('tab_view',state.tab,{tab:state.tab});
@@ -731,7 +981,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   else if(state.tab==='plaza')await renderPlaza();
   else if(state.tab==='tower')await renderTowerPage();
   else if(state.tab==='messages')await renderMessagesPage();
-  else loadFeed();
+  else {if(state.tab==='feed')await loadStoriesStrip();loadFeed();}
 });
 async function renderInhabitantsPage(){
   if(state.tab!=='residents')return;
@@ -1076,7 +1326,7 @@ async function renderMessagesPage(){
   if(state.tab!=='messages')return;
   $('#feed-status').classList.add('hidden');
   $('#feed-list').innerHTML=`<section class="messages-hub">
-    <header class="messages-hub-head"><div><span class="section-code">MSN.EXE // CONTATOS HUMANOS</span><h2>Mensagens</h2><p>Escolha alguém. Uma janela aparece. Tecnologia de ponta, circa 2006.</p></div>
+    <header class="messages-hub-head"><div><span class="section-code">MSN.EXE // AMIZADES HUMANAS</span><h2>Amigos & cúmplices</h2><p>Sua lista de gente que você aceitou voluntariamente. Clique em alguém e a janela aparece, porque 2006 ainda tinha algumas ideias úteis.</p></div>
     <div class="messages-head-controls"><label class="presence-picker">aparecer como <select id="presence-mode-select"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><button id="notification-permission-button" class="notification-permission-button">${notificationPermissionLabel()}</button></div></header>
     <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f),muted=isPeerMuted(f.id);return `<button class="compact-friend" data-open-chat="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${escapeHtml(f.display_name)}${muted?' <i class="muted-mark">🔇</i>':''}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}${muted?' · mutado':''}</em></button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
   </section>`;
@@ -1086,6 +1336,15 @@ async function renderMessagesPage(){
   $$('[data-open-chat]').forEach(b=>b.onclick=()=>openChatWindow(b.dataset.openChat));
   startDirectRealtime();
 }
+
+document.addEventListener('pointerdown',e=>{
+  const menu=$('#dm-options-menu');
+  if(menu&&!menu.classList.contains('hidden')&&!e.target.closest('#dm-options-menu,#dm-options'))menu.classList.add('hidden');
+  const emoji=$('#dm-emoticon-palette');
+  if(emoji&&!emoji.classList.contains('hidden')&&!e.target.closest('#dm-emoticon-palette,#dm-emoticons'))emoji.classList.add('hidden');
+  const postEmoji=$('#post-emoticon-palette');
+  if(postEmoji&&!postEmoji.classList.contains('hidden')&&!e.target.closest('#post-emoticon-palette,#post-emoticons'))postEmoji.classList.add('hidden');
+});
 
 function preferredVoiceMime(){
   if(!window.MediaRecorder)return'';
@@ -1243,7 +1502,7 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
         <button id="dm-voice" class="dm-voice-button" title="Gravar mensagem de voz">🎙 voz</button>
         <button id="dm-voice-cancel" class="dm-voice-cancel hidden" title="Cancelar gravação">× cancelar</button>
         <input id="dm-file-input" type="file" hidden accept="image/*,audio/*,.pdf,.txt,.zip,.docx">
-        <div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${['😀','😂','😅','🙃','👀','🤨','❤️','💀','🔥','☕','⚠️','🖥️','🐈','⌛','🫠','¯\\_(ツ)_/¯'].map(e=>`<button type="button" data-emoticon="${escapeAttr(e)}">${e}</button>`).join('')}</div>
+        <div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${avessoEmoticonButtons('data-emoticon')}</div>
       </div>
       <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem... ou grave voz no celular sem fingir que 2006 tinha tudo."><button>Enviar</button></form>
     </div>`;
@@ -1497,6 +1756,11 @@ async function renderProfile(){
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
       <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
+    <section class="profile-story-section">
+      <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
+      <button id="profile-story-create">＋ postar story</button>
+      <div id="profile-story-list" class="profile-story-list"><p class="story-empty">procurando coisas que ainda não expiraram...</p></div>
+    </section>
     <div class="profile-settings-grid">
       <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Mensagem de status<input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Aparecer como<select id="profile-presence"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
       <section class="profile-settings-card security-card"><span class="section-code">CONTA // SEGURANÇA</span><p><b>E-mail</b><br>${escapeHtml(state.session?.user?.email||'')}</p><label>Nova senha<input id="profile-password" type="password" minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password"></label><button id="change-password">alterar senha</button><small>Seu @ continua estável para links. Seu nome exibido pode trocar de personalidade quantas vezes quiser.</small></section>
@@ -1519,6 +1783,7 @@ async function renderProfile(){
     <div class="world-pref-foot"><span id="profile-world-status">carregando modo...</span><small>${interferenceOnline?'Interferências visuais globais estão online.':'O motor visual ainda está bloqueado globalmente.'} Personagens nunca reescrevem o que você publicou.</small></div>
   </section>`;
   $('#open-avatar-picker').onclick=openAvatarDialog;
+  $('#profile-story-create').onclick=openStoryCreate;
   $('#save-profile-settings').onclick=saveProfileSettings;
   $('#change-password').onclick=changePassword;
   $('#profile-presence').value=state.profile.presence_mode||'online';
@@ -1530,6 +1795,7 @@ async function renderProfile(){
   setWorldModeLabel();
   loadFriendPanel();
   loadBlockedPanel();
+  loadProfileStories(state.profile.id,'#profile-story-list');
   loadAlbum(state.profile.id,true);
   loadGuestbook(state.profile.id,'#profile-guestbook');
   algoSay('profile');
@@ -1654,6 +1920,11 @@ async function openPublicProfile(userId){
   $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
     <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</p><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <section class="public-story-section">
+      <span class="section-code">STORIES // AINDA NÃO EXPIRARAM</span>
+      <h2>Stories de ${escapeHtml(p.display_name)}</h2>
+      <div id="public-story-list" class="profile-story-list"><p class="story-empty">checando o relógio...</p></div>
+    </section>
     <section class="guestbook-section public-guestbook">
       <span class="section-code">RECADOS // ESCREVA NA PAREDE DE ALGUÉM</span>
       <h2>Recados para ${escapeHtml(p.display_name)}</h2>
@@ -1672,6 +1943,7 @@ async function openPublicProfile(userId){
   $('#guestbook-submit')?.addEventListener('click',()=>sendGuestbookEntry(userId));
   loadGuestbook(userId,'#public-guestbook-list');
   loadAlbum(userId,false);
+  loadProfileStories(userId,'#public-story-list');
 }
 function bindProfileLinks(){ /* links usam delegação global */ }
 document.addEventListener('click',e=>{
