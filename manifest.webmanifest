@@ -1,0 +1,72 @@
+{
+  "name": "AVESSO",
+  "short_name": "AVESSO",
+  "description": "A rede social onde atenção vale mais que exposição.",
+  "start_url": "./#para-cuidar",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#090b0c",
+  "theme_color": "#090b0c",
+  "categories": [
+    "social"
+  ],
+  "icons": [
+    {
+      "src": "assets/avesso-app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Feed",
+      "short_name": "Feed",
+      "url": "./#para-cuidar",
+      "icons": [
+        {
+          "src": "assets/avesso-app-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Praça Central",
+      "short_name": "Praça",
+      "url": "./#praca",
+      "icons": [
+        {
+          "src": "assets/avesso-app-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Amigos",
+      "short_name": "Amigos",
+      "url": "./#amigos",
+      "icons": [
+        {
+          "src": "assets/avesso-app-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Seu Canto",
+      "short_name": "Canto",
+      "url": "./#seu-canto",
+      "icons": [
+        {
+          "src": "assets/avesso-app-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
+}
