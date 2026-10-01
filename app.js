@@ -411,7 +411,7 @@ function openStoryCreate(){
   $('#story-create-message').textContent='';
   $('#story-body').value='';
   $('#story-image').value='';
-  $('#story-visibility').value='publico';
+  $('#story-visibility').value=state.siteSettings?.story_settings?.default_visibility==='amigos'?'amigos':'publico';
   if(!dialog.open)dialog.showModal();
   setTimeout(()=>$('#story-body')?.focus(),40);
 }
@@ -431,7 +431,9 @@ async function publishStory(){
   const btn=$('#story-publish');if(btn){btn.disabled=true;btn.textContent='subindo para a internet...';}
   let created=null,mediaPath=null;
   try{
-    const ins=await supabase.from('stories').insert({author_id:state.profile.id,body,visibility,media_type:mediaType}).select().single();
+    const durationHours=Math.max(1,Math.min(24,Number(state.siteSettings?.story_settings?.duration_hours)||24));
+    const expiresAt=new Date(Date.now()+durationHours*3600000).toISOString();
+    const ins=await supabase.from('stories').insert({author_id:state.profile.id,body,visibility,media_type:mediaType,expires_at:expiresAt}).select().single();
     if(ins.error)throw ins.error;
     created=ins.data;
     if(file){
@@ -445,7 +447,7 @@ async function publishStory(){
     clearStoryPreview();
     state.storyCapturedFile=null;
     $('#story-create-dialog')?.close();
-    toast(mediaType==='video'?'Vídeo no story. Ele tem 24 horas antes do esquecimento institucional.':'Story publicado. O relógio de 24h já está julgando.');
+    toast(mediaType==='video'?`Vídeo no story. Ele expira em ${durationHours}h.`:`Story publicado por ${durationHours}h.`);
     trackAction('story_posted','stories',{visibility,media_type:mediaType||'text'});
     await loadStoriesStrip();
     if(state.tab==='profile')loadProfileStories(state.profile.id,'#profile-story-list');
@@ -456,7 +458,7 @@ async function publishStory(){
     toast('O story caiu antes de completar 24 horas.');
   }finally{
     state.storyBusy=false;
-    if(btn){btn.disabled=false;btn.textContent='publicar por 24h';}
+    if(btn){const h=Math.max(1,Math.min(24,Number(state.siteSettings?.story_settings?.duration_hours)||24));btn.disabled=false;btn.textContent=`publicar por ${h}h`;}
   }
 }
 
@@ -2834,6 +2836,9 @@ function dashboardAppearanceHtml(){
       '<label><input id="owner-login-registration" type="checkbox" '+(login.registration_enabled!==false?'checked':'')+'> permitir novos cadastros</label>'+
       '<label><input id="owner-story-enabled" type="checkbox" '+(stories.enabled!==false?'checked':'')+'> stories ativos</label>'+
       '<label><input id="owner-story-camera" type="checkbox" '+(stories.camera_enabled!==false?'checked':'')+'> câmera nos stories</label>'+
+      '<label>duração do story (h)<input id="owner-story-hours" type="number" min="1" max="24" value="'+escapeAttr(stories.duration_hours||24)+'"></label>'+
+      '<label>gravação máxima (s)<input id="owner-story-seconds" type="number" min="5" max="60" value="'+escapeAttr(stories.max_video_seconds||15)+'"></label>'+
+      '<label>visibilidade padrão<select id="owner-story-visibility"><option value="publico" '+((stories.default_visibility||'publico')==='publico'?'selected':'')+'>público</option><option value="amigos" '+(stories.default_visibility==='amigos'?'selected':'')+'>amigos</option></select></label>'+
       '<label>posts por página<input id="owner-feed-size" type="number" min="10" max="100" value="'+escapeAttr(feed.page_size||40)+'"></label>'+
       '<label><input id="owner-feed-attention" type="checkbox" '+(feed.show_attention_tag!==false?'checked':'')+'> etiqueta “precisa de atenção”</label>'+
       '<label>densidade<select id="owner-layout-density"><option value="compact" '+(layout.density==='compact'?'selected':'')+'>compacta</option><option value="comfortable" '+(layout.density==='comfortable'?'selected':'')+'>confortável</option></select></label>'+
@@ -3070,7 +3075,7 @@ async function dashboardSaveAppearance(){
 }
 async function dashboardSaveRuntime(){
   const feed={page_size:Math.max(10,Math.min(100,Number($('#owner-feed-size')?.value)||40)),show_attention_tag:Boolean($('#owner-feed-attention')?.checked)};
-  const stories={enabled:Boolean($('#owner-story-enabled')?.checked),camera_enabled:Boolean($('#owner-story-camera')?.checked)};
+  const stories={enabled:Boolean($('#owner-story-enabled')?.checked),camera_enabled:Boolean($('#owner-story-camera')?.checked),duration_hours:Math.max(1,Math.min(24,Number($('#owner-story-hours')?.value)||24)),max_video_seconds:Math.max(5,Math.min(60,Number($('#owner-story-seconds')?.value)||15)),default_visibility:$('#owner-story-visibility')?.value==='amigos'?'amigos':'publico'};
   const login={registration_enabled:Boolean($('#owner-login-registration')?.checked)};
   const layout={density:$('#owner-layout-density')?.value||'compact'};
   const {data,error}=await supabase.rpc('owner_update_runtime_settings',{p_feed_settings:feed,p_story_settings:stories,p_login_settings:login,p_layout_settings:layout});
