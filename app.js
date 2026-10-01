@@ -1151,7 +1151,7 @@ async function setChatTheme(theme){
   applyChatAppearance();
 }
 async function setChatWallpaper(slug){
-  if(!CHAT_WALLPAPERS.some(x=>x[0]===slug)||!state.profile?.id)return;
+  if(!allChatWallpapers().some(x=>x[0]===slug)||!state.profile?.id)return;
   const previous=state.profile.chat_wallpaper||'none';
   state.profile={...state.profile,chat_wallpaper:slug};
   applyChatAppearance({theme:state.profile.chat_theme||'bbs_cyan',wallpaper:slug});
@@ -3660,7 +3660,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
         <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
         <label class="dm-away-setting"><span>MINHA AUSÊNCIA AUTOMÁTICA</span><select id="dm-away-after"><option value="5">5 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option><option value="20">20 minutos</option><option value="30">30 minutos</option><option value="0">nunca</option></select></label><label class="dm-chat-listening-setting"><input id="dm-show-listening" type="checkbox" ${state.profile.chat_listening_visible!==false?'checked':''}><span><b>mostrar minha música nas conversas</b><small>o Canto pode continuar mostrando mesmo se você esconder daqui</small></span></label><div class="dm-status-setting"><span>MEU STATUS</span><div><input id="dm-status-message" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"><button id="dm-save-status" type="button">salvar</button></div></div>
         <div class="dm-theme-section"><span>TEMA // PIXEL 199X → 2026</span><div class="dm-theme-grid">${CHAT_THEMES.map(([id,label,color])=>`<button type="button" class="chat-theme-choice ${theme===id?'active':''}" data-chat-theme="${id}" title="${escapeAttr(label)}"><i style="--theme-color:${color}"></i><b>${escapeHtml(label)}</b></button>`).join('')}</div></div>
-        <div class="dm-wallpaper-section"><span>FUNDO // CONVERSA</span><div class="dm-chat-wallpaper-grid">${CHAT_WALLPAPERS.map(([slug,name])=>`<button type="button" class="dm-chat-wallpaper ${chatWallpaper===slug?'active':''}" data-chat-wallpaper="${escapeAttr(slug)}" title="${escapeAttr(name)}" style="${slug==='none'?'':'--chat-thumb:url(\''+wallpaperUrl(slug)+'\')'}"><i></i><b>${escapeHtml(name)}</b></button>`).join('')}</div></div>
+        <div class="dm-wallpaper-section"><span>FUNDO // CONVERSA</span><div class="dm-chat-wallpaper-grid">${allChatWallpapers().map(([slug,name])=>`<button type="button" class="dm-chat-wallpaper ${chatWallpaper===slug?'active':''}" data-chat-wallpaper="${escapeAttr(slug)}" title="${escapeAttr(name)}" style="${slug==='none'?'':'--chat-thumb:url(\''+wallpaperUrl(slug)+'\')'}"><i></i><b>${escapeHtml(name)}</b></button>`).join('')}</div></div>
       </div>
     </header>
     <div class="dm-window-body">
@@ -3936,12 +3936,12 @@ function openWallpaperDialog(target){
   const grid=$('#wallpaper-modal-grid');
   const current=target==='profile'?state.profile.profile_wallpaper:state.profile.app_wallpaper;
   $('#wallpaper-dialog-title').textContent=target==='profile'?'Fundo do Meu Canto':'Fundo geral do AVESSO';
-  grid.innerHTML=WALLPAPER_OPTIONS.map(([slug,name,tag])=>`<button class="wallpaper-choice ${slug===current?'active':''}" data-wallpaper="${slug}"><img src="${wallpaperUrl(slug)}" alt=""><b>${escapeHtml(name)}</b><small>${escapeHtml(tag)}</small></button>`).join('');
+  grid.innerHTML=allWallpaperOptions().map(([slug,name,tag])=>`<button class="wallpaper-choice ${slug===current?'active':''}" data-wallpaper="${slug}"><img src="${wallpaperUrl(slug)}" alt=""><b>${escapeHtml(name)}</b><small>${escapeHtml(tag)}</small></button>`).join('');
   $$('[data-wallpaper]').forEach(b=>b.onclick=()=>saveWallpaper(target,b.dataset.wallpaper));
   $('#wallpaper-dialog').showModal();
 }
 async function saveWallpaper(target,slug){
-  if(!WALLPAPER_OPTIONS.some(x=>x[0]===slug))return;
+  if(!allWallpaperOptions().some(x=>x[0]===slug))return;
   const column=target==='profile'?'profile_wallpaper':'app_wallpaper';
   const {data,error}=await supabase.from('profiles').update({[column]:slug,updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
   if(error)return toast('O papel de parede se recusou a colar na parede.');
@@ -4002,7 +4002,7 @@ async function removeFriendship(id){
 }
 function openAvatarDialog(){
   const grid=$('#avatar-modal-grid');
-  grid.innerHTML=AVATAR_OPTIONS.map(([label,url,kind])=>`<button class="avatar-choice-modal ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${escapeAttr(url)}"><img src="${escapeAttr(url)}" alt="${escapeAttr(label)}"><b>${label}</b><small>${kind}</small></button>`).join('');
+  grid.innerHTML=allAvatarOptions().map(([label,url,kind])=>`<button class="avatar-choice-modal ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${escapeAttr(url)}"><img src="${escapeAttr(url)}" alt="${escapeAttr(label)}"><b>${label}</b><small>${kind}</small></button>`).join('');
   $$('[data-avatar-url]').forEach(b=>b.onclick=()=>saveAvatar(b.dataset.avatarUrl));
   $('#avatar-dialog').showModal();
 }
