@@ -111,7 +111,7 @@ function hydrateStories(rows=[]){
     return Promise.all(rows.map(async row=>{
       let image_url='';
       if(row.image_path){
-        const {data}=await supabase.storage.from('avesso-stories').createSignedUrl(row.image_path,3600);
+        const {data}=await supabase.storage.from('avesso-stories').createSignedUrl(row.image_path,300);
         image_url=data?.signedUrl||'';
       }
       return {...row,author:profiles[row.author_id]||{},image_url};
@@ -135,7 +135,7 @@ function storyCardHtml(story,{compact=false}={}){
 
 async function loadStoriesStrip(){
   const host=$('#stories-zone');
-  if(!host||!state.profile||!isFeedTab()){host?.classList.add('hidden');return;}
+  if(!host||!state.profile||state.tab!=='feed'){host?.classList.add('hidden');return;}
   host.classList.remove('hidden');
   const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(60);
   if(error){host.innerHTML='<div class="stories-error">stories deram tela azul.</div>';return;}
@@ -216,7 +216,7 @@ async function openStory(storyId){
   ]);
   let image_url='';
   if(story.image_path){
-    const signed=await supabase.storage.from('avesso-stories').createSignedUrl(story.image_path,3600);
+    const signed=await supabase.storage.from('avesso-stories').createSignedUrl(story.image_path,300);
     image_url=signed.data?.signedUrl||'';
   }
   const comments=commentsRes.data||[],commentIds=[...new Set(comments.map(x=>x.user_id))];
@@ -959,7 +959,7 @@ function applyAppTabLayout(){
   const worldOpen=['residents','plaza','tower','profile','public_profile','messages'].includes(state.tab);
   $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
   $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
-  $('#stories-zone')?.classList.toggle('hidden',!isFeedTab());
+  $('#stories-zone')?.classList.toggle('hidden',state.tab!=='feed');
   $('.feed-header')?.classList.toggle('hidden',worldOpen);
   $('#refresh-feed')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
   applyAppWallpaper();
@@ -981,7 +981,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   else if(state.tab==='plaza')await renderPlaza();
   else if(state.tab==='tower')await renderTowerPage();
   else if(state.tab==='messages')await renderMessagesPage();
-  else {await loadStoriesStrip();loadFeed();}
+  else {if(state.tab==='feed')await loadStoriesStrip();loadFeed();}
 });
 async function renderInhabitantsPage(){
   if(state.tab!=='residents')return;
