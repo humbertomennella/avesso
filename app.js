@@ -684,6 +684,65 @@ function socialNotify({title='AVESSO',body='',avatar='',kind='message',action=nu
   browserNotify(item);
   runSocialNotificationQueue();
 }
+
+async function loadStaffNotifications(){
+  if(!state.profile?.id)return;
+  const {data,error}=await supabase.from('staff_notifications')
+    .select('id,title,body,severity,created_at,read_at,sender_id')
+    .eq('recipient_id',state.profile.id)
+    .is('read_at',null)
+    .order('created_at',{ascending:true})
+    .limit(12);
+  if(error)return;
+  for(const row of data||[]){
+    socialNotify({
+      title:(row.severity==='critical'?'⚠ ':'')+(row.title||'STAFF // AVESSO'),
+      body:row.body||'',
+      kind:row.severity==='critical'?'attention':'message',
+      sound:true
+    });
+    await supabase.from('staff_notifications').update({read_at:new Date().toISOString()}).eq('id',row.id).eq('recipient_id',state.profile.id);
+  }
+}
+function ensureReportDialog(){
+  let dialog=$('#report-user-dialog');
+  if(dialog)return dialog;
+  dialog=document.createElement('dialog');
+  dialog.id='report-user-dialog';
+  dialog.className='report-user-dialog';
+  dialog.innerHTML='<button class="dialog-close report-user-close" aria-label="Fechar">×</button>'+
+    '<span class="section-code">DENÚNCIA // CONTEXTO ANTES DO JULGAMENTO</span>'+
+    '<h2>Denunciar usuário</h2><p id="report-user-target"></p>'+
+    '<label>motivo<select id="report-user-reason"><option value="assedio">assédio</option><option value="odio">ódio / discriminação</option><option value="spam">spam</option><option value="risco">risco / ameaça</option><option value="outro">outro</option></select></label>'+
+    '<label>detalhes<textarea id="report-user-details" maxlength="500" placeholder="explique o que aconteceu, sem romance de 14 capítulos"></textarea></label>'+
+    '<button id="report-user-submit" class="btn btn-acid" type="button">enviar denúncia</button>';
+  document.body.appendChild(dialog);
+  dialog.querySelector('.report-user-close').onclick=()=>dialog.close();
+  return dialog;
+}
+async function reportUser(userId,displayName='usuário'){
+  if(!userId||userId===state.profile?.id)return;
+  const dialog=ensureReportDialog();
+  dialog.dataset.userId=userId;
+  $('#report-user-target').textContent='Alvo: '+displayName;
+  $('#report-user-details').value='';
+  if(!dialog.open)dialog.showModal();
+  $('#report-user-submit').onclick=async()=>{
+    const reason=$('#report-user-reason').value;
+    const details=$('#report-user-details').value.trim();
+    const btn=$('#report-user-submit');btn.disabled=true;
+    const {error}=await supabase.from('reports').insert({
+      reporter_id:state.profile.id,
+      reported_profile_id:userId,
+      reason,
+      details
+    });
+    btn.disabled=false;
+    if(error)return toast('A denúncia não foi enviada.');
+    dialog.close();
+    toast('Denúncia enviada para a equipe de moderação.');
+  };
+}
 function runSocialNotificationQueue(){
   if(state.socialNotificationBusy)return;
   const item=state.socialNotificationQueue.shift();if(!item)return;
@@ -4616,6 +4675,7 @@ function subscribeRealtime(){
       if(event.config?.importance==='important')toast(`EVENTO DO MUNDO // ${event.title}`);
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'post_reactions'},()=>{if(isFeedTab())loadFeed();})
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_notifications'},payload=>{if(payload.new?.recipient_id===state.profile?.id)loadStaffNotifications();})
     .on('postgres_changes',{event:'*',schema:'public',table:'profile_media'},payload=>{
       const row=payload.new?.user_id?payload.new:(payload.old||{});
       if(state.tab==='profile'&&row.user_id===state.profile?.id)loadProfileMedia(state.profile.id,true,'#profile-media-list');
