@@ -1580,7 +1580,7 @@ async function enterApp(){
   if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return;}
   await loadAdminAccess();
   await loadOwnModeration();
-  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):'');
+  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.staffRole==='owner'?adminCrownHtml('nav-admin-crown'):'');
   $('#nav-handle').textContent='@'+data.handle;
   renderNavAvatar();
   applyAppWallpaper();
@@ -4025,7 +4025,7 @@ async function saveProfileSettings(){
   if(error)return toast('O perfil resistiu à mudança. Tente novamente.');
   state.profile=data;
   await supabase.auth.updateUser({data:{display_name}}).catch(()=>{});
-  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):''); renderNavAvatar();
+  $('#nav-name').dataset.profileId=data.id; $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.staffRole==='owner'?adminCrownHtml('nav-admin-crown'):''); renderNavAvatar(); decorateIdentityNodes(document);
   toast('Seu Canto foi atualizado. Identidade salva sem pedir aprovação do algoritmo.');
   renderProfile();
 }
@@ -4371,7 +4371,7 @@ async function renderProfile(){
   $('#feed-list').innerHTML=`<section class="profile-control" style="--profile-wallpaper:url('${wallpaperUrl(state.profile.profile_wallpaper)}')">
     <header class="profile-control-hero">
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
-      <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${escapeHtml(state.profile.display_name)}${state.isAdmin?adminCrownHtml('profile-admin-crown'):''}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
+      <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${escapeHtml(state.profile.display_name)}${state.staffRole==='owner'?adminCrownHtml('profile-admin-crown'):''}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
