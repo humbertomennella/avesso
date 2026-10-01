@@ -2226,6 +2226,93 @@ async function saveAdminWorldControls(){
   toast('Controles do Mundo do AVESSO atualizados.');
   renderAdminDashboard();
 }
+
+function adminApplyPreset(name){
+  const presets={
+    avesso:{bg:'#090b0c',panel:'#111517',panel2:'#191f21',ink:'#f5f3e8',muted:'#8e9999',line:'#293235',acid:'#d8ff3e',cyan:'#22d9ee',coral:'#ff5c4d',violet:'#9b7cff'},
+    phosphor:{bg:'#020503',panel:'#07100a',panel2:'#0b170e',ink:'#dfffe6',muted:'#78a383',line:'#1e4b2a',acid:'#74ff4b',cyan:'#45ffc7',coral:'#ff695c',violet:'#9e7cff'},
+    cyan:{bg:'#04080a',panel:'#071319',panel2:'#0c2028',ink:'#e8fbff',muted:'#7da5ad',line:'#1f4b56',acid:'#d8ff3e',cyan:'#28e8ff',coral:'#ff6a5f',violet:'#758dff'},
+    magenta:{bg:'#0b050c',panel:'#160b18',panel2:'#231027',ink:'#fff0fb',muted:'#ad83a8',line:'#53204d',acid:'#d8ff3e',cyan:'#29e4ff',coral:'#ff655b',violet:'#ff59d6'}
+  };
+  const p=presets[name];if(!p)return;
+  Object.entries(p).forEach(([key,value])=>{const input=$('#admin-color-'+key);if(input)input.value=value;});
+  const preview={...(state.siteSettings||{}),
+    color_bg:p.bg,color_panel:p.panel,color_panel2:p.panel2,color_ink:p.ink,color_muted:p.muted,
+    color_line:p.line,color_acid:p.acid,color_cyan:p.cyan,color_coral:p.coral,color_violet:p.violet
+  };
+  applySiteSettings(preview);
+}
+async function saveAdminSiteSettings(){
+  if(!state.isAdmin)return;
+  const args={
+    p_site_name:String($('#admin-site-name')?.value||'AVESSO').trim(),
+    p_tagline:String($('#admin-site-tagline')?.value||'').trim(),
+    p_color_bg:$('#admin-color-bg')?.value||'#090b0c',
+    p_color_panel:$('#admin-color-panel')?.value||'#111517',
+    p_color_panel2:$('#admin-color-panel2')?.value||'#191f21',
+    p_color_ink:$('#admin-color-ink')?.value||'#f5f3e8',
+    p_color_muted:$('#admin-color-muted')?.value||'#8e9999',
+    p_color_line:$('#admin-color-line')?.value||'#293235',
+    p_color_acid:$('#admin-color-acid')?.value||'#d8ff3e',
+    p_color_cyan:$('#admin-color-cyan')?.value||'#22d9ee',
+    p_color_coral:$('#admin-color-coral')?.value||'#ff5c4d',
+    p_color_violet:$('#admin-color-violet')?.value||'#9b7cff',
+    p_custom_css:String($('#admin-custom-css')?.value||'').slice(0,20000),
+    p_announcement:String($('#admin-announcement')?.value||'').slice(0,240)
+  };
+  const btn=$('#admin-site-save');if(btn)btn.disabled=true;
+  const {data,error}=await supabase.rpc('admin_update_site_settings',args);
+  if(btn)btn.disabled=false;
+  if(error)return toast('A aparência global não foi salva. O CSS ganhou consciência.');
+  state.siteSettings=data||args;
+  applySiteSettings(data||state.siteSettings);
+  toast('Aparência global atualizada.');
+  renderAdminDashboard();
+}
+async function adminToggleSuspension(userId,suspended){
+  if(!state.isAdmin||!userId)return;
+  let reason='';
+  if(suspended){
+    reason=prompt('Motivo da suspensão (fica no registro administrativo):','violação das regras do AVESSO')||'';
+    if(!reason.trim())return;
+  }
+  const {error}=await supabase.rpc('admin_set_user_suspension',{p_user_id:userId,p_suspended:suspended,p_reason:reason,p_until:null});
+  if(error)return toast('Não foi possível alterar a suspensão deste usuário.');
+  toast(suspended?'Usuário suspenso. A rede continua sem tribunal de praça pública.':'Usuário reativado.');
+  renderAdminDashboard();
+}
+async function adminSetRole(userId,role){
+  if(state.adminRole!=='owner'||!userId)return;
+  const {error}=await supabase.rpc('admin_set_user_role',{p_user_id:userId,p_role:role});
+  if(error)return toast('A função administrativa não foi alterada.');
+  toast(role==='none'?'Acesso administrativo removido.':'Papel administrativo atualizado.');
+  renderAdminDashboard();
+}
+async function adminDeleteContent(kind,id){
+  if(!state.isAdmin||!id)return;
+  const rpc={post:'admin_delete_post',response:'admin_delete_response',photo:'admin_delete_photo',story:'admin_delete_story'}[kind];
+  if(!rpc)return;
+  if(!confirm('Remover este conteúdo da rede? A ação será registrada no log administrativo.'))return;
+  const {error}=await supabase.rpc(rpc,{p_id:id});
+  if(error)return toast('A moderação não conseguiu remover o conteúdo.');
+  toast('Conteúdo removido pela moderação.');
+  if(isFeedTab())loadFeed();
+  renderAdminDashboard();
+}
+function adminContentCard(kind,row){
+  const author='@'+escapeHtml(row.author_handle||'...');
+  const body=escapeHtml(row.body||row.caption||('[ '+kind+' ]'));
+  const media=kind==='photo'&&row.storage_path?'<img src="'+escapeAttr(publicAlbumUrl(row.storage_path))+'" alt="">':'';
+  return '<article class="admin-content-card">'+media+'<div><header><b>'+author+'</b><small>'+ago(row.created_at)+'</small></header><p>'+body+'</p></div><button class="danger" data-admin-delete-kind="'+kind+'" data-admin-delete-id="'+escapeAttr(row.id)+'">remover</button></article>';
+}
+function adminAuditRow(row){
+  const labels={
+    update_site_settings:'aparência alterada',suspend_user:'usuário suspenso',restore_user:'usuário reativado',
+    set_admin_role:'papel administrativo',delete_post:'post removido',delete_response:'resposta removida',
+    delete_photo:'foto removida',delete_story:'story removido'
+  };
+  return '<div class="admin-audit-row"><b>'+escapeHtml(labels[row.action]||row.action||'ação')+'</b><span>'+escapeHtml(row.target_type||'sistema')+(row.target_id?' · '+escapeHtml(String(row.target_id).slice(0,12)):'')+'</span><time>'+ago(row.created_at)+'</time></div>';
+}
 async function renderAdminDashboard(){
   if(state.tab!=='admin')return;
   if(!state.isAdmin){
