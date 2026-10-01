@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, dashboardSection:'overview', staffRoles:{}, badgeCatalog:{}, userBadgeMap:{}, systemAssets:[], staffChatChannel:null, staffChatRealtime:null, suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, dashboardSection:'overview', staffRoles:{}, badgeCatalog:{}, userBadgeMap:{}, systemAssets:[], siteOverrides:[], staffChatChannel:null, staffChatRealtime:null, suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -184,11 +184,31 @@ function applySiteSettings(settings=state.siteSettings||{}){
   document.querySelectorAll('[data-auth-mode="signup"]').forEach(el=>{el.classList.toggle('hidden',!registrationEnabled);el.setAttribute('aria-hidden',registrationEnabled?'false':'true');});
   if(!registrationEnabled&&state.mode==='signup'&&typeof setAuthMode==='function')setAuthMode('login');
 }
+function applySiteOverrides(rows=state.siteOverrides||[]){
+  for(const row of rows.filter(x=>x.enabled!==false)){
+    let nodes=[];
+    try{nodes=[...document.querySelectorAll(row.selector)];}catch{continue;}
+    for(const el of nodes){
+      const value=String(row.value||'');
+      if(row.action==='text')el.textContent=value;
+      else if(row.action==='src'&&('src' in el))el.src=value;
+      else if(row.action==='alt'&&('alt' in el))el.alt=value;
+      else if(row.action==='hide')el.classList.add('hidden');
+      else if(row.action==='show')el.classList.remove('hidden');
+      else if(row.action==='append_text')el.append(document.createTextNode(value));
+      else if(row.action==='prepend_text')el.prepend(document.createTextNode(value));
+      else if(row.action==='background_image')el.style.backgroundImage=value?('url("'+value.replaceAll('"','%22')+'")'):'none';
+    }
+  }
+}
 async function loadSiteSettings(){
-  const {data,error}=await supabase.from('site_settings').select('*').eq('id','global').maybeSingle();
-  if(error||!data)return;
-  state.siteSettings=data;
-  applySiteSettings(data);
+  const [settingsRes,overridesRes]=await Promise.all([
+    supabase.from('site_settings').select('*').eq('id','global').maybeSingle(),
+    supabase.from('site_overrides').select('*').eq('enabled',true).order('sort_order',{ascending:true})
+  ]);
+  if(settingsRes.data){state.siteSettings=settingsRes.data;applySiteSettings(settingsRes.data);}
+  state.siteOverrides=overridesRes.data||[];
+  applySiteOverrides(state.siteOverrides);
 }
 async function loadOwnModeration(){
   state.suspended=false;state.suspension=null;
@@ -2828,7 +2848,8 @@ function dashboardContentHtml(){
   return dashboardHeader('OWNER // CMS','Páginas & conteúdo','Edite blocos de texto, imagem, links e substituições de interface sem reconstruir o site.')+
     '<section class="dashboard-panel"><div class="content-block-editor"><input id="content-page" placeholder="página: landing" value="landing"><input id="content-key" placeholder="chave: hero.title"><select id="content-kind"><option>text</option><option>html</option><option>image</option><option>link</option><option>json</option></select><textarea id="content-value" placeholder="conteúdo"></textarea><label><input id="content-enabled" type="checkbox" checked> ativo</label><input id="content-sort" type="number" value="100"><button id="content-save">＋ salvar bloco</button></div></section>'+
     '<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Blocos cadastrados</h3><small>'+blocks.length+'</small></div><div class="content-block-list">'+blocks.map(b=>'<article><div><b>'+escapeHtml(b.page_slug)+' // '+escapeHtml(b.block_key)+'</b><small>'+escapeHtml(b.kind)+' · '+(b.enabled?'ativo':'pausado')+'</small><p>'+escapeHtml(String(b.value||'').slice(0,240))+'</p></div><div><button data-content-edit="'+b.id+'">editar</button><button class="danger" data-content-delete="'+b.id+'">apagar</button></div></article>').join('')+'</div></section>'+
-    '<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Overrides de layout</h3><small>'+overrides.length+'</small></div><p class="dashboard-hint">Use o CSS global para alterações livres. Overrides existentes continuam listados para auditoria.</p><div class="override-list">'+overrides.map(o=>'<article><b>'+escapeHtml(o.page)+' · '+escapeHtml(o.selector)+'</b><small>'+escapeHtml(o.action)+'</small><code>'+escapeHtml(o.value)+'</code></article>').join('')+'</div></section>';
+    '<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Editor direto da interface</h3><small>selector seguro + ação</small></div><div class="override-editor"><input id="override-page" value="global" placeholder="página / rótulo"><input id="override-selector" placeholder="seletor CSS, ex.: .hero-copy h1"><select id="override-action"><option>text</option><option>src</option><option>alt</option><option>hide</option><option>show</option><option>append_text</option><option>prepend_text</option><option>background_image</option></select><textarea id="override-value" placeholder="novo texto, URL ou valor"></textarea><input id="override-sort" type="number" value="0"><label><input id="override-enabled" type="checkbox" checked> ativo</label><button id="override-save">salvar alteração global</button></div></section>'+
+    '<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Overrides de layout</h3><small>'+overrides.length+'</small></div><p class="dashboard-hint">Você pode alterar texto, imagem, visibilidade e fundo de qualquer elemento que tenha um seletor CSS estável, inclusive a página inicial e o formulário de acesso.</p><div class="override-list">'+overrides.map(o=>'<article><div><b>'+escapeHtml(o.page)+' · '+escapeHtml(o.selector)+'</b><small>'+escapeHtml(o.action)+' · '+(o.enabled?'ativo':'pausado')+'</small><code>'+escapeHtml(o.value)+'</code></div><div><button data-override-edit="'+o.id+'">editar</button><button class="danger" data-override-delete="'+o.id+'">apagar</button></div></article>').join('')+'</div></section>';
 }
 
 function dashboardAssetsHtml(){
@@ -2912,7 +2933,10 @@ function bindDashboardSectionActions(){
 
   $('#content-save')?.addEventListener('click',()=>dashboardSaveContentBlock());
   $$('[data-content-edit]').forEach(b=>b.onclick=()=>dashboardEditContentBlock(b.dataset.contentEdit));
-  $$('[data-content-delete]').forEach(b=>b.onclick=()=>dashboardDeleteContentBlock(b.dataset.contentDelete));
+  $('[data-content-delete]').forEach(b=>b.onclick=()=>dashboardDeleteContentBlock(b.dataset.contentDelete));
+  $('#override-save')?.addEventListener('click',()=>dashboardSaveOverride());
+  $('[data-override-edit]').forEach(b=>b.onclick=()=>dashboardEditOverride(b.dataset.overrideEdit));
+  $('[data-override-delete]').forEach(b=>b.onclick=()=>dashboardDeleteOverride(b.dataset.overrideDelete));
 
   $('#asset-upload')?.addEventListener('click',dashboardUploadAsset);
   $$('[data-asset-delete]').forEach(b=>b.onclick=()=>dashboardDeleteAsset(b.dataset.assetDelete,b.dataset.assetPath));
@@ -3070,6 +3094,25 @@ async function dashboardDeleteContentBlock(id){
   const {error}=await supabase.rpc('owner_delete_content_block',{p_id:id});
   if(error)return toast('Não foi possível apagar o bloco.');
   await renderStaffDashboard({reload:true});
+}
+async function dashboardSaveOverride(id=null){
+  const page=$('#override-page')?.value.trim()||'global',selector=$('#override-selector')?.value.trim()||'',action=$('#override-action')?.value||'text',value=$('#override-value')?.value||'',enabled=Boolean($('#override-enabled')?.checked),sort=Number($('#override-sort')?.value)||0;
+  if(!selector)return toast('Informe um seletor CSS.');
+  try{document.querySelector(selector);}catch{return toast('Seletor CSS inválido.');}
+  const {error}=await supabase.rpc('owner_save_site_override',{p_id:id,p_page:page,p_selector:selector,p_action:action,p_value:value,p_enabled:enabled,p_sort_order:sort});
+  if(error)return toast('A alteração da interface não foi salva.');
+  toast('Alteração global salva.');await loadSiteSettings();await renderStaffDashboard({reload:true});
+}
+function dashboardEditOverride(id){
+  const o=(state.adminSnapshot?.site_overrides||[]).find(x=>x.id===id);if(!o)return;
+  $('#override-page').value=o.page;$('#override-selector').value=o.selector;$('#override-action').value=o.action;$('#override-value').value=o.value||'';$('#override-enabled').checked=o.enabled;$('#override-sort').value=o.sort_order||0;
+  const btn=$('#override-save');btn.textContent='salvar alteração';btn.onclick=()=>dashboardSaveOverride(id);
+}
+async function dashboardDeleteOverride(id){
+  if(!confirm('Apagar esta alteração global da interface?'))return;
+  const {error}=await supabase.rpc('owner_delete_site_override',{p_id:id});
+  if(error)return toast('Não foi possível apagar o override.');
+  await loadSiteSettings();await renderStaffDashboard({reload:true});
 }
 async function dashboardUploadAsset(){
   const file=$('#asset-file')?.files?.[0];if(!file)return toast('Escolha uma imagem.');
