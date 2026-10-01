@@ -874,23 +874,16 @@ $('#post-image').addEventListener('change',e=>{
   trackAction('image_selected','composer',{type:file.type,size:file.size});
 });
 $('#remove-image').onclick=()=>{state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');};
-$('#post-media').addEventListener('change',e=>{
-  const file=e.target.files?.[0]||null;
-  const preview=$('#media-preview');
-  if(!file){state.postMediaFile=null;preview.classList.add('hidden');return;}
-  const kind=mediaKindFromFile(file);
-  if(!kind){e.target.value='';state.postMediaFile=null;return toast('Use um arquivo de áudio ou vídeo compatível. GIF continua sendo imagem, por mais que tente.');}
-  if(file.size>mediaSizeLimit(kind)){e.target.value='';state.postMediaFile=null;return toast(`${kind==='video'?'Vídeo':'Áudio'} acima de ${mediaSizeLabel(kind)}. O servidor também tem limites emocionais.`);}
-  state.postMediaFile=file;
-  const mediaLink=$('#post-media-link');if(mediaLink)mediaLink.value='';
-  const mediaLinkStatus=$('#post-media-link-status');if(mediaLinkStatus)mediaLinkStatus.textContent='arquivo local selecionado';
-  $('#media-preview-icon').textContent=kind==='video'?'▶':'♫';
-  $('#media-preview-name').textContent=file.name;
-  $('#media-preview-kind').textContent=`${kind==='video'?'vídeo':'música/áudio'} · ${Math.max(.1,file.size/1024/1024).toFixed(1)} MB`;
-  preview.classList.remove('hidden');
-  trackAction('media_selected','composer',{type:file.type,size:file.size,kind});
-});
-$('#remove-media').onclick=()=>{state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');const s=$('#post-media-link-status');if(s)s.textContent='link reconhecido vira player, não caça-clique';};
+$('#post-media-link-toggle').onclick=()=>{
+  const row=$('#post-media-link-row');
+  row.classList.toggle('hidden');
+  if(!row.classList.contains('hidden'))setTimeout(()=>$('#post-media-link')?.focus(),40);
+};
+$('#post-media-link-clear').onclick=()=>{
+  $('#post-media-link').value='';
+  $('#post-media-link-row').classList.add('hidden');
+  $('#post-media-link-status').textContent='link reconhecido vira player, não caça-clique';
+};
 function parseExternalMediaLink(raw){
   const value=String(raw||'').trim();
   if(!value)return null;
@@ -968,7 +961,7 @@ $('#post-media-link').addEventListener('input',e=>{
   if(!e.target.value.trim()){if(status)status.textContent='link reconhecido vira player, não caça-clique';return;}
   if(parsed){
     if(status)status.textContent=`${parsed.provider} reconhecido · player será incorporado`;
-    state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');
+    state.postMediaFile=null;if($('#post-media-link'))$('#post-media-link').value='';if($('#post-media-link-row'))$('#post-media-link-row').classList.add('hidden');
   }else if(status)status.textContent='use um link válido do YouTube ou Spotify';
 });
 $('#publish-post').onclick=async()=>{
@@ -977,16 +970,12 @@ $('#publish-post').onclick=async()=>{
   const external=parseExternalMediaLink($('#post-media-link')?.value||'');
   if($('#post-media-link')?.value.trim()&&!external)return toast('Esse link não é um YouTube ou Spotify reconhecível.');
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
-  if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||state.postMediaFile||external))return toast('Imagem, música e vídeo privados ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
-  if(body.length<3&&!state.postImageFile&&!state.postMediaFile&&!external)return toast('Dê ao menos uma frase, imagem, música, vídeo ou link. Telepatia ainda não foi integrada.');
+  if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||external))return toast('Imagem e mídia incorporada privadas ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
+  if(body.length<3&&!state.postImageFile&&!external)return toast('Dê ao menos uma frase, imagem ou link de YouTube/Spotify. Telepatia ainda não foi integrada.');
   $('#publish-post').disabled=true;
   let image_url=null,media_url=external?.url||null,media_kind=external?.kind||null;
   try{
     image_url=await uploadPostImage();
-    if(!external){
-      const media=await uploadPostMedia();
-      media_url=media.url;media_kind=media.kind;
-    }
   }catch(e){
     $('#publish-post').disabled=false;
     console.error('media upload failed',e);
@@ -1045,14 +1034,14 @@ async function loadFeed(){
   const requestedTab=state.tab;
   const status=$('#feed-status');
   status.classList.remove('hidden');
-  status.textContent='ordenando pelo que importa, ideia radical...';
+  status.textContent='carregando o que acabou de acontecer...';
   algoSay('feed_loading');
 
   let query=supabase.from('feed_attention').select('*');
   if(requestedTab==='quiet')query=query.eq('response_count',0);
   if(requestedTab==='sent')query=query.eq('author_id',state.profile.id);
 
-  const {data,error}=await query.order('attention_need',{ascending:false}).limit(40);
+  const {data,error}=await query.order('created_at',{ascending:false}).limit(40);
 
   // O usuário pode ter mudado de página enquanto o banco respondia.
   if(viewVersion!==state.viewVersion||state.tab!==requestedTab||!isFeedTab())return;
@@ -1117,13 +1106,14 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
     const ownerActions=p.author_id===state.profile.id?`<div class="post-owner-actions"><button data-post-edit="${p.id}">editar</button><button class="danger" data-post-delete="${p.id}">apagar</button></div>`:'';
     return `<article class="post-card" data-post-card="${p.id}">
       <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
+      ${ownerActions}
       <p class="post-body" data-post-body="${p.id}">${escapeHtml(p.body)}</p>
       ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea>${['youtube','spotify'].includes(p.media_kind)?`<input type="url" data-post-media-link-edit="${p.id}" value="${escapeAttr(externalMediaShareUrl(p.media_url))}" placeholder="link do YouTube ou Spotify">`:''}<div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
       ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
       ${feedMediaHtml(p.media_url,p.media_kind)}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
       ${conversationHtml}
-      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${ownerActions}${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
+      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
       <div class="inline-reply hidden" data-reply-box="${p.id}"><label>RESPOSTA // fale com a pessoa, não com a métrica</label><textarea maxlength="420" placeholder="Escreva algo que valha o espaço que ocupa."></textarea><div class="reply-emoticon-row"><button type="button" data-reply-emoticons="${p.id}">☻ avessícones</button><div class="feed-emoticon-palette hidden" data-reply-emoticon-palette="${p.id}">${avessoEmoticonButtons('data-reply-emoticon')}</div></div><div><button data-reply-send="${p.id}">publicar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
     </article>`;
   }).join('');
@@ -2050,7 +2040,7 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
       <span class="dm-msn-appmark">▓ AVESSO.MSG</span>
       <button id="dm-restore-name" class="dm-title-peer" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}</button>
       <span class="dm-msn-era">56K // 2026</span>
-      <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'□':'_'}</button><button id="dm-maximize" title="${state.chatMaximized?'Restaurar tamanho':'Maximizar'}">${state.chatMaximized?'❐':'□'}</button><button id="dm-close" title="Fechar">×</button></div>
+      <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'↥':'_'}</button><button id="dm-maximize" title="${state.chatMaximized?'Restaurar tamanho':'Maximizar'}">${state.chatMaximized?'❐':'□'}</button><button id="dm-close" title="Fechar">×</button></div>
     </div>
     <header class="dm-floating-head">
       <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
@@ -2127,7 +2117,7 @@ function toggleChatMinimize(){
   const win=ensureChatWindow();
   win.classList.toggle('minimized',state.chatWindowMinimized);
   const button=$('#dm-minimize');
-  if(button){button.textContent=state.chatWindowMinimized?'□':'_';button.title=state.chatWindowMinimized?'Restaurar':'Minimizar';}
+  if(button){button.textContent=state.chatWindowMinimized?'↥':'_';button.title=state.chatWindowMinimized?'Restaurar':'Minimizar';}
   applyChatGeometry();
   if(!state.chatWindowMinimized)setTimeout(()=>$('#dm-input')?.focus(),80);
 }
@@ -2137,7 +2127,7 @@ function autoMinimizeChat(){
   const win=ensureChatWindow();
   win.classList.add('minimized');
   const button=$('#dm-minimize');
-  if(button){button.textContent='□';button.title='Restaurar';}
+  if(button){button.textContent='↥';button.title='Restaurar';}
   applyChatGeometry();
 }
 function closeChatWindow(silent=false){
@@ -2444,28 +2434,21 @@ async function loadProfileMedia(userId,editable=false,selector=editable?'#profil
   host.querySelectorAll('[data-profile-media-save]').forEach(b=>b.onclick=()=>saveProfileMediaEdit(b.dataset.profileMediaSave));
 }
 async function uploadProfileMedia(){
-  const file=$('#profile-media-file')?.files?.[0]||null;
   const external=parseExternalMediaLink($('#profile-media-link')?.value||'');
-  if($('#profile-media-link')?.value.trim()&&!external)return toast('Use um link válido do YouTube ou Spotify.');
-  if(!file&&!external)return toast('Escolha um arquivo ou cole um link do YouTube/Spotify.');
-  if(file&&external)return toast('Escolha arquivo ou link. Os dois juntos viram burocracia.');
+  if(!external)return toast('Cole um link válido do YouTube ou Spotify.');
   const caption=String($('#profile-media-caption')?.value||'').trim().slice(0,420);
-  let kind=external?.kind||mediaKindFromFile(file),media_url=external?.url||null,path=null;
-  if(!kind)return toast('Esse arquivo não decidiu se é música ou vídeo.');
-  if(file&&file.size>mediaSizeLimit(kind))return toast(`${kind==='video'?'Vídeo':'Áudio'} acima de ${mediaSizeLabel(kind)}.`);
-  const btn=$('#profile-media-upload');if(btn){btn.disabled=true;btn.textContent='enviando...';}
-  if(file){
-    const ext=(file.name.split('.').pop()||(kind==='video'?'mp4':'mp3')).replace(/[^a-z0-9]/gi,'').toLowerCase();
-    path=`${state.profile.id}/profile/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-    const {error:uploadError}=await supabase.storage.from('avesso-media').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
-    if(uploadError){if(btn){btn.disabled=false;btn.textContent='publicar no Canto';}return toast('A mídia ficou presa no cabo. Tente novamente.');}
-    media_url=publicMediaUrl(path);
-  }
-  const {error}=await supabase.from('profile_media').insert({user_id:state.profile.id,media_url,storage_path:path,media_kind:kind,caption});
+  const btn=$('#profile-media-upload');if(btn){btn.disabled=true;btn.textContent='publicando...';}
+  const {error}=await supabase.from('profile_media').insert({
+    user_id:state.profile.id,
+    media_url:external.url,
+    storage_path:null,
+    media_kind:external.kind,
+    caption
+  });
   if(btn){btn.disabled=false;btn.textContent='publicar no Canto';}
-  if(error){if(path)await supabase.storage.from('avesso-media').remove([path]);return toast('A mídia chegou, mas o Canto fingiu que não conhece.');}
-  $('#profile-media-file').value='';$('#profile-media-caption').value='';if($('#profile-media-link'))$('#profile-media-link').value='';
-  toast(kind==='youtube'?'YouTube incorporado ao seu Canto.':kind==='spotify'?'Spotify incorporado ao seu Canto.':kind==='video'?'Vídeo publicado no seu Canto.':'Áudio publicado no seu Canto.');
+  if(error)return toast('O link chegou, mas o Canto fingiu que não conhece.');
+  $('#profile-media-link').value='';$('#profile-media-caption').value='';
+  toast(external.kind==='youtube'?'YouTube incorporado ao seu Canto.':'Spotify incorporado ao seu Canto.');
   loadProfileMedia(state.profile.id,true,'#profile-media-list');
 }
 async function saveProfileMediaEdit(id){
@@ -2512,7 +2495,7 @@ async function renderProfile(){
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
     <section class="profile-album-control"><span class="section-code">ÁLBUM // FOTOS QUE VOCÊ DECIDIU NÃO APAGAR</span><h2>Seu álbum</h2><p>Poste imagens no seu Canto. Reações existem, mas continuam sem virar olimpíada social.</p><div class="album-upload-row"><input id="album-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><input id="album-caption" maxlength="180" placeholder="legenda opcional. autocontrole também."><button id="album-upload">adicionar foto</button></div><div id="profile-album" class="profile-album-grid"><p>carregando memórias...</p></div></section>
-    <section class="profile-media-control"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Sua fita, seu clipe, seu problema</h2><p>Envie um arquivo ou cole um link do YouTube/Spotify. Sem autoplay, porque ainda resta alguma civilização.</p><div class="profile-media-upload"><input id="profile-media-file" type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/wav,audio/webm,video/mp4,video/webm,video/quicktime"><input id="profile-media-link" type="url" inputmode="url" placeholder="link do YouTube ou Spotify"><input id="profile-media-caption" maxlength="420" placeholder="legenda opcional. contexto não machuca."><button id="profile-media-upload">publicar no Canto</button></div><div id="profile-media-list" class="profile-media-grid"><p>rebobinando...</p></div></section>
+    <section class="profile-media-control"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Sua fita, seu clipe, seu problema</h2><p>Envie um arquivo ou cole um link do YouTube/Spotify. Sem autoplay, porque ainda resta alguma civilização.</p><div class="profile-media-upload link-only"><input id="profile-media-link" type="url" inputmode="url" placeholder="cole um link do YouTube ou Spotify"><input id="profile-media-caption" maxlength="420" placeholder="legenda opcional. contexto não machuca."><button id="profile-media-upload">publicar no Canto</button></div><div id="profile-media-list" class="profile-media-grid"><p>rebobinando...</p></div></section>
     <section class="guestbook-section guestbook-own"><span class="section-code">RECADOS // DEIXARAM ISSO AQUI</span><h2>Recados no seu Canto</h2><p>Amigos podem deixar texto, links, emojis e imagens. Você continua com a sofisticada tecnologia chamada “apagar”.</p><div id="profile-guestbook" class="guestbook-list"><p>procurando bilhetes na porta...</p></div></section>
     <section class="friends-control"><span class="section-code">PESSOAS // AMIGOS</span><h2>Lista de pessoas que você aceitou voluntariamente</h2><div id="friends-panel"><p>carregando relações humanas...</p></div></section>
     <section class="blocked-control"><span class="section-code">CONTROLE // BLOQUEADOS</span><h2>Porta fechada também é interface</h2><p>Bloquear encerra amizade e impede novas mensagens. Desbloquear não cria amizade de volta, porque nem botão deveria ter esse poder.</p><div id="blocked-panel"><p>consultando bloqueios...</p></div></section>
