@@ -6567,3 +6567,76 @@ body.avesso-own-corner .profile-avatar-large img{
     font-size:clamp(1.5rem,8vw,2.6rem)!important;
   }
 }
+
+
+/* GIFs mantidos pelo próprio repositório. */
+.repo-gif-head{
+  grid-column:1/-1;
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  padding-bottom:6px;
+  border-bottom:1px dashed #314448;
+}
+.repo-gif-head b{
+  color:var(--cyan);
+  font:800 .48rem/1.2 var(--mono);
+}
+.repo-gif-head small{
+  color:#7f8b89;
+  font:500 .43rem/1.2 var(--mono);
+}
+.repo-gif-library{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:repeat(6,minmax(58px,1fr));
+  gap:5px;
+}
+.repo-gif-choice{
+  min-width:0;
+  padding:5px;
+  border:1px solid #36494d;
+  background:#071012;
+  color:#9eaaa7;
+  cursor:pointer;
+  text-align:center;
+}
+.repo-gif-choice:hover,
+.repo-gif-choice.active{
+  border-color:var(--acid);
+  color:var(--acid);
+  background:#0d1608;
+  box-shadow:inset 0 -2px 0 var(--acid);
+}
+.repo-gif-choice img{
+  display:block;
+  width:100%;
+  aspect-ratio:1;
+  object-fit:contain;
+  image-rendering:pixelated;
+  background:#030708;
+}
+.repo-gif-choice span{
+  display:block;
+  margin-top:4px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font:700 .39rem/1.2 var(--mono);
+}
+
+@media(max-width:760px){
+  .repo-gif-library{
+    grid-template-columns:repeat(3,minmax(62px,1fr));
+    max-height:170px;
+    overflow:auto;
+  }
+  .repo-gif-head{
+    display:block;
+  }
+  .repo-gif-head small{
+    display:block;
+    margin-top:3px;
+  }
+}
