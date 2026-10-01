@@ -1669,37 +1669,80 @@ async function enterApp(){
   $('.site-header').classList.add('hidden');
   $('.site-footer').classList.add('hidden');
   $('#app-view').classList.remove('hidden');
-  const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();
+
+  const profileResult=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();
+  const data=profileResult.data;
   state.profile=data;
-  if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return;}
-  await loadAdminAccess();
-  await loadOwnModeration();
+  if(profileResult.error||!data){
+    const status=$('#feed-status');
+    if(status){
+      status.classList.remove('hidden');
+      status.textContent='Não consegui carregar seu perfil. Toque em atualizar para tentar de novo.';
+    }
+    toast('Seu perfil não carregou. A interface ficou de pé em vez de fingir que está tudo bem.');
+    return;
+  }
+
+  // CORE FIRST: o feed e a navegação não dependem mais de módulos secundários.
   $('#nav-name').innerHTML=identityNameHtml(data.id,data.display_name,'nav-identity-name');
   $('#nav-handle').textContent='@'+data.handle;
   renderNavAvatar();
+  state.tab=state.tab||'feed';
+  document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x.dataset.appTab===state.tab));
   applyAppWallpaper();
-  setupOnlineFriendsDock();
-  markPresenceActivity({force:true});
-  startPresenceHeartbeat();
-  syncPresenceCompanionConfig();
-  await loadWorldState();
-  await loadBlockedPeers();
-  subscribeRealtime();
-  startDirectRealtime();
-  await primeFriendPresenceCache();
-  startFriendPresenceWatch();
-  Promise.allSettled([loadFeed(),loadImpact(),loadStoriesStrip(),loadMutedPeers()]).then(()=>{});
-  registerNotificationWorker();
-  if('Notification' in window&&Notification.permission==='granted')ensureWebPushSubscription();
-  armBrowserNotifications();
-  startStoryRealtime();
-  loadStoryNotifications();
-  scheduleIdleWorld();
-  scheduleTowerPulse();
-  trackAction('login','app');
-  setTimeout(notifyPendingFriendRequests,900);
-  setTimeout(loadStaffNotifications,1100);
-  setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);
+  applyAppTabLayout();
+
+  const coreLoad=()=>Promise.allSettled([
+    loadFeed(),
+    loadImpact(),
+    loadStoriesStrip()
+  ]);
+  coreLoad();
+
+  // Se algum subsistema externo travar, o feed continua funcionando.
+  (async()=>{
+    try{await loadAdminAccess();}catch(error){console.error('admin access boot',error);}
+    try{await loadOwnModeration();}catch(error){console.error('moderation boot',error);}
+    try{setupOnlineFriendsDock();}catch(error){console.error('friends dock boot',error);}
+    try{markPresenceActivity({force:true});}catch(error){console.error('presence activity boot',error);}
+    try{startPresenceHeartbeat();}catch(error){console.error('presence heartbeat boot',error);}
+    try{syncPresenceCompanionConfig();}catch(error){console.error('presence companion boot',error);}
+    try{await loadWorldState();}catch(error){console.error('world boot',error);}
+    try{await loadBlockedPeers();}catch(error){console.error('blocks boot',error);}
+    try{subscribeRealtime();}catch(error){console.error('realtime boot',error);}
+    try{startDirectRealtime();}catch(error){console.error('direct realtime boot',error);}
+    try{await primeFriendPresenceCache();}catch(error){console.error('friend cache boot',error);}
+    try{startFriendPresenceWatch();}catch(error){console.error('friend watch boot',error);}
+    try{await loadMutedPeers();}catch(error){console.error('mutes boot',error);}
+    try{registerNotificationWorker();}catch(error){console.error('notification worker boot',error);}
+    try{if('Notification' in window&&Notification.permission==='granted')ensureWebPushSubscription();}catch(error){console.error('web push boot',error);}
+    try{armBrowserNotifications();}catch(error){console.error('browser notifications boot',error);}
+    try{startStoryRealtime();}catch(error){console.error('story realtime boot',error);}
+    try{loadStoryNotifications();}catch(error){console.error('story notifications boot',error);}
+    try{scheduleIdleWorld();}catch(error){console.error('idle world boot',error);}
+    try{scheduleTowerPulse();}catch(error){console.error('tower boot',error);}
+    try{trackAction('login','app');}catch(error){console.error('track login',error);}
+    setTimeout(()=>{try{notifyPendingFriendRequests();}catch{}},900);
+    setTimeout(()=>{try{loadStaffNotifications();}catch{}},1100);
+    setTimeout(()=>{try{askWorldCharacter('login',{action_type:'login',surface:'app'});}catch{}},1400);
+  })();
+
+  // Watchdog: nunca deixar a tela presa eternamente em "conectando".
+  setTimeout(()=>{
+    if(!state.profile||state.tab!=='feed')return;
+    const status=$('#feed-status');
+    const list=$('#feed-list');
+    const stuck=status&&!status.classList.contains('hidden')&&/conectando|carregando/i.test(status.textContent||'');
+    if(stuck||!list?.children?.length){
+      coreLoad().then(()=>{
+        const stillEmpty=!$('#feed-list')?.children?.length;
+        if(stillEmpty&&status){
+          status.classList.remove('hidden');
+          status.textContent='Nada carregou ainda. Use ↻ para tentar novamente.';
+        }
+      });
+    }
+  },4500);
 }
 function leaveApp(){
   clearTimeout(state.world.idleTimer);
