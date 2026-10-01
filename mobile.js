@@ -32,6 +32,7 @@
   let pullStartY=null;
   let swipeStart=null;
   let notificationCache=[];
+  let notificationHandle='';
   const unread={messages:0,profile:0,center:0};
 
   const qs=(s,r=document)=>r.querySelector(s);
@@ -48,10 +49,19 @@
     return 'avesso_mobile_notifications_v2:'+currentHandle();
   }
   function loadNotificationCache(){
+    notificationHandle=currentHandle();
     try{
       const rows=JSON.parse(localStorage.getItem(notificationStorageKey())||'[]');
       notificationCache=Array.isArray(rows)?rows.slice(0,60):[];
     }catch{notificationCache=[];}
+    unread.center=notificationCache.filter(n=>!n.read).length;
+  }
+  function syncNotificationIdentity(){
+    const handle=currentHandle();
+    if(handle===notificationHandle)return;
+    loadNotificationCache();
+    renderNotificationCenter();
+    renderBadges();
   }
   function saveNotificationCache(){
     try{localStorage.setItem(notificationStorageKey(),JSON.stringify(notificationCache.slice(0,60)));}catch{}
@@ -377,8 +387,10 @@
       composer.prepend(head);
     }
     if(isMobile()){
+      const firstMobileMount=!composer.classList.contains('mobile-composer-sheet');
       if(composer.parentNode!==document.body)document.body.appendChild(composer);
-      composer.classList.add('mobile-composer-sheet','mobile-composer-closed');
+      composer.classList.add('mobile-composer-sheet');
+      if(firstMobileMount)composer.classList.add('mobile-composer-closed');
     }else{
       closeComposer();
       composer.classList.remove('mobile-composer-sheet','mobile-composer-closed');
@@ -601,7 +613,10 @@
     appObserver=new MutationObserver(()=>{
       syncAppVisibility();
       syncComposerVisibility();
-      if(!app.classList.contains('hidden'))centerActiveNav();
+      if(!app.classList.contains('hidden')){
+        syncNotificationIdentity();
+        centerActiveNav();
+      }
     });
     appObserver.observe(app,{attributes:true,attributeFilter:['class']});
   }
@@ -671,7 +686,6 @@
 
   function boot(){
     loadNotificationCache();
-    unread.center=notificationCache.filter(n=>!n.read).length;
     mountMobileNav();
     ensureComposer();
     watchPublish();
