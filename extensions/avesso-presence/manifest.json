@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "AVESSO Presence",
+  "version": "0.1.0",
+  "description": "Ponte opcional para mostrar no AVESSO o que está tocando em serviços de música no navegador.",
+  "permissions": ["tabs"],
+  "host_permissions": [
+    "https://humbertomennella.github.io/avesso/*",
+    "*://*.youtube.com/*",
+    "*://youtu.be/*",
+    "*://open.spotify.com/*",
+    "*://soundcloud.com/*",
+    "*://*.deezer.com/*",
+    "*://listen.tidal.com/*",
+    "*://music.apple.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://youtu.be/*",
+        "*://open.spotify.com/*",
+        "*://soundcloud.com/*",
+        "*://*.deezer.com/*",
+        "*://listen.tidal.com/*",
+        "*://music.apple.com/*"
+      ],
+      "js": ["source.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://humbertomennella.github.io/avesso/*"],
+      "js": ["bridge.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "AVESSO Presence"
+  }
+}

@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, onlineDockCollapsed:false, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -437,6 +437,90 @@ function runSocialNotificationQueue(){
   if(item.sound!==false)playUiSound(item.kind==='friend'?'friend':item.kind==='attention'?'attention':item.kind==='online'?'online':item.kind==='guestbook'?'guestbook':'message');
   setTimeout(dismiss,5000);
 }
+const NOW_PLAYING_TTL_MS=180000;
+function nowPlayingView(profile){
+  if(!profile?.listening_visible||!profile.now_playing_title||!profile.now_playing_updated_at)return null;
+  const age=Date.now()-new Date(profile.now_playing_updated_at).getTime();
+  if(!Number.isFinite(age)||age>NOW_PLAYING_TTL_MS)return null;
+  return {
+    title:String(profile.now_playing_title||'').slice(0,180),
+    artist:String(profile.now_playing_artist||'').slice(0,180),
+    source:String(profile.now_playing_source||'').slice(0,80),
+    url:String(profile.now_playing_url||'').slice(0,1000)
+  };
+}
+function nowPlayingHtml(profile,{compact=false}={}){
+  const np=nowPlayingView(profile);
+  if(!np)return'';
+  const label=np.artist?`${np.title} — ${np.artist}`:np.title;
+  const content=`<span class="now-playing-eq" aria-hidden="true"><i></i><i></i><i></i></span><span><b>♫ ouvindo agora</b><small>${escapeHtml(label)}${np.source?` · ${escapeHtml(np.source)}`:''}</small></span>`;
+  return np.url
+    ?`<a class="now-playing-status ${compact?'compact':''}" href="${escapeAttr(np.url)}" target="_blank" rel="noopener noreferrer">${content}</a>`
+    :`<div class="now-playing-status ${compact?'compact':''}">${content}</div>`;
+}
+function refreshOwnNowPlayingPreview(){
+  const host=$('#profile-now-playing-preview');
+  if(!host)return;
+  host.innerHTML=nowPlayingHtml(state.profile)||'<div class="now-playing-empty">nada detectado agora. o silêncio também tem presença.</div>';
+  const bridge=$('#listening-bridge-status');
+  if(bridge)bridge.textContent=state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // site sozinho não consegue ler outras abas ou apps';
+}
+async function saveListeningPrivacy(){
+  if(!state.profile?.id)return;
+  const visible=Boolean($('#listening-visible')?.checked);
+  const patch={listening_visible:visible,updated_at:new Date().toISOString()};
+  if(!visible){
+    Object.assign(patch,{now_playing_title:null,now_playing_artist:null,now_playing_source:null,now_playing_url:null,now_playing_updated_at:null});
+  }
+  const {data,error}=await supabase.from('profiles').update(patch).eq('id',state.profile.id).select().single();
+  if(error)return toast('A privacidade do som tropeçou no banco.');
+  state.profile=data;
+  refreshOwnNowPlayingPreview();
+  if(visible)window.postMessage({type:'AVESSO_PRESENCE_REQUEST'},location.origin);
+  toast(visible?'“Ouvindo agora” visível. A trilha saiu do modo fantasma.':'“Ouvindo agora” oculto. Ninguém precisa saber de tudo.');
+}
+async function pushNowPlaying(payload){
+  if(!state.profile?.id||!state.profile.listening_visible)return;
+  const clean=payload&&payload.title?{
+    title:String(payload.title||'').trim().slice(0,180),
+    artist:String(payload.artist||'').trim().slice(0,180),
+    source:String(payload.source||'').trim().slice(0,80),
+    url:String(payload.url||'').trim().slice(0,1000)
+  }:null;
+  const signature=clean?JSON.stringify(clean):'';
+  if(signature===state.lastNowPlayingSignature&&state.profile.now_playing_updated_at&&Date.now()-new Date(state.profile.now_playing_updated_at).getTime()<45000)return;
+  state.lastNowPlayingSignature=signature;
+  clearTimeout(state.nowPlayingPushTimer);
+  state.nowPlayingPushTimer=setTimeout(async()=>{
+    const patch=clean?{
+      now_playing_title:clean.title,
+      now_playing_artist:clean.artist||null,
+      now_playing_source:clean.source||null,
+      now_playing_url:clean.url||null,
+      now_playing_updated_at:new Date().toISOString(),
+      updated_at:new Date().toISOString()
+    }:{
+      now_playing_title:null,now_playing_artist:null,now_playing_source:null,now_playing_url:null,now_playing_updated_at:null,updated_at:new Date().toISOString()
+    };
+    const {data,error}=await supabase.from('profiles').update(patch).eq('id',state.profile.id).select().single();
+    if(error)return;
+    state.profile=data;
+    refreshOwnNowPlayingPreview();
+    if(state.chatWindowOpen&&state.directPeerId)updateOwnListeningInChat();
+  },450);
+}
+function updateOwnListeningInChat(){
+  const host=$('#dm-self-listening');
+  if(host)host.innerHTML=nowPlayingHtml(state.profile,{compact:true});
+}
+window.addEventListener('message',event=>{
+  if(event.source!==window||event.origin!==location.origin)return;
+  if(event.data?.type!=='AVESSO_NOW_PLAYING')return;
+  state.presenceBridgeSeen=true;
+  refreshOwnNowPlayingPreview();
+  pushNowPlaying(event.data.payload||null);
+});
+
 function presenceView(profile){
   if(!profile)return{mode:'offline',label:'offline'};
   if(profile.presence_mode==='invisible')return{mode:'offline',label:'offline'};
@@ -469,13 +553,14 @@ document.addEventListener('visibilitychange',()=>{
   if(state.pendingAttentionPeerId){
     const peerId=state.pendingAttentionPeerId;
     state.pendingAttentionPeerId=null;
-    state.chatWindowMinimized=true;
-    openChatWindow(peerId,{keepMinimized:true}).then(()=>{
-      state.chatWindowMinimized=true;
+    openChatWindow(peerId,{keepMinimized:false}).then(()=>{
+      state.chatWindowMinimized=false;
       const win=ensureChatWindow();
-      win.classList.add('minimized');
+      win.classList.remove('minimized','hidden','docked-minimized');
       applyChatGeometry();
       triggerChatNudge(peerId);
+      triggerScreenNudge();
+      playUiSound('attention');
     });
   }
 });
@@ -836,10 +921,12 @@ $('#resend-confirmation').onclick=async()=>{const email=new FormData($('#auth-fo
 
 function humanError(m){const value=String(m||'');const lower=value.toLowerCase();if(lower.includes('email not confirmed'))return'Confirme seu e-mail antes de entrar. Use o link mais recente ou solicite outro na aba de cadastro.';if(lower.includes('invalid login'))return'E-mail ou senha não conferem. Se você já confirmou, use a senha do cadastro.';if(lower.includes('already registered'))return'Este e-mail já tem cadastro. Use a aba de entrar.';if(lower.includes('expired')||lower.includes('otp_expired'))return'Este link expirou ou já foi utilizado. Se já confirmou, entre com sua senha.';if(lower.includes('password'))return'A senha precisa atender aos requisitos de segurança.';return value;}
 $('#logout').onclick=()=>supabase.auth.signOut();
+$('#nav-home-link').onclick=e=>{e.preventDefault();document.querySelector('[data-app-tab="feed"]')?.click();};
+$('#nav-profile-link').onclick=()=>document.querySelector('[data-app-tab="profile"]')?.click();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await loadBlockedPeers();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.blockedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();stopCornerMusic();closeStoryViewer();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await loadBlockedPeers();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();setupOnlineFriendsDock();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearTimeout(state.nowPlayingPushTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.blockedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();stopCornerMusic();closeStoryViewer();closeChatWindow(true);document.body.classList.remove('avesso-app-active');$('#online-friends-dock')?.classList.add('hidden');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -1532,31 +1619,60 @@ async function acceptedFriendProfiles(){
     .or(`requester_id.eq.${state.profile.id},addressee_id.eq.${state.profile.id}`);
   const ids=[...new Set((rels||[]).map(r=>r.requester_id===state.profile.id?r.addressee_id:r.requester_id))];
   if(!ids.length)return[];
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen').in('id',ids);
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at').in('id',ids);
   return data||[];
 }
 async function profileById(id){
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen').eq('id',id).maybeSingle();
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at').eq('id',id).maybeSingle();
   return data||null;
 }
 function cachedPresenceEntry(profile){
   return {mode:presenceView(profile).mode,lastSeen:profile?.last_seen?new Date(profile.last_seen).getTime():0,profile};
 }
+function renderOnlineFriendsDock(){
+  const dock=$('#online-friends-dock'),list=$('#online-friends-list'),count=$('#online-friends-count');
+  if(!dock||!list||!count||!state.profile)return;
+  ageFriendPresenceCache(false);
+  const online=Object.values(state.friendPresence||{})
+    .filter(entry=>entry?.mode==='online'&&entry.profile&&!isPeerBlocked(entry.profile.id))
+    .map(entry=>entry.profile)
+    .sort((a,b)=>String(a.display_name||'').localeCompare(String(b.display_name||''),'pt-BR'));
+  count.textContent=online.length;
+  list.innerHTML=online.map(friend=>`<button class="online-friend-item" data-online-friend="${friend.id}" type="button">
+    <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
+    <span><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small>${nowPlayingView(friend)?`<em>♫ ${escapeHtml(nowPlayingView(friend).title)}</em>`:''}</span>
+    <i class="presence-dot online"></i>
+  </button>`).join('')||'<div class="online-friends-empty">0 humanos online. o modem respira em paz.</div>';
+  list.querySelectorAll('[data-online-friend]').forEach(b=>b.onclick=()=>openFriendChat(b.dataset.onlineFriend));
+  dock.classList.remove('hidden');
+  dock.classList.toggle('collapsed',state.onlineDockCollapsed);
+  $('#online-friends-toggle')?.setAttribute('aria-expanded',String(!state.onlineDockCollapsed));
+}
+function setupOnlineFriendsDock(){
+  state.onlineDockCollapsed=window.matchMedia('(max-width:760px)').matches;
+  $('#online-friends-toggle').onclick=()=>{
+    state.onlineDockCollapsed=!state.onlineDockCollapsed;
+    renderOnlineFriendsDock();
+  };
+  renderOnlineFriendsDock();
+}
 async function primeFriendPresenceCache(){
   state.friendPresence={};
   const friends=await acceptedFriendProfiles();
   friends.forEach(friend=>{state.friendPresence[friend.id]=cachedPresenceEntry(friend);});
+  renderOnlineFriendsDock();
 }
-function ageFriendPresenceCache(){
+function ageFriendPresenceCache(render=true){
   const now=Date.now();
   Object.values(state.friendPresence||{}).forEach(entry=>{
     if(entry?.mode==='online'&&entry.lastSeen&&now-entry.lastSeen>120000)entry.mode='away';
   });
+  if(render)renderOnlineFriendsDock();
 }
 function startFriendPresenceWatch(){
   clearInterval(state.presenceWatchTimer);
   ageFriendPresenceCache();
-  state.presenceWatchTimer=setInterval(ageFriendPresenceCache,30000);
+  state.presenceWatchTimer=setInterval(()=>ageFriendPresenceCache(true),30000);
 }
 function noteFriendPresence(profile){
   if(!profile?.id||!Object.prototype.hasOwnProperty.call(state.friendPresence,profile.id))return;
@@ -1564,6 +1680,8 @@ function noteFriendPresence(profile){
   const prev=state.friendPresence[profile.id];
   const next=cachedPresenceEntry(profile);
   state.friendPresence[profile.id]=next;
+  renderOnlineFriendsDock();
+  if(state.chatWindowOpen&&state.directPeerId===profile.id)updateChatPeerHeader(profile);
   if(prev?.mode!=='online'&&next.mode==='online'&&!isPeerMuted(profile.id)){
     socialNotify({
       title:`${profile.display_name||'Um amigo'} entrou no AVESSO`,
@@ -1652,12 +1770,7 @@ async function receiveIncomingDirectMessage(m,{source='realtime'}={}){
 
   const sameChat=state.chatWindowOpen&&state.directPeerId===m.sender_id;
   if(attention&&!muted){
-    if(document.hidden||!document.hasFocus()){
-      state.pendingAttentionPeerId=m.sender_id;
-      if(sameChat)autoMinimizeChat();
-    }else{
-      await receiveAttention(m.sender_id,m);
-    }
+    await receiveAttention(m.sender_id,m);
   }else if(sameChat){
     const hydrated=await hydrateDirectMessage(m);
     appendDirectMessage(hydrated);
@@ -1723,6 +1836,7 @@ function startDirectRealtime(){
       if(f.status==='accepted'&&f.requester_id===me){
         const who=await profileById(f.addressee_id);
         if(who)state.friendPresence[who.id]=cachedPresenceEntry(who);
+        renderOnlineFriendsDock();
         socialNotify({title:'Amizade aceita',body:`${who?.display_name||'Alguém'} aceitou. Nenhum contador público foi ferido.`,avatar:who?.avatar_url||'',kind:'friend',action:()=>openFriendChat(f.addressee_id)});
       }
       if(state.tab==='messages')renderMessagesPage();
@@ -1731,8 +1845,17 @@ function startDirectRealtime(){
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'profiles'},payload=>{
       const p=payload.new||{};
       if(p.id!==me)noteFriendPresence(p);
+      if(p.id===me){
+        state.profile={...state.profile,...p};
+        refreshOwnNowPlayingPreview();
+        updateOwnListeningInChat();
+      }
       if(state.tab==='messages')renderMessagesPage();
       if(state.chatWindowOpen&&state.directPeerId===p.id&&!state.chatWindowMinimized)updateChatPeerHeader(p);
+      if(state.tab==='public_profile'&&state.publicProfileId===p.id){
+        const host=$('#public-now-playing');
+        if(host)host.innerHTML=nowPlayingHtml(p);
+      }
     })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'guestbook_entries'},async payload=>{
       const row=payload.new||{};
@@ -1794,6 +1917,10 @@ function updateChatPeerHeader(peer){
   const name=$('#dm-peer-profile-name');if(name)name.textContent=peer.display_name;
   const small=$('.dm-peer-heading small');
   if(small)small.innerHTML=`<i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}`;
+  const listening=$('#dm-peer-listening');
+  if(listening)listening.innerHTML=nowPlayingHtml(peer,{compact:true});
+  const sideListening=$('#dm-peer-side-listening');
+  if(sideListening)sideListening.innerHTML=nowPlayingHtml(peer,{compact:true});
   const orb=$('.dm-msn-status-orb');
   if(orb){orb.className=`dm-msn-status-orb ${p.mode}`;orb.title=p.label;}
 }
@@ -2161,7 +2288,7 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
     </div>
     <header class="dm-floating-head">
       <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
-      <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><button class="dm-peer-name" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
+      <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><button class="dm-peer-name" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small><div id="dm-peer-listening" class="dm-listening-line">${nowPlayingHtml(peer,{compact:true})}</div></div>
       <div class="dm-head-actions"><span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span><button id="dm-options" class="dm-kebab" aria-label="Opções da conversa" title="Opções da conversa">•••</button></div>
       <div id="dm-options-menu" class="dm-options-menu dm-options-menu-head hidden">
         <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${escapeHtml(peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
@@ -2178,14 +2305,14 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
           <div class="dm-msn-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</div>
           <b>${escapeHtml(peer.display_name)}</b>
           <small>${escapeHtml(peer.status_message||'online o suficiente')}</small>
-          <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span>
+          <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span><div id="dm-peer-side-listening" class="dm-side-listening">${nowPlayingHtml(peer,{compact:true})}</div>
         </aside>
         <div class="dm-log" id="dm-log">${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
         <aside class="dm-msn-self" title="Seu perfil nesta conversa">
           <div class="dm-msn-self-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
           <b>VOCÊ</b>
           <small>${escapeHtml(state.profile.display_name)}</small>
-          <span class="dm-msn-presence"><i class="presence-dot ${mePresence.mode}"></i> ${mePresence.label}</span>
+          <span class="dm-msn-presence"><i class="presence-dot ${mePresence.mode}"></i> ${mePresence.label}</span><div id="dm-self-listening" class="dm-side-listening">${nowPlayingHtml(state.profile,{compact:true})}</div>
         </aside>
       </div>
       <div class="dm-tools">
@@ -2266,22 +2393,21 @@ function triggerChatNudge(peerId){
 }
 async function receiveAttention(peerId,message=null){
   if(!peerId)return;
-  if(document.hidden||!document.hasFocus()){
-    state.pendingAttentionPeerId=peerId;
-    autoMinimizeChat();
-    return;
-  }
   const alreadyOpen=state.chatWindowOpen&&state.directPeerId===peerId;
-  if(!alreadyOpen)await openChatWindow(peerId);
+  if(!alreadyOpen)await openChatWindow(peerId,{keepMinimized:false});
   else if(message)appendDirectMessage(message);
   state.chatWindowMinimized=false;
   const win=ensureChatWindow();
-  win.classList.remove('minimized','hidden');
+  win.classList.remove('minimized','hidden','docked-minimized');
   applyChatGeometry();
-  if(message?.id)markDirectRead(message.id);
+  if(message?.id&&!document.hidden)markDirectRead(message.id);
   triggerChatNudge(peerId);
-  triggerScreenNudge();
   playUiSound('attention');
+  if(document.hidden||!document.hasFocus()){
+    state.pendingAttentionPeerId=peerId;
+    return;
+  }
+  triggerScreenNudge();
 }
 async function sendDirectMessage(e){
   e?.preventDefault();
@@ -2403,6 +2529,7 @@ async function answerFriendRequest(id,accept){
     if(peer)state.friendPresence[peer.id]=cachedPresenceEntry(peer);
   }
   toast(accept?'Amizade aceita. Nenhum algoritmo comemorou.':'Pedido recusado. A civilização continua.');
+  await primeFriendPresenceCache();
   loadFriendPanel();
 }
 async function removeFriendship(id){
@@ -2410,6 +2537,7 @@ async function removeFriendship(id){
   const {error}=await supabase.from('friendships').delete().eq('id',id);
   if(error)return toast('Não foi possível remover agora.');
   toast('Amizade removida.');
+  await primeFriendPresenceCache();
   loadFriendPanel();
 }
 function openAvatarDialog(){
@@ -2599,7 +2727,7 @@ async function renderProfile(){
   $('#feed-list').innerHTML=`<section class="profile-control" style="--profile-wallpaper:url('${wallpaperUrl(state.profile.profile_wallpaper)}')">
     <header class="profile-control-hero">
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
-      <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><button id="open-avatar-picker">mudar foto de perfil</button></div>
+      <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><div class="profile-hero-listening">${nowPlayingHtml(state.profile)}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
@@ -2608,6 +2736,7 @@ async function renderProfile(){
     </section>
     <div class="profile-settings-grid">
       <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Mensagem de status<input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Aparecer como<select id="profile-presence"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
+      <section class="profile-settings-card listening-privacy-card"><span class="section-code">PRIVACIDADE // OUVINDO AGORA</span><h3>Seu player não precisa virar testemunha</h3><label class="listening-privacy-switch"><input id="listening-visible" type="checkbox" ${state.profile.listening_visible?'checked':''}><span><b>mostrar o que estou ouvindo</b><small>aparece no Meu Canto e nas conversas enquanto estiver recente</small></span></label><div id="profile-now-playing-preview" class="profile-now-playing-preview">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty">nada detectado agora. o silêncio também tem presença.</div>'}</div><button id="save-listening-privacy" type="button">salvar privacidade</button><small id="listening-bridge-status">${state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // site sozinho não consegue ler outras abas ou apps'}</small><em>Detecção automática de outras abas/aplicativos exige o AVESSO Presence. Navegadores não entregam esse dado a sites comuns, porque às vezes a privacidade ainda vence.</em></section>
       <section class="profile-settings-card security-card"><span class="section-code">CONTA // SEGURANÇA</span><p><b>E-mail</b><br>${escapeHtml(state.session?.user?.email||'')}</p><label>Nova senha<input id="profile-password" type="password" minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password"></label><button id="change-password">alterar senha</button><small>Seu @ continua estável para links. Seu nome exibido pode trocar de personalidade quantas vezes quiser.</small></section>
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
@@ -2632,6 +2761,7 @@ async function renderProfile(){
   $('#open-avatar-picker').onclick=openAvatarDialog;
   $('#profile-story-create').onclick=openStoryCreate;
   $('#save-profile-settings').onclick=saveProfileSettings;
+  $('#save-listening-privacy').onclick=saveListeningPrivacy;
   $('#change-password').onclick=changePassword;
   $('#profile-presence').value=state.profile.presence_mode||'online';
   $('#profile-presence').onchange=e=>setPresenceMode(e.target.value);
@@ -2761,7 +2891,7 @@ async function openPublicProfile(userId){
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   applyAppTabLayout();$('#feed-status').classList.add('hidden');
   const [profileRes,friendship]=await Promise.all([
-    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen,corner_music_url,corner_music_enabled').eq('id',userId).maybeSingle(),
+    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen,corner_music_url,corner_music_enabled,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at').eq('id',userId).maybeSingle(),
     getFriendshipWith(userId)
   ]);
   if(state.tab!=='public_profile'||state.publicProfileId!==userId)return;
@@ -2776,7 +2906,7 @@ async function openPublicProfile(userId){
     : '<div class="guestbook-locked">Recados são para amigos. Civilização mínima, aparentemente.</div>';
   $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
-    <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</p><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</p><div id="public-now-playing">${nowPlayingHtml(p)}</div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
     <section class="public-story-section">
       <span class="section-code">STORIES // AINDA NÃO EXPIRARAM</span>
       <h2>Stories de ${escapeHtml(p.display_name)}</h2>

@@ -4702,3 +4702,398 @@ html.msn-screen-nudge body{
     flex-wrap:wrap;
   }
 }
+
+
+/* AVESSO ATTENTION + NOW PLAYING + ONLINE DOCK 2026-10-01 */
+
+/* Nome/avatar e logo agora são rotas de verdade, não decoração com crise de identidade. */
+.app-nav .user-chip{
+  width:calc(100% - 20px);
+  text-align:left;
+  color:inherit;
+  cursor:pointer;
+  font:inherit;
+}
+.app-nav .user-chip:hover{
+  border-color:var(--acid)!important;
+  box-shadow:
+    inset 3px 0 0 var(--acid),
+    inset 0 0 24px #d8ff3e0a!important;
+}
+.app-nav .brand{
+  cursor:pointer;
+}
+.app-nav .brand:hover{
+  color:var(--acid);
+  text-shadow:0 0 10px #d8ff3e44;
+}
+
+/* Chamar atenção: tela inteira treme e dá um flash curto, como a internet civilizada de 2006. */
+html.msn-screen-nudge:after{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:20000;
+  pointer-events:none;
+  border:3px solid #ffd458;
+  box-shadow:
+    inset 0 0 42px #ffd45833,
+    0 0 30px #ffd45855;
+  animation:attention-flash .12s steps(2,end) 8;
+}
+@keyframes attention-flash{
+  0%,100%{opacity:0}
+  50%{opacity:.9}
+}
+html.msn-screen-nudge body{
+  animation:msn-screen-nudge-hard .052s linear 24!important;
+}
+@keyframes msn-screen-nudge-hard{
+  0%{transform:translate(0,0) rotate(0)}
+  12.5%{transform:translate(-15px,7px) rotate(-.18deg)}
+  25%{transform:translate(14px,-6px) rotate(.18deg)}
+  37.5%{transform:translate(-12px,-8px) rotate(-.12deg)}
+  50%{transform:translate(16px,6px) rotate(.15deg)}
+  62.5%{transform:translate(-13px,3px) rotate(-.14deg)}
+  75%{transform:translate(11px,-7px) rotate(.12deg)}
+  87.5%{transform:translate(-7px,5px) rotate(-.08deg)}
+  100%{transform:translate(0,0) rotate(0)}
+}
+
+/* Ouvindo agora */
+.now-playing-status{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+  max-width:100%;
+  margin:8px 0;
+  padding:8px 9px;
+  border:1px solid #31464b;
+  background:
+    linear-gradient(90deg,#22d9ee0d,#d8ff3e08),
+    #071012d9;
+  color:#edf3ed;
+  text-decoration:none;
+  box-shadow:inset 2px 0 0 var(--cyan);
+}
+.now-playing-status:hover{
+  border-color:var(--acid);
+  box-shadow:inset 2px 0 0 var(--acid),0 0 14px #d8ff3e10;
+}
+.now-playing-status>span:last-child{
+  min-width:0;
+}
+.now-playing-status b,
+.now-playing-status small{
+  display:block;
+  min-width:0;
+}
+.now-playing-status b{
+  color:var(--cyan);
+  font:800 .52rem/1.15 var(--mono);
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.now-playing-status small{
+  margin-top:3px;
+  color:#c5cecb;
+  font:600 .57rem/1.35 var(--mono);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.now-playing-status.compact{
+  margin:5px 0 0;
+  padding:5px 6px;
+  gap:6px;
+  background:#071012b8;
+}
+.now-playing-status.compact b{font-size:.44rem}
+.now-playing-status.compact small{font-size:.48rem}
+.now-playing-eq{
+  width:18px;
+  height:16px;
+  flex:0 0 18px;
+  display:flex;
+  align-items:end;
+  justify-content:center;
+  gap:2px;
+}
+.now-playing-eq i{
+  display:block;
+  width:3px;
+  background:var(--acid);
+  animation:now-playing-bars .65s steps(4,end) infinite alternate;
+}
+.now-playing-eq i:nth-child(1){height:7px}
+.now-playing-eq i:nth-child(2){height:14px;animation-delay:.18s}
+.now-playing-eq i:nth-child(3){height:10px;animation-delay:.34s}
+@keyframes now-playing-bars{
+  0%{transform:scaleY(.35);opacity:.6}
+  100%{transform:scaleY(1);opacity:1}
+}
+.now-playing-empty{
+  color:#74817f;
+  padding:9px;
+  border:1px dashed #2c3b3e;
+  font:600 .55rem/1.4 var(--mono);
+}
+.listening-privacy-card{
+  position:relative;
+  overflow:hidden;
+  background:
+    linear-gradient(135deg,#071013ed,#0c120be8),
+    url("assets/wallpapers/terapia-do-algoritmo.webp") center/cover no-repeat!important;
+}
+.listening-privacy-card:after{
+  content:"MEDIA.SYS";
+  position:absolute;
+  right:10px;
+  top:9px;
+  color:#d8ff3e55;
+  font:800 .42rem/1 var(--mono);
+  letter-spacing:.12em;
+}
+.listening-privacy-card h3{
+  margin:7px 0 12px;
+  font-size:1.05rem;
+}
+.listening-privacy-switch{
+  display:flex!important;
+  align-items:center;
+  gap:10px;
+  margin:0 0 10px!important;
+  padding:10px;
+  border:1px solid #35464a;
+  background:#05090bc9;
+  cursor:pointer;
+}
+.listening-privacy-switch input{
+  width:18px!important;
+  height:18px;
+  flex:0 0 18px;
+  accent-color:var(--acid);
+}
+.listening-privacy-switch b,
+.listening-privacy-switch small{
+  display:block;
+}
+.listening-privacy-switch b{
+  color:var(--acid);
+  font:800 .57rem/1.25 var(--mono);
+}
+.listening-privacy-switch small{
+  margin-top:3px;
+  color:#85918f;
+  font:500 .49rem/1.35 var(--mono);
+}
+.profile-now-playing-preview{
+  margin:8px 0;
+}
+#save-listening-privacy{
+  margin-top:4px;
+}
+#listening-bridge-status{
+  display:block;
+  margin-top:10px;
+  color:var(--cyan);
+  font:700 .48rem/1.35 var(--mono);
+}
+.listening-privacy-card>em{
+  display:block;
+  margin-top:8px;
+  color:#74817f;
+  font:500 .48rem/1.45 var(--mono);
+  font-style:normal;
+}
+
+/* Chat: ouvindo agora cabe no cabeçalho e nas laterais sem sequestrar a conversa. */
+.dm-listening-line{
+  min-width:0;
+  max-width:100%;
+}
+.dm-listening-line:empty,
+.dm-side-listening:empty{
+  display:none;
+}
+.dm-peer-heading .now-playing-status{
+  max-width:310px;
+}
+.dm-side-listening .now-playing-status{
+  display:block;
+  margin-top:7px;
+}
+.dm-side-listening .now-playing-eq{
+  float:left;
+  margin-right:5px;
+}
+.dm-side-listening .now-playing-status small{
+  white-space:normal;
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  overflow:hidden;
+}
+
+/* Amigos online no canto inferior direito */
+.online-friends-dock{
+  position:fixed;
+  right:18px;
+  bottom:18px;
+  z-index:11350;
+  width:260px;
+  border:1px solid #355057;
+  background:
+    linear-gradient(180deg,#071013f2,#040809f6),
+    url("assets/wallpapers/cidade-56k.webp") center/cover no-repeat;
+  box-shadow:7px 7px 0 #020405,0 0 25px #22d9ee12;
+  overflow:hidden;
+}
+.online-friends-dock.hidden{display:none}
+.online-friends-toggle{
+  width:100%;
+  height:38px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 9px;
+  border:0;
+  border-bottom:1px solid #31454a;
+  background:
+    linear-gradient(90deg,#22d9ee16,#d8ff3e0b),
+    #081114;
+  color:var(--cyan);
+  cursor:pointer;
+  font:800 .54rem/1 var(--mono);
+  letter-spacing:.04em;
+}
+.online-friends-toggle b{
+  display:grid;
+  place-items:center;
+  min-width:22px;
+  height:20px;
+  padding:0 5px;
+  border:1px solid var(--acid);
+  color:var(--acid);
+  background:#0a1006;
+}
+.online-friends-list{
+  max-height:254px;
+  overflow:auto;
+  padding:5px;
+}
+.online-friends-dock.collapsed .online-friends-list{
+  display:none;
+}
+.online-friends-dock.collapsed{
+  width:176px;
+}
+.online-friend-item{
+  width:100%;
+  display:grid;
+  grid-template-columns:34px minmax(0,1fr) 10px;
+  align-items:center;
+  gap:7px;
+  padding:6px;
+  border:1px solid transparent;
+  background:#071012c9;
+  color:#e8eeea;
+  text-align:left;
+  cursor:pointer;
+}
+.online-friend-item+.online-friend-item{
+  margin-top:3px;
+}
+.online-friend-item:hover{
+  border-color:var(--acid);
+  background:#d8ff3e0c;
+}
+.online-friend-avatar{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  border:1px solid #405157;
+  background:#030607;
+}
+.online-friend-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  image-rendering:pixelated;
+}
+.online-friend-item span:nth-child(2){
+  min-width:0;
+}
+.online-friend-item b,
+.online-friend-item small,
+.online-friend-item em{
+  display:block;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.online-friend-item b{
+  font:800 .56rem/1.2 var(--mono);
+}
+.online-friend-item small{
+  color:#7f8b89;
+  font:500 .46rem/1.25 var(--mono);
+}
+.online-friend-item em{
+  margin-top:2px;
+  color:var(--acid);
+  font:500 .43rem/1.2 var(--mono);
+  font-style:normal;
+}
+.online-friends-empty{
+  padding:12px 9px;
+  color:#7d8987;
+  font:600 .50rem/1.4 var(--mono);
+}
+
+/* Quando a conversa grande está aberta, o dock sai da frente. */
+body:has(.dm-floating-window:not(.hidden).minimized) .online-friends-dock{
+  bottom:70px;
+}
+body:has(.dm-floating-window:not(.hidden):not(.minimized)) .online-friends-dock{
+  right:min(610px,calc(100vw - 278px));
+  bottom:18px;
+}
+
+/* O status não deve ser exibido para tecnologias assistivas como player invisível ou ruído. */
+.corner-music-host{
+  speak:none;
+}
+
+@media(max-width:1100px){
+  body:has(.dm-floating-window:not(.hidden):not(.minimized)) .online-friends-dock{
+    display:none;
+  }
+}
+@media(max-width:760px){
+  .online-friends-dock{
+    right:8px!important;
+    bottom:82px!important;
+    width:min(250px,calc(100vw - 16px));
+    z-index:11250;
+  }
+  .online-friends-dock.collapsed{
+    width:162px;
+  }
+  .now-playing-status small{
+    white-space:normal;
+  }
+  .listening-privacy-card{
+    background:#071013!important;
+  }
+  .dm-peer-heading .now-playing-status{
+    max-width:100%;
+  }
+  .dm-side-listening{
+    display:none;
+  }
+}
