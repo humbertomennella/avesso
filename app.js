@@ -1956,12 +1956,10 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
         <button id="dm-attention" title="Chamar atenção">⚡ chamar atenção</button>
         <button id="dm-emoticons" title="Emoticons">☺ emoticons</button>
         <button id="dm-attach" title="Enviar arquivo ou imagem">📎 arquivo</button>
-        <button id="dm-voice" class="dm-voice-button" title="Gravar mensagem de voz">🎙 voz</button>
-        <button id="dm-voice-cancel" class="dm-voice-cancel hidden" title="Cancelar gravação">× cancelar</button>
         <input id="dm-file-input" type="file" hidden accept="image/*,audio/*,.pdf,.txt,.zip,.docx">
         <div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${avessoEmoticonButtons('data-emoticon')}</div>
       </div>
-      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem... ou grave voz no celular sem fingir que 2006 tinha tudo."><button>Enviar</button></form>
+      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem..."><button id="dm-send-action" class="dm-send-action" type="button" aria-label="Segure para gravar áudio"></button></form>
     </div>`;
   $('#dm-minimize').onclick=toggleChatMinimize;
   $('#dm-maximize').onclick=toggleChatMaximize;
@@ -1972,11 +1970,10 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
   $('#dm-form').onsubmit=sendDirectMessage;
   $('#dm-attention').onclick=sendAttention;
   $('#dm-emoticons').onclick=()=>{$('#dm-emoticon-palette').classList.toggle('hidden');$('#dm-options-menu')?.classList.add('hidden');};
-  $$('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();});
+  $('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();syncDmComposerAction();});
   $('#dm-attach').onclick=()=>$('#dm-file-input').click();
-  $('#dm-file-input').onchange=e=>{const f=e.target.files?.[0];if(f)sendDirectAttachment(f);};
-  $('#dm-voice').onclick=toggleVoiceRecording;
-  $('#dm-voice-cancel').onclick=()=>cancelVoiceRecording();
+  $('#dm-file-input').onchange=e=>{const file=e.target.files?.[0];if(file)sendDirectAttachment(file);};
+  bindHoldToTalk();
   $('#dm-options').onclick=e=>{e.stopPropagation();$('#dm-options-menu').classList.toggle('hidden');$('#dm-emoticon-palette')?.classList.add('hidden');};
   $('#dm-visit-profile').onclick=()=>{openPublicProfile(peerId);$('#dm-options-menu')?.classList.add('hidden');};
   $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
@@ -2005,6 +2002,15 @@ function toggleChatMinimize(){
   applyChatGeometry();
   if(!state.chatWindowMinimized)setTimeout(()=>$('#dm-input')?.focus(),80);
 }
+function autoMinimizeChat(){
+  if(!state.chatWindowOpen||state.chatWindowMinimized)return;
+  state.chatWindowMinimized=true;
+  const win=ensureChatWindow();
+  win.classList.add('minimized');
+  const button=$('#dm-minimize');
+  if(button){button.textContent='□';button.title='Restaurar';}
+  applyChatGeometry();
+}
 function closeChatWindow(silent=false){
   if(state.voiceRecorder)cancelVoiceRecording(true);
   state.chatWindowOpen=false;state.chatWindowMinimized=false;state.directPeerId=null;
@@ -2022,12 +2028,21 @@ function triggerChatNudge(peerId){
   if(!state.chatWindowOpen||state.directPeerId!==peerId)return;
   const win=ensureChatWindow();win.classList.remove('nudge');void win.offsetWidth;win.classList.add('nudge');setTimeout(()=>win.classList.remove('nudge'),1100);
 }
-async function receiveAttention(peerId){
+async function receiveAttention(peerId,message=null){
   if(!peerId)return;
-  if(document.hidden)state.pendingAttentionPeerId=peerId;
-  await openChatWindow(peerId);
+  if(document.hidden||!document.hasFocus()){
+    state.pendingAttentionPeerId=peerId;
+    autoMinimizeChat();
+    return;
+  }
+  const alreadyOpen=state.chatWindowOpen&&state.directPeerId===peerId;
+  if(!alreadyOpen)await openChatWindow(peerId);
+  else if(message)appendDirectMessage(message);
   state.chatWindowMinimized=false;
-  ensureChatWindow().classList.remove('minimized','hidden');
+  const win=ensureChatWindow();
+  win.classList.remove('minimized','hidden');
+  applyChatGeometry();
+  if(message?.id)markDirectRead(message.id);
   triggerChatNudge(peerId);
   triggerScreenNudge();
   playUiSound('attention');
@@ -2036,32 +2051,58 @@ async function sendDirectMessage(e){
   e?.preventDefault();
   const input=$('#dm-input');const body=input?.value.trim()||'';
   if(!body||!state.directPeerId)return;
-  input.value='';
-  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:state.directPeerId,body,message_kind:'text'});
-  if(error){input.value=body;return toast('A mensagem não atravessou o fio. Confirme que vocês ainda são amigos.');}
-  await refreshChatWindow();
+  const peerId=state.directPeerId;
+  input.value='';syncDmComposerAction();
+  const {data,error}=await supabase.from('direct_messages')
+    .insert({sender_id:state.profile.id,recipient_id:peerId,body,message_kind:'text'})
+    .select('*').single();
+  if(error){
+    input.value=body;syncDmComposerAction();
+    return toast('A mensagem não atravessou o fio. Confirme que vocês ainda são amigos.');
+  }
+  if(state.chatWindowOpen&&state.directPeerId===peerId)appendDirectMessage(data);
 }
 async function sendAttention(){
   if(!state.directPeerId)return;
+  const peerId=state.directPeerId;
   const body=`${state.profile.display_name} chamou sua atenção. A internet acaba de voltar para 2006.`;
-  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:state.directPeerId,body,message_kind:'attention'});
+  const {data,error}=await supabase.from('direct_messages')
+    .insert({sender_id:state.profile.id,recipient_id:peerId,body,message_kind:'attention'})
+    .select('*').single();
   if(error)return toast('Nem chamar atenção chamou atenção.');
-  playUiSound('attention');triggerChatNudge(state.directPeerId);triggerScreenNudge();await refreshChatWindow();
+  if(state.chatWindowOpen&&state.directPeerId===peerId)appendDirectMessage(data);
+  playUiSound('attention');
+  const button=$('#dm-attention');
+  if(button){button.classList.remove('sent');void button.offsetWidth;button.classList.add('sent');setTimeout(()=>button.classList.remove('sent'),450);}
 }
-async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDuration=0}={}){
+async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDuration=0,optimisticId=null,optimisticUrl=null}={}){
   if(!recipientId||!file)return;
-  if(file.size>10*1024*1024)return toast('Até 10 MB por arquivo. A nostalgia não inclui conexão discada real.');
+  const clearOptimistic=()=>{
+    if(optimisticId)document.querySelector(`[data-dm-id="${CSS.escape(String(optimisticId))}"]`)?.remove();
+    if(optimisticUrl)URL.revokeObjectURL(optimisticUrl);
+  };
+  if(file.size>10*1024*1024){clearOptimistic();return toast('Até 10 MB por arquivo. A nostalgia não inclui conexão discada real.');}
   const allowed=/^(image\/(jpeg|png|webp|gif)|audio\/(webm|ogg|mp4|mpeg|wav|x-wav|aac|x-m4a)|application\/pdf|text\/plain|application\/(zip|x-zip-compressed)|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/i.test(file.type||'');
-  if(!allowed)return toast('Formato não aceito nessa conversa.');
+  if(!allowed){clearOptimistic();return toast('Formato não aceito nessa conversa.');}
   const path=`${state.profile.id}/${recipientId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
-  const {error:upErr}=await supabase.storage.from('avesso-chat').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type});
-  if(upErr)return toast('O arquivo caiu no chão antes de chegar.');
+  const {error:upErr}=await supabase.storage.from('avesso-chat').upload(path,file,{cacheControl:'86400',upsert:false,contentType:file.type});
+  if(upErr){clearOptimistic();return toast('O arquivo caiu no chão antes de chegar.');}
   const kind=file.type.startsWith('image/')?'image':file.type.startsWith('audio/')?'audio':'file';
   const body=kind==='audio'?`Mensagem de voz${voiceDuration?' · '+voiceDuration+'s':''}`:file.name;
-  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:recipientId,body,message_kind:kind,attachment_path:path,attachment_name:file.name,attachment_type:file.type,attachment_size:file.size});
-  if(error){await supabase.storage.from('avesso-chat').remove([path]);return toast('O banco recusou o pacote. Elegante.');}
-  if(kind==='audio')toast('Mensagem de voz enviada. O modem imaginário sobreviveu.');
-  if(state.chatWindowOpen&&state.directPeerId===recipientId)await refreshChatWindow();
+  const {data,error}=await supabase.from('direct_messages')
+    .insert({sender_id:state.profile.id,recipient_id:recipientId,body,message_kind:kind,attachment_path:path,attachment_name:file.name,attachment_type:file.type,attachment_size:file.size})
+    .select('*').single();
+  if(error){
+    await supabase.storage.from('avesso-chat').remove([path]);
+    clearOptimistic();
+    return toast('O banco recusou o pacote. Elegante.');
+  }
+  const hydrated=await hydrateDirectMessage(data);
+  if(state.chatWindowOpen&&state.directPeerId===recipientId){
+    if(optimisticId)appendDirectMessage(hydrated,{replaceId:optimisticId});
+    else appendDirectMessage(hydrated);
+  }
+  if(optimisticUrl)setTimeout(()=>URL.revokeObjectURL(optimisticUrl),500);
 }
 function openFriendChat(peerId){
   state.tab='messages';bumpView();applyAppTabLayout();
