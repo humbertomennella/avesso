@@ -3999,7 +3999,7 @@ async function loadMoreDirectHistory(){
   const previousHeight=log.scrollHeight;
   const anchor=log.querySelector('#dm-load-older');
   if(anchor)anchor.remove();
-  log.insertAdjacentHTML('afterbegin',hydrated.map(dmMessageHtml).join(''));
+  log.insertAdjacentHTML('afterbegin',dmConversationHtml(hydrated));
   if(state.directHistoryHasMore){
     log.insertAdjacentHTML('afterbegin','<button id="dm-load-older" class="dm-load-older" type="button">carregar antigas</button>');
     $('#dm-load-older').onclick=loadMoreDirectHistory;
@@ -4024,6 +4024,18 @@ async function refreshDirectMessageBubble(messageId){
     repairLegacyVoicePlayers(log);
     bindDirectMessageActions(log);
   }
+}
+function dmDayKey(value){
+  try{return new Date(value).toLocaleDateString('pt-BR',{year:'numeric',month:'2-digit',day:'2-digit'});}catch{return'';}
+}
+function dmConversationHtml(rows=[]){
+  let lastDay='';
+  return rows.map(row=>{
+    const day=dmDayKey(row.created_at);
+    const separator=day&&day!==lastDay?`<div class="dm-date-separator"><span>${day}</span></div>`:'';
+    lastDay=day||lastDay;
+    return separator+dmMessageHtml(row);
+  }).join('');
 }
 function dmMessageHtml(m){
   const mine=m.sender_id===state.profile.id;
@@ -4681,7 +4693,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
           <small>@${escapeHtml(peer.handle)}</small>
           <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span>
         </aside>
-        <div class="dm-log" id="dm-log">${state.directHistoryHasMore?'<button id="dm-load-older" class="dm-load-older" type="button">carregar antigas</button>':''}${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
+        <div class="dm-log" id="dm-log">${state.directHistoryHasMore?'<button id="dm-load-older" class="dm-load-older" type="button">carregar antigas</button>':''}${dmConversationHtml(messages)||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
         <aside class="dm-msn-self" title="Seu perfil nesta conversa">
           <div class="dm-msn-self-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
           <b>${identityNameHtml(state.profile.id,state.profile.display_name)}</b>
