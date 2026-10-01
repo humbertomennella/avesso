@@ -3741,7 +3741,7 @@ async function renderMessagesPage(){
 
 document.addEventListener('pointerdown',e=>{
   const menu=$('#dm-options-menu');
-  if(menu&&!menu.classList.contains('hidden')&&!e.target.closest('#dm-options-menu,#dm-options'))menu.classList.add('hidden');
+  if(menu&&!menu.classList.contains('hidden')&&!e.target.closest('#dm-options-menu,#dm-options'))setChatOptionsOpen(false);
   const emoji=$('#dm-emoticon-palette');
   if(emoji&&!emoji.classList.contains('hidden')&&!e.target.closest('#dm-emoticon-palette,#dm-emoticons'))emoji.classList.add('hidden');
   const postEmoji=$('#post-emoticon-palette');
@@ -4110,6 +4110,50 @@ function ensureChatWindow(){
   if(!win){win=document.createElement('section');win.id='dm-floating-window';win.className='dm-floating-window hidden';document.body.appendChild(win);}
   return win;
 }
+function chatOptionsMobile(){
+  return window.matchMedia?.('(max-width: 820px)').matches;
+}
+function prepareChatOptionsMenu(){
+  const win=$('#dm-floating-window');
+  const menu=$('#dm-options-menu');
+  if(!win||!menu)return;
+  if(chatOptionsMobile()&&menu.parentElement!==win)win.appendChild(menu);
+  if(chatOptionsMobile()){
+    const head=win.querySelector('header.dm-floating-head');
+    const winRect=win.getBoundingClientRect();
+    const headRect=head?.getBoundingClientRect();
+    const top=Math.max(78,Math.round((headRect?.bottom??(winRect.top+112))-winRect.top+4));
+    menu.style.setProperty('--dm-options-mobile-top',top+'px');
+    let close=menu.querySelector('.dm-options-mobile-close');
+    if(!close){
+      close=document.createElement('button');
+      close.type='button';
+      close.className='dm-options-mobile-close';
+      close.textContent='× fechar';
+      close.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();setChatOptionsOpen(false);});
+      menu.prepend(close);
+    }
+  }
+}
+function setChatOptionsOpen(open){
+  const win=$('#dm-floating-window');
+  const menu=$('#dm-options-menu');
+  const button=$('#dm-options');
+  if(!win||!menu)return;
+  if(open)prepareChatOptionsMenu();
+  menu.classList.toggle('hidden',!open);
+  win.classList.toggle('options-open',Boolean(open));
+  button?.setAttribute('aria-expanded',String(Boolean(open)));
+  if(open){
+    menu.scrollTop=0;
+    requestAnimationFrame(()=>menu.querySelector('button,select,input')?.focus?.({preventScroll:true}));
+  }
+}
+function toggleChatOptions(){
+  const menu=$('#dm-options-menu');
+  if(!menu)return;
+  setChatOptionsOpen(menu.classList.contains('hidden'));
+}
 async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   if(!peerId)return;
   if(state.voiceRecorder&&state.voicePeerId&&state.voicePeerId!==peerId)cancelVoiceRecording(true);
@@ -4136,7 +4180,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
     <header class="dm-floating-head">
       <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
       <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><div class="dm-peer-identity-row"><button class="dm-peer-name" id="dm-peer-profile-name" data-profile-id="${peer.id}">${identityNameHtml(peer.id,peer.display_name)}</button><span id="dm-peer-status" class="dm-user-status ${peer.status_message?'':'hidden'}" title="${escapeAttr(peer.status_message||'')}">${escapeHtml(peer.status_message||'')}</span><div id="dm-peer-listening" class="dm-listening-inline">${chatNowPlayingHtml(peer,{compact:true})}</div></div><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
-      <div class="dm-head-actions"><span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span><button id="dm-options" class="dm-kebab" aria-label="Opções da conversa" title="Opções da conversa">•••</button></div>
+      <div class="dm-head-actions"><span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span><button id="dm-options" class="dm-kebab" aria-label="Opções da conversa" aria-expanded="false" title="Opções da conversa">•••</button></div>
       <div id="dm-options-menu" class="dm-options-menu dm-options-menu-head hidden">
         <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${identityNameHtml(peer.id,peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
         <button id="dm-visit-profile">↗ visitar o Canto</button>
@@ -4193,8 +4237,8 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('#dm-attach').onclick=()=>$('#dm-file-input').click();
   $('#dm-file-input').onchange=e=>{const file=e.target.files?.[0];if(file)sendDirectAttachment(file);};
   bindHoldToTalk();
-  $('#dm-options').onclick=e=>{e.stopPropagation();$('#dm-options-menu').classList.toggle('hidden');$('#dm-emoticon-palette')?.classList.add('hidden');};
-  $('#dm-visit-profile').onclick=()=>{openPublicProfile(peerId);$('#dm-options-menu')?.classList.add('hidden');};
+  bindChatControl($('#dm-options'),()=>{ $('#dm-emoticon-palette')?.classList.add('hidden'); toggleChatOptions(); });
+  $('#dm-visit-profile').onclick=()=>{setChatOptionsOpen(false);openPublicProfile(peerId);};
   $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
   $('#dm-report-peer').onclick=()=>reportUser(peerId);
   $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
@@ -4202,7 +4246,8 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   const showListening=$('#dm-show-listening');if(showListening)showListening.onchange=e=>saveChatListeningVisibility(e.target.checked);
   const saveStatus=$('#dm-save-status');if(saveStatus)saveStatus.onclick=saveQuickChatStatus;
   $$('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
-  $$('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
+  $('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
+  prepareChatOptionsMenu();
   installChatDesktopWindowing();
   window.postMessage({type:'AVESSO_PRESENCE_REQUEST'},location.origin);
   syncVoiceRecordingUI();
@@ -4281,6 +4326,7 @@ async function refreshChatWindow(){
 }
 function toggleChatMinimize(){
   if(!state.chatWindowOpen)return;
+  setChatOptionsOpen(false);
   state.chatWindowMinimized=!state.chatWindowMinimized;
   const win=ensureChatWindow();
   win.classList.toggle('minimized',state.chatWindowMinimized);
@@ -4308,6 +4354,7 @@ function autoMinimizeChat(){
   applyChatGeometry();
 }
 function closeChatWindow(silent=false){
+  setChatOptionsOpen(false);
   if(state.voiceRecorder||state.voicePendingStart)cancelVoiceRecording(true);
   clearTimeout(state.incomingMessagePulseTimer);
   state.incomingMessagePulseTimer=null;
