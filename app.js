@@ -1339,6 +1339,17 @@ $('#remove-image').onclick=()=>{
   if($('#post-gif-url'))$('#post-gif-url').value='';
   $('#image-preview').classList.add('hidden');
 };
+function repoGifByRef(value=''){
+  const match=String(value||'').match(/^avesso-gif:([a-z0-9_-]+)$/i);
+  return match?AVESSO_GIFS.find(g=>g.id===match[1])||null:null;
+}
+function postImageSrc(value=''){
+  return repoGifByRef(value)?.src||String(value||'');
+}
+function isGifPostImage(value=''){
+  const raw=String(value||'');
+  return Boolean(repoGifByRef(raw)||/^data:image\/gif/i.test(raw)||/\.gif(?:$|[?#])/i.test(raw)||/media\.giphy\.com|i\.giphy\.com|media\.tenor\.com|c\.tenor\.com/i.test(raw));
+}
 function directGifUrl(raw){
   const value=String(raw||'').trim();
   if(!value)return'';
@@ -1359,7 +1370,7 @@ function renderRepoGifLibrary(){
   host.querySelectorAll('[data-repo-gif]').forEach(button=>button.onclick=()=>{
     const gif=AVESSO_GIFS.find(item=>item.id===button.dataset.repoGif);
     if(!gif)return;
-    state.postGifUrl=gif.src;
+    state.postGifUrl=`avesso-gif:${gif.id}`;
     state.postImageFile=null;
     $('#post-gif-file').value='';
     $('#post-gif-url').value='';
@@ -1840,7 +1851,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       ${ownerActions}
       <p class="post-body" data-post-body="${p.id}">${escapeHtml(p.body)}</p>
       ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea>${['youtube','spotify'].includes(p.media_kind)?`<input type="url" data-post-media-link-edit="${p.id}" value="${escapeAttr(externalMediaShareUrl(p.media_url))}" placeholder="link do YouTube ou Spotify">`:''}<div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
-      ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
+      ${p.image_url?`<figure class="post-image ${isGifPostImage(p.image_url)?'post-gif':''}"><img src="${escapeAttr(postImageSrc(p.image_url))}" alt="${isGifPostImage(p.image_url)?'GIF':'Imagem'} publicado por ${escapeAttr(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
       ${feedMediaHtml(p.media_url,p.media_kind)}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
       ${conversationHtml}
