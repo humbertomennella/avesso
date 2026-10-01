@@ -2541,6 +2541,571 @@ async function renderAdminDashboard(){
   bindProfileLinks();
 }
 
+
+/* =========================================================
+   DASHBOARD STAFF // V3
+   ========================================================= */
+function dashboardSectionsForRole(role=state.adminRole){
+  const base=[
+    ['overview','◫','visão geral'],
+    ['reports','⚑','denúncias'],
+    ['moderation','⌫','moderação'],
+    ['terms','⌕','termos monitorados'],
+    ['users','◎','usuários'],
+    ['staff-chat','↔','chat interno']
+  ];
+  if(staffRoleRank(role)>=20)base.push(['staff','♟','equipe']);
+  if(role==='owner')base.push(
+    ['appearance','▧','aparência'],
+    ['content','≡','páginas & conteúdo'],
+    ['assets','▣','mídia & assets'],
+    ['badges','✦','emblemas'],
+    ['characters','☻','habitantes & IA'],
+    ['database','▤','banco'],
+    ['audit','⌁','auditoria']
+  );
+  return base;
+}
+function dashboardRoleBadge(role=state.adminRole){
+  const label=staffRoleLabel(role)||'Staff';
+  return '<span class="staff-role-badge role-'+escapeAttr(role||'staff')+'">'+escapeHtml(label)+'</span>';
+}
+function dashboardShellHtml(body){
+  const sections=dashboardSectionsForRole();
+  return '<section class="staff-dashboard">'+
+    '<aside class="staff-dashboard-nav">'+
+      '<div class="staff-dashboard-brand"><span class="section-code">AVESSO.STAFF</span><strong>DASHBOARD</strong>'+dashboardRoleBadge()+'</div>'+
+      '<nav>'+sections.map(([id,icon,label])=>'<button class="'+(state.dashboardSection===id?'active':'')+'" data-dashboard-section="'+id+'"><i>'+icon+'</i><span>'+escapeHtml(label)+'</span></button>').join('')+'</nav>'+
+      '<div class="staff-dashboard-foot"><small>'+escapeHtml(state.profile?.display_name||'staff')+'</small><b>@'+escapeHtml(state.profile?.handle||'...')+'</b></div>'+
+    '</aside>'+
+    '<main class="staff-dashboard-main">'+body+'</main>'+
+  '</section>';
+}
+function bindDashboardNav(){
+  $$('[data-dashboard-section]').forEach(b=>b.onclick=()=>{
+    state.dashboardSection=b.dataset.dashboardSection;
+    renderStaffDashboard({reload:false});
+  });
+}
+function staffUserSelect(users=[],selected=''){
+  return '<option value="">não atribuído</option>'+users.map(u=>'<option value="'+escapeAttr(u.id)+'" '+(u.id===selected?'selected':'')+'>@'+escapeHtml(u.handle||'...')+' · '+escapeHtml(staffRoleLabel(u.role)||u.role||'staff')+'</option>').join('');
+}
+function dashboardHeader(code,title,description,actions=''){
+  return '<header class="staff-page-head"><div><span class="section-code">'+escapeHtml(code)+'</span><h2>'+escapeHtml(title)+'</h2><p>'+escapeHtml(description)+'</p></div><div class="staff-page-actions">'+actions+'</div></header>';
+}
+function dashboardEmpty(text){return '<p class="dashboard-empty">'+escapeHtml(text)+'</p>';}
+function dashboardStat(label,value,detail=''){
+  return '<article class="dashboard-stat"><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(String(value??0))+'</strong><small>'+escapeHtml(detail)+'</small></article>';
+}
+
+async function loadStaffDashboardSnapshot(){
+  const {data,error}=await supabase.rpc('staff_dashboard_snapshot');
+  if(error){console.error('staff dashboard snapshot',error);throw error;}
+  state.adminSnapshot=data||{};
+  if(data?.role){state.adminRole=data.role;state.isAdmin=true;}
+  return state.adminSnapshot;
+}
+async function renderStaffDashboard({reload=true}={}){
+  if(state.tab!=='admin')return;
+  if(!state.isAdmin){await goToFeedHome();return;}
+  $('#feed-status').classList.add('hidden');
+  const host=$('#feed-list');
+  if(reload||!state.adminSnapshot){
+    host.innerHTML=dashboardShellHtml('<div class="dashboard-loading">DASHBOARD.EXE // carregando permissões...</div>');
+    bindDashboardNav();
+    try{await loadStaffDashboardSnapshot();}catch{
+      host.innerHTML='<section class="admin-shell"><div class="admin-error">A dashboard falhou ao carregar. O poder sem dados é só decoração.</div></section>';
+      return;
+    }
+  }
+  const allowed=dashboardSectionsForRole().map(x=>x[0]);
+  if(!allowed.includes(state.dashboardSection))state.dashboardSection='overview';
+  let body='';
+  if(state.dashboardSection==='overview')body=dashboardOverviewHtml();
+  else if(state.dashboardSection==='reports')body=dashboardReportsHtml();
+  else if(state.dashboardSection==='moderation')body=await dashboardModerationHtml();
+  else if(state.dashboardSection==='terms')body=dashboardTermsHtml();
+  else if(state.dashboardSection==='users')body=dashboardUsersHtml();
+  else if(state.dashboardSection==='staff-chat')body=await dashboardStaffChatHtml();
+  else if(state.dashboardSection==='staff')body=dashboardStaffHtml();
+  else if(state.dashboardSection==='appearance')body=dashboardAppearanceHtml();
+  else if(state.dashboardSection==='content')body=dashboardContentHtml();
+  else if(state.dashboardSection==='assets')body=dashboardAssetsHtml();
+  else if(state.dashboardSection==='badges')body=dashboardBadgesHtml();
+  else if(state.dashboardSection==='characters')body=dashboardCharactersHtml();
+  else if(state.dashboardSection==='database')body=await dashboardDatabaseHtml();
+  else if(state.dashboardSection==='audit')body=dashboardAuditHtml();
+  host.innerHTML=dashboardShellHtml(body);
+  bindDashboardNav();
+  bindDashboardSectionActions();
+}
+
+function dashboardOverviewHtml(){
+  const d=state.adminSnapshot||{},c=d.counts||{};
+  const cards=[
+    ['habitantes',c.users,'contas'],
+    ['online',c.online_now,'agora'],
+    ['denúncias',c.reports_open,'pendentes'],
+    ['alertas',c.alerts_open,'monitoramento'],
+    ['suspensos',c.suspended_users,'ativos'],
+    ['staff',c.staff,'membros']
+  ].map(x=>dashboardStat(...x)).join('');
+  const reports=(d.reports||[]).filter(x=>['aberto','em_analise','encaminhado'].includes(x.status)).slice(0,6);
+  const alerts=(d.alerts||[]).filter(x=>['novo','em_analise','encaminhado'].includes(x.status)).slice(0,6);
+  return dashboardHeader('DASHBOARD // VISÃO GERAL','Centro de controle','O que exige atenção sem transformar a rede numa central de paranoia.','<button id="dashboard-refresh">↻ atualizar</button>')+
+    '<div class="dashboard-stats-grid">'+cards+'</div>'+
+    '<div class="dashboard-two-col">'+
+      '<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Denúncias recentes</h3><button data-dashboard-jump="reports">abrir fila →</button></div>'+
+        (reports.map(r=>'<article class="dashboard-mini-row"><b>'+escapeHtml(String(r.reason||'denúncia'))+'</b><span>'+escapeHtml(r.reported_profile?.handle?'@'+r.reported_profile.handle:(r.post_id?'post':'conteúdo'))+'</span><em>'+escapeHtml(r.priority||'normal')+'</em><time>'+ago(r.created_at)+'</time></article>').join('')||dashboardEmpty('Nenhuma denúncia pendente.'))+
+      '</section>'+
+      '<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Alertas automáticos</h3><button data-dashboard-jump="moderation">abrir monitor →</button></div>'+
+        (alerts.map(a=>'<article class="dashboard-mini-row"><b>'+escapeHtml(a.matched_term||'termo')+'</b><span>'+escapeHtml(a.user_handle?'@'+a.user_handle:a.source_type)+'</span><em>'+escapeHtml(a.severity||'alta')+'</em><time>'+ago(a.created_at)+'</time></article>').join('')||dashboardEmpty('Nenhum alerta pendente.'))+
+      '</section>'+
+    '</div>'+
+    '<section class="dashboard-panel dashboard-privacy-note"><span class="section-code">PRIVACIDADE</span><p>Mensagens privadas de usuários não entram na dashboard. Moderação automática cobre conteúdo público e a Praça Central. O chat interno da equipe é separado.</p></section>';
+}
+
+function dashboardReportsHtml(){
+  const d=state.adminSnapshot||{},reports=d.reports||[],staff=d.staff||[];
+  return dashboardHeader('MODERAÇÃO // DENÚNCIAS','Fila de denúncias','Assuma, encaminhe, priorize e resolva. Moderador vê a fila; Senior e Owner podem redistribuir casos.')+
+    '<section class="dashboard-panel"><div class="staff-filter-row"><input id="report-filter" placeholder="filtrar por usuário, motivo ou texto"><select id="report-status-filter"><option value="">todos os status</option><option>aberto</option><option>em_analise</option><option>encaminhado</option><option>resolvido</option><option>descartado</option><option>arquivado</option></select></div>'+
+    '<div id="dashboard-report-list" class="dashboard-report-list">'+reports.map(r=>{
+      const target=r.reported_profile?.handle?'@'+r.reported_profile.handle:(r.post_id?'post '+String(r.post_id).slice(0,8):'conteúdo');
+      return '<article class="staff-report-card" data-report-search="'+escapeAttr([r.reason,r.details,target,r.status].join(' ').toLowerCase())+'" data-report-state="'+escapeAttr(r.status)+'">'+
+        '<header><div><b>'+escapeHtml(String(r.reason||'denúncia'))+'</b><small>'+escapeHtml(r.reporter?.handle?'por @'+r.reporter.handle:'reportante')+' · '+ago(r.created_at)+'</small></div>'+
+        '<span class="priority '+escapeAttr(r.priority||'normal')+'">'+escapeHtml(r.priority||'normal')+'</span></header>'+
+        '<p>'+escapeHtml(r.details||'sem detalhes')+'</p><div class="report-target">alvo: <b>'+escapeHtml(target)+'</b></div>'+
+        '<div class="report-controls"><select data-report-status="'+r.id+'">'+['aberto','em_analise','encaminhado','resolvido','descartado','arquivado'].map(v=>'<option value="'+v+'" '+(r.status===v?'selected':'')+'>'+v.replace('_',' ')+'</option>').join('')+'</select>'+
+        '<select data-report-priority="'+r.id+'">'+['baixa','normal','alta','critica'].map(v=>'<option value="'+v+'" '+(r.priority===v?'selected':'')+'>'+v+'</option>').join('')+'</select>'+
+        '<select data-report-assignee="'+r.id+'">'+staffUserSelect(staff,r.assigned_to)+'</select></div>'+
+        '<textarea data-report-note="'+r.id+'" maxlength="3000" placeholder="notas internas">'+escapeHtml(r.staff_notes||'')+'</textarea>'+
+        '<textarea data-report-resolution="'+r.id+'" maxlength="2000" placeholder="resolução / decisão">'+escapeHtml(r.resolution||'')+'</textarea>'+
+        '<footer><button data-report-save="'+r.id+'">salvar caso</button><button data-report-take="'+r.id+'">assumir</button><button data-report-forward="'+r.id+'">encaminhar</button></footer>'+
+      '</article>';
+    }).join('')+'</div></section>';
+}
+
+async function dashboardModerationHtml(){
+  const [snapRes]=await Promise.all([supabase.rpc('staff_moderation_content_snapshot')]);
+  const m=snapRes.data||{};
+  state.dashboardModeration=m;
+  const alerts=state.adminSnapshot?.alerts||[];
+  const contentGroup=(kind,label,rows)=>'<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>'+label+'</h3><small>'+rows.length+' recentes</small></div><div class="moderation-content-list">'+
+    (rows.map(row=>'<article class="moderation-content-row"><div><header><b>@'+escapeHtml(row.author_handle||'...')+'</b><time>'+ago(row.created_at)+'</time></header><p>'+escapeHtml(row.body||row.caption||'[mídia]')+'</p></div><button class="danger" data-staff-delete-kind="'+kind+'" data-staff-delete-id="'+row.id+'">apagar</button></article>').join('')||dashboardEmpty('Nada nesta categoria.'))+'</div></section>';
+  const alertCards=alerts.map(a=>'<article class="moderation-alert-card severity-'+escapeAttr(a.severity||'alta')+'"><header><b>'+escapeHtml(a.matched_term||'termo detectado')+'</b><span>'+escapeHtml(a.severity||'alta')+'</span><time>'+ago(a.created_at)+'</time></header><p>'+escapeHtml(a.excerpt||'sem trecho')+'</p><small>'+escapeHtml(a.source_type||'conteúdo')+' · '+escapeHtml(a.user_handle?'@'+a.user_handle:'sem perfil')+'</small><div><button data-alert-status="'+a.id+'" data-alert-value="em_analise">assumir</button><button data-alert-status="'+a.id+'" data-alert-value="resolvido">resolver</button><button data-alert-status="'+a.id+'" data-alert-value="ignorado">ignorar</button><button data-alert-status="'+a.id+'" data-alert-value="encaminhado">encaminhar</button></div></article>').join('');
+  return dashboardHeader('MODERAÇÃO // TEMPO REAL','Monitor público','Termos cadastrados são verificados no feed, respostas, stories e Praça Central. Mensagens privadas ficam fora.')+
+    '<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Alertas 24h</h3><small>'+alerts.length+' carregados</small></div><div class="moderation-alert-list">'+(alertCards||dashboardEmpty('Nenhum alerta.'))+'</div></section>'+
+    '<div class="moderation-grid">'+
+      contentGroup('post','Publicações',m.posts||[])+
+      contentGroup('response','Respostas',m.responses||[])+
+      contentGroup('photo','Fotos',m.photos||[])+
+      contentGroup('story','Stories',m.stories||[])+
+      contentGroup('plaza','Praça Central',m.plaza||[])+
+    '</div>';
+}
+
+function dashboardTermsHtml(){
+  const terms=state.adminSnapshot?.terms||[];
+  return dashboardHeader('MONITOR // PALAVRAS & FRASES','Termos monitorados','A lista dispara alertas em conteúdo público. Contexto ainda exige revisão humana; substring não é juiz.')+
+    '<section class="dashboard-panel term-editor"><div class="term-editor-grid">'+
+      '<input id="term-text" maxlength="160" placeholder="termo ou frase">'+
+      '<select id="term-category"><option>racismo</option><option>homofobia</option><option>transfobia</option><option>xenofobia</option><option>ameaca</option><option>crime</option><option>assedio</option><option>spam</option><option>outro</option></select>'+
+      '<select id="term-severity"><option>baixa</option><option selected>media</option><option>alta</option><option>critica</option></select>'+
+      '<input id="term-notes" maxlength="500" placeholder="nota interna / contexto">'+
+      '<label><input id="term-enabled" type="checkbox" checked> ativo</label>'+
+      '<button id="term-save">＋ adicionar termo</button></div></section>'+
+    '<section class="dashboard-panel"><div class="dashboard-term-list">'+terms.map(t=>'<article><div><b>'+escapeHtml(t.term)+'</b><small>'+escapeHtml(t.category)+' · '+escapeHtml(t.severity)+' · '+(t.enabled?'ATIVO':'PAUSADO')+'</small><p>'+escapeHtml(t.notes||'')+'</p></div><div><button data-term-edit="'+t.id+'">editar</button><button class="danger" data-term-delete="'+t.id+'">apagar</button></div></article>').join('')+'</div></section>';
+}
+
+function dashboardUsersHtml(){
+  const users=state.adminSnapshot?.users||[];
+  const role=state.adminRole;
+  return dashboardHeader('USUÁRIOS // AÇÕES','Contas e medidas','Ban temporário ou permanente exige motivo. Notificações chegam diretamente ao usuário.')+
+    '<section class="dashboard-panel"><div class="staff-filter-row"><input id="user-filter" placeholder="buscar nome ou @"><small>'+users.length+' perfis carregados</small></div>'+
+    '<div id="dashboard-user-list" class="dashboard-user-list">'+users.map(u=>{
+      const canAct=staffRoleRank(u.staff_role)<staffRoleRank(role)&&u.id!==state.profile.id;
+      return '<article class="dashboard-user-card '+(u.suspended?'is-banned':'')+'" data-user-search="'+escapeAttr(((u.display_name||'')+' '+(u.handle||'')).toLowerCase())+'">'+
+        '<button class="user-core" data-profile-id="'+u.id+'"><span class="mini-avatar">'+avatarHtml(u.avatar_url,u.display_name||'?')+'</span><span><b>'+identityNameHtml(u.id,u.display_name||'sem nome')+'</b><small>@'+escapeHtml(u.handle||'...')+'</small></span></button>'+
+        '<div class="user-state"><span>'+escapeHtml(u.staff_role?staffRoleLabel(u.staff_role):'usuário')+'</span><em>'+(u.suspended?'BANIDO':'ativo')+'</em></div>'+
+        '<div class="user-actions"><button data-user-notice="'+u.id+'">notificar</button>'+
+          (canAct?(u.suspended?'<button data-user-unban="'+u.id+'">reativar</button>':'<button class="danger" data-user-ban="'+u.id+'">banir / suspender</button>'):'')+
+        '</div>'+
+        (u.suspended?'<p class="ban-reason">'+escapeHtml(u.suspension_reason||'sem motivo registrado')+(u.suspended_until?' · até '+new Date(u.suspended_until).toLocaleString('pt-BR'):' · permanente')+'</p>':'')+
+      '</article>';
+    }).join('')+'</div></section>';
+}
+
+function dashboardStaffHtml(){
+  const staff=state.adminSnapshot?.staff||[];
+  const warnings=state.adminSnapshot?.warnings||[];
+  return dashboardHeader('EQUIPE // HIERARQUIA','Gerência da Staff','Administrador-Sênior gerencia Moderadores. O Owner gerencia toda a cadeia.')+
+    '<section class="dashboard-panel"><div class="dashboard-staff-list">'+staff.map(u=>{
+      const canManage=staffRoleRank(state.adminRole)>staffRoleRank(u.role)&&u.id!==state.profile.id;
+      const roleSelect=state.adminRole==='owner'
+        ?'<select data-staff-role="'+u.id+'"><option value="none">usuário</option><option value="moderator" '+(u.role==='moderator'?'selected':'')+'>Moderador</option><option value="senior_admin" '+(u.role==='senior_admin'?'selected':'')+'>Administrador-Sênior</option><option value="owner" '+(u.role==='owner'?'selected':'')+'>Administrador Geral</option></select>'
+        :(canManage?'<select data-staff-role="'+u.id+'"><option value="moderator" selected>Moderador</option><option value="none">remover da Staff</option></select>':'');
+      return '<article><div class="staff-member-core"><span class="mini-avatar">'+avatarHtml(u.avatar_url,u.display_name||'?')+'</span><div><b>'+identityNameHtml(u.id,u.display_name||'sem nome')+'</b><small>@'+escapeHtml(u.handle||'...')+' · '+escapeHtml(staffRoleLabel(u.role))+'</small></div></div><div class="staff-member-actions">'+roleSelect+(canManage?'<button data-staff-warn="'+u.id+'">advertir</button>':'')+'</div><small class="warning-count">'+escapeHtml(String(u.warnings||0))+' advertência(s) ativa(s)</small></article>';
+    }).join('')+'</div></section>'+
+    '<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Advertências</h3></div><div class="staff-warning-list">'+(warnings.map(w=>'<article><b>@'+escapeHtml(w.staff_handle||'...')+'</b><span>'+escapeHtml(w.severity||'aviso')+'</span><p>'+escapeHtml(w.reason||'')+'</p><small>por @'+escapeHtml(w.issuer_handle||'...')+' · '+ago(w.created_at)+'</small></article>').join('')||dashboardEmpty('Nenhuma advertência registrada.'))+'</div></section>';
+}
+
+async function dashboardStaffChatHtml(){
+  const staff=state.adminSnapshot?.staff||[];
+  const role=state.adminRole;
+  const channel=state.staffChatChannel||'all';
+  let query=supabase.from('staff_chat_messages').select('id,sender_id,recipient_id,channel,body,created_at').order('created_at',{ascending:true}).limit(180);
+  if(channel.startsWith('direct:')){
+    const peer=channel.slice(7);
+    query=query.eq('channel','direct').or('sender_id.eq.'+peer+',recipient_id.eq.'+peer);
+  }else query=query.eq('channel',channel);
+  const {data:messages}=await query;
+  const profiles=Object.fromEntries(staff.map(x=>[x.id,x]));
+  const channels=[
+    ['all','todos'],
+    ['moderators','moderadores'],
+    ...(staffRoleRank(role)>=20?[['senior','administração sênior']]:[])
+  ];
+  return dashboardHeader('STAFF.MSG // INTERNO','Chat da equipe','Canais internos por escopo. Conversas diretas ficam visíveis apenas aos participantes.')+
+    '<section class="dashboard-panel staff-chat-panel"><div class="staff-chat-channels">'+channels.map(([id,label])=>'<button class="'+(channel===id?'active':'')+'" data-staff-chat-channel="'+id+'">'+escapeHtml(label)+'</button>').join('')+
+      '<select id="staff-direct-select"><option value="">conversa direta...</option>'+staff.filter(x=>x.id!==state.profile.id).map(x=>'<option value="'+x.id+'" '+(channel==='direct:'+x.id?'selected':'')+'>@'+escapeHtml(x.handle)+' · '+escapeHtml(staffRoleLabel(x.role))+'</option>').join('')+'</select></div>'+
+    '<div id="staff-chat-log" class="staff-chat-log">'+(messages||[]).map(m=>{const p=profiles[m.sender_id]||{};return '<article class="'+(m.sender_id===state.profile.id?'mine':'')+'"><header><b>'+identityNameHtml(m.sender_id,p.display_name||p.handle||'staff')+'</b><small>@'+escapeHtml(p.handle||'...')+' · '+ago(m.created_at)+'</small></header><p>'+escapeHtml(m.body)+'</p></article>';}).join('')+'</div>'+
+    '<form id="staff-chat-form" class="staff-chat-form"><textarea id="staff-chat-input" maxlength="1200" placeholder="mensagem interna..."></textarea><button>enviar</button></form></section>';
+}
+
+function dashboardAppearanceHtml(){
+  const s=state.adminSnapshot?.site||state.siteSettings||{};
+  const colors=[
+    ['bg','Fundo',s.color_bg||'#090b0c'],['panel','Painel',s.color_panel||'#111517'],['panel2','Painel 2',s.color_panel2||'#191f21'],
+    ['ink','Texto',s.color_ink||'#f5f3e8'],['muted','Texto discreto',s.color_muted||'#8e9999'],['line','Linhas',s.color_line||'#293235'],
+    ['acid','Ácido',s.color_acid||'#d8ff3e'],['cyan','Ciano',s.color_cyan||'#22d9ee'],['coral','Coral',s.color_coral||'#ff5c4d'],['violet','Violeta',s.color_violet||'#9b7cff']
+  ];
+  const feed=s.feed_settings||{},stories=s.story_settings||{},login=s.login_settings||{},layout=s.layout_settings||{};
+  return dashboardHeader('OWNER // APARÊNCIA & RUNTIME','Controle global','Tema, registro/login, feed, stories, layout e CSS global. Salvar afeta a rede inteira.')+
+    '<section class="dashboard-panel"><div class="owner-settings-grid"><label>Nome<input id="owner-site-name" value="'+escapeAttr(s.site_name||'AVESSO')+'"></label><label>Tagline<input id="owner-site-tagline" value="'+escapeAttr(s.tagline||'menos palco, mais presença')+'"></label><label class="wide">Aviso global<textarea id="owner-announcement">'+escapeHtml(s.announcement||'')+'</textarea></label></div>'+
+    '<div class="owner-color-grid">'+colors.map(([id,label,value])=>'<label><span>'+label+'</span><input id="owner-color-'+id+'" type="color" value="'+escapeAttr(value)+'"></label>').join('')+'</div>'+
+    '<div class="owner-runtime-grid">'+
+      '<label><input id="owner-login-registration" type="checkbox" '+(login.registration_enabled!==false?'checked':'')+'> permitir novos cadastros</label>'+
+      '<label><input id="owner-story-enabled" type="checkbox" '+(stories.enabled!==false?'checked':'')+'> stories ativos</label>'+
+      '<label><input id="owner-story-camera" type="checkbox" '+(stories.camera_enabled!==false?'checked':'')+'> câmera nos stories</label>'+
+      '<label>posts por página<input id="owner-feed-size" type="number" min="10" max="100" value="'+escapeAttr(feed.page_size||40)+'"></label>'+
+      '<label><input id="owner-feed-attention" type="checkbox" '+(feed.show_attention_tag!==false?'checked':'')+'> etiqueta “precisa de atenção”</label>'+
+      '<label>densidade<select id="owner-layout-density"><option value="compact" '+(layout.density==='compact'?'selected':'')+'>compacta</option><option value="comfortable" '+(layout.density==='comfortable'?'selected':'')+'>confortável</option></select></label>'+
+    '</div>'+
+    '<label class="owner-css-field">CSS GLOBAL<textarea id="owner-custom-css" spellcheck="false">'+escapeHtml(s.custom_css||'')+'</textarea><small>Controle visual completo. JavaScript e credenciais continuam fora daqui porque incêndio não é recurso premium.</small></label>'+
+    '<div class="dashboard-save-row"><button id="owner-save-appearance">salvar tema e cores</button><button id="owner-save-runtime">salvar feed / stories / login / layout</button></div></section>';
+}
+
+function dashboardContentHtml(){
+  const blocks=state.adminSnapshot?.content_blocks||[];
+  const overrides=state.adminSnapshot?.site_overrides||[];
+  return dashboardHeader('OWNER // CMS','Páginas & conteúdo','Edite blocos de texto, imagem, links e substituições de interface sem reconstruir o site.')+
+    '<section class="dashboard-panel"><div class="content-block-editor"><input id="content-page" placeholder="página: landing" value="landing"><input id="content-key" placeholder="chave: hero.title"><select id="content-kind"><option>text</option><option>html</option><option>image</option><option>link</option><option>json</option></select><textarea id="content-value" placeholder="conteúdo"></textarea><label><input id="content-enabled" type="checkbox" checked> ativo</label><input id="content-sort" type="number" value="100"><button id="content-save">＋ salvar bloco</button></div></section>'+
+    '<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Blocos cadastrados</h3><small>'+blocks.length+'</small></div><div class="content-block-list">'+blocks.map(b=>'<article><div><b>'+escapeHtml(b.page_slug)+' // '+escapeHtml(b.block_key)+'</b><small>'+escapeHtml(b.kind)+' · '+(b.enabled?'ativo':'pausado')+'</small><p>'+escapeHtml(String(b.value||'').slice(0,240))+'</p></div><div><button data-content-edit="'+b.id+'">editar</button><button class="danger" data-content-delete="'+b.id+'">apagar</button></div></article>').join('')+'</div></section>'+
+    '<section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Overrides de layout</h3><small>'+overrides.length+'</small></div><p class="dashboard-hint">Use o CSS global para alterações livres. Overrides existentes continuam listados para auditoria.</p><div class="override-list">'+overrides.map(o=>'<article><b>'+escapeHtml(o.page)+' · '+escapeHtml(o.selector)+'</b><small>'+escapeHtml(o.action)+'</small><code>'+escapeHtml(o.value)+'</code></article>').join('')+'</div></section>';
+}
+
+function dashboardAssetsHtml(){
+  const assets=state.adminSnapshot?.assets||[];
+  return dashboardHeader('OWNER // ASSETS','Mídia do sistema','Envie wallpapers, emoticons, avatares, emblemas, imagens dos habitantes e elementos de interface.')+
+    '<section class="dashboard-panel"><div class="asset-uploader"><select id="asset-type"><option>wallpaper</option><option>emoticon</option><option>avatar</option><option>badge</option><option>character</option><option>ui</option><option>other</option></select><input id="asset-name" placeholder="nome"><input id="asset-slug" placeholder="slug"><input id="asset-shortcode" placeholder="shortcode opcional"><input id="asset-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"><button id="asset-upload">enviar para o banco</button></div></section>'+
+    '<section class="dashboard-panel"><div class="asset-grid">'+assets.map(a=>'<article><img src="'+escapeAttr(adminAssetUrl(a.storage_path))+'" alt=""><div><b>'+escapeHtml(a.name)+'</b><small>'+escapeHtml(a.asset_type)+' · '+escapeHtml(a.slug)+'</small><code>'+escapeHtml(a.shortcode||'')+'</code></div><button class="danger" data-asset-delete="'+a.id+'" data-asset-path="'+escapeAttr(a.storage_path)+'">apagar</button></article>').join('')+'</div></section>';
+}
+
+function dashboardBadgesHtml(){
+  const d=state.adminSnapshot||{},assets=(d.assets||[]).filter(a=>a.asset_type==='badge'),badges=d.badges||[],users=d.users||[],assigned=d.user_badges||[];
+  return dashboardHeader('OWNER // EMBLEMAS','Emblemas dos usuários','Envie qualquer imagem suportada como asset de badge, transforme-a em emblema e atribua a um perfil.')+
+    '<section class="dashboard-panel"><div class="badge-create-row"><select id="badge-asset"><option value="">imagem do emblema...</option>'+assets.map(a=>'<option value="'+a.storage_path+'">'+escapeHtml(a.name)+'</option>').join('')+'</select><input id="badge-name" placeholder="nome do emblema"><input id="badge-slug" placeholder="slug"><input id="badge-description" placeholder="descrição"><button id="badge-create">criar emblema</button></div></section>'+
+    '<section class="dashboard-panel"><div class="badge-assign-row"><select id="badge-user"><option value="">usuário...</option>'+users.map(u=>'<option value="'+u.id+'">@'+escapeHtml(u.handle)+' · '+escapeHtml(u.display_name)+'</option>').join('')+'</select><select id="badge-id"><option value="">emblema...</option>'+badges.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select><button id="badge-grant">atribuir</button><button id="badge-revoke">remover</button></div>'+
+    '<div class="badge-catalog">'+badges.map(b=>'<article><img src="'+escapeAttr(adminAssetUrl(b.image_path)||b.image_path)+'" alt=""><b>'+escapeHtml(b.name)+'</b><small>'+escapeHtml(b.description||'')+'</small><em>'+assigned.filter(x=>x.badge_id===b.id).length+' usuário(s)</em></article>').join('')+'</div></section>';
+}
+
+function dashboardCharactersHtml(){
+  const d=state.adminSnapshot||{},chars=d.characters||[],dialogues=d.dialogues||[];
+  return dashboardHeader('OWNER // HABITANTES','Personalidade, IA e repertório','Controle imagem, identidade, raridade, atividade, personalidade, prompt, modelo e frases de cada habitante.')+
+    '<div class="character-admin-grid">'+chars.map(c=>{
+      const ai=c.ai_profile||{};
+      const lines=dialogues.filter(x=>x.character_id===c.id);
+      return '<section class="dashboard-panel character-admin-card" data-character-card="'+c.id+'">'+
+        '<header><img src="'+escapeAttr(c.avatar_url||c.image_path||'')+'" alt=""><div><span class="section-code">'+escapeHtml(c.slug)+'</span><h3>'+escapeHtml(c.name)+'</h3><small>'+escapeHtml(c.role)+'</small></div></header>'+
+        '<div class="character-editor-grid"><label>nome<input data-char-name value="'+escapeAttr(c.name)+'"></label><label>papel<input data-char-role value="'+escapeAttr(c.role)+'"></label><label>cor<input data-char-color type="color" value="'+escapeAttr(c.accent_color||'#d8ff3e')+'"></label><label>imagem URL<input data-char-avatar value="'+escapeAttr(c.avatar_url||'')+'"></label><label>local<input data-char-home value="'+escapeAttr(c.home_location||'Praça Central')+'"></label><label>raridade<input data-char-rarity type="number" min="1" max="1000" value="'+escapeAttr(c.rarity||50)+'"></label><label>estado<select data-char-presence>'+['idle','working','wandering','observing','missing','event','offline'].map(v=>'<option '+(c.presence_state===v?'selected':'')+'>'+v+'</option>').join('')+'</select></label><label><input data-char-active type="checkbox" '+(c.is_active?'checked':'')+'> ativo</label><label><input data-char-ai-enabled type="checkbox" '+(c.ai_enabled?'checked':'')+'> IA ativa</label></div>'+
+        '<label>bio<textarea data-char-bio>'+escapeHtml(c.bio||'')+'</textarea></label><label>personalidade<textarea data-char-personality>'+escapeHtml(c.personality||'')+'</textarea></label><button data-char-save="'+c.id+'">salvar habitante</button>'+
+        '<details><summary>IA do habitante</summary><div class="character-ai-editor"><label>modelo<input data-ai-model value="'+escapeAttr(ai.model||'gpt-5.6-luna')+'"></label><label>resumo da persona<textarea data-ai-summary>'+escapeHtml(ai.persona_summary||'')+'</textarea></label><label>system prompt<textarea data-ai-prompt>'+escapeHtml(ai.system_prompt||'')+'</textarea></label><label>regras de comportamento JSON<textarea data-ai-behavior>'+escapeHtml(JSON.stringify(ai.behavior_rules||{},null,2))+'</textarea></label><label>regras de voz JSON<textarea data-ai-voice>'+escapeHtml(JSON.stringify(ai.voice_rules||{},null,2))+'</textarea></label><label>máx. caracteres<input data-ai-max type="number" min="80" max="1200" value="'+escapeAttr(ai.max_output_chars||420)+'"></label><label><input data-ai-enabled type="checkbox" '+(ai.ai_enabled?'checked':'')+'> IA deste perfil ativa</label><button data-ai-save="'+c.id+'">salvar IA</button></div></details>'+
+        '<details><summary>Frases ('+lines.length+')</summary><div class="character-dialogues">'+lines.map(l=>'<article><b>'+escapeHtml(l.context)+'</b><p>'+escapeHtml(l.body)+'</p><small>peso '+l.weight+' · '+(l.enabled?'ativo':'pausado')+'</small><button class="danger" data-dialogue-delete="'+l.id+'">apagar</button></article>').join('')+'<div class="dialogue-new"><input data-dialogue-context placeholder="contexto_exemplo"><textarea data-dialogue-body maxlength="420" placeholder="nova frase"></textarea><input data-dialogue-weight type="number" value="1" min="1" max="100"><button data-dialogue-add="'+c.id+'">＋ adicionar frase</button></div></div></details>'+
+      '</section>';
+    }).join('')+'</div>';
+}
+
+async function dashboardDatabaseHtml(){
+  const {data,error}=await supabase.rpc('owner_database_snapshot');
+  const db=data||{};
+  if(error)return dashboardHeader('OWNER // BANCO','Banco de dados','Falha ao consultar o snapshot estrutural.')+'<div class="admin-error">'+escapeHtml(error.message||'erro')+'</div>';
+  return dashboardHeader('OWNER // BANCO','Banco de dados','Visão estrutural segura do Supabase. Operações destrutivas permanecem em RPCs auditadas; não exponho uma service-role nem SQL arbitrário no navegador.')+
+    '<div class="dashboard-stats-grid">'+dashboardStat('funções',db.functions,'public')+dashboardStat('políticas',db.policies,'RLS')+dashboardStat('objetos storage',db.storage_objects,'arquivos')+dashboardStat('storage',Math.round((db.storage_bytes||0)/1024/1024)+' MB','aprox.')+'</div>'+
+    '<section class="dashboard-panel"><div class="db-table-grid">'+(db.tables||[]).map(t=>'<article><header><b>'+escapeHtml(t.name)+'</b><span class="'+(t.rls?'ok':'warn')+'">'+(t.rls?'RLS':'SEM RLS')+'</span></header><strong>'+escapeHtml(String(t.estimated_rows))+'</strong><small>linhas estimadas · '+escapeHtml(String(t.policies))+' políticas · '+Math.round((t.size_bytes||0)/1024)+' KB</small></article>').join('')+'</div></section>';
+}
+
+function dashboardAuditHtml(){
+  const rows=state.adminSnapshot?.audit||[];
+  return dashboardHeader('OWNER // AUDITORIA','Registro administrativo','Quem fez o quê, em qual alvo e quando. Porque “ninguém mexeu nisso” é uma tradição corporativa antiga.')+
+    '<section class="dashboard-panel"><div class="admin-audit-list">'+(rows.map(adminAuditRow).join('')||dashboardEmpty('Nenhuma ação registrada.'))+'</div></section>';
+}
+
+function bindDashboardSectionActions(){
+  $('#dashboard-refresh')?.addEventListener('click',()=>renderStaffDashboard({reload:true}));
+  $$('[data-dashboard-jump]').forEach(b=>b.onclick=()=>{state.dashboardSection=b.dataset.dashboardJump;renderStaffDashboard({reload:false});});
+
+  const reportFilter=$('#report-filter'),reportStatus=$('#report-status-filter');
+  const filterReports=()=>{$$('#dashboard-report-list .staff-report-card').forEach(card=>{const q=(reportFilter?.value||'').toLowerCase(),st=reportStatus?.value||'';card.classList.toggle('hidden',Boolean(q&&!card.dataset.reportSearch.includes(q)||st&&card.dataset.reportState!==st));});};
+  if(reportFilter)reportFilter.oninput=filterReports;if(reportStatus)reportStatus.onchange=filterReports;
+  $$('[data-report-take]').forEach(b=>b.onclick=()=>dashboardTakeReport(b.dataset.reportTake));
+  $$('[data-report-save]').forEach(b=>b.onclick=()=>dashboardSaveReport(b.dataset.reportSave));
+  $$('[data-report-forward]').forEach(b=>b.onclick=()=>dashboardForwardReport(b.dataset.reportForward));
+
+  $$('[data-alert-status]').forEach(b=>b.onclick=()=>dashboardResolveAlert(b.dataset.alertStatus,b.dataset.alertValue));
+  $$('[data-staff-delete-kind]').forEach(b=>b.onclick=()=>dashboardDeleteContent(b.dataset.staffDeleteKind,b.dataset.staffDeleteId));
+
+  $('#term-save')?.addEventListener('click',()=>dashboardSaveTerm());
+  $$('[data-term-edit]').forEach(b=>b.onclick=()=>dashboardEditTerm(b.dataset.termEdit));
+  $$('[data-term-delete]').forEach(b=>b.onclick=()=>dashboardDeleteTerm(b.dataset.termDelete));
+
+  const userFilter=$('#user-filter');if(userFilter)userFilter.oninput=()=>{$$('#dashboard-user-list .dashboard-user-card').forEach(card=>card.classList.toggle('hidden',!card.dataset.userSearch.includes(userFilter.value.toLowerCase())));};
+  $$('[data-user-ban]').forEach(b=>b.onclick=()=>dashboardBanUser(b.dataset.userBan));
+  $$('[data-user-unban]').forEach(b=>b.onclick=()=>dashboardUnbanUser(b.dataset.userUnban));
+  $$('[data-user-notice]').forEach(b=>b.onclick=()=>dashboardNotifyUser(b.dataset.userNotice));
+
+  $$('[data-staff-role]').forEach(s=>s.onchange=()=>dashboardSetStaffRole(s.dataset.staffRole,s.value));
+  $$('[data-staff-warn]').forEach(b=>b.onclick=()=>dashboardWarnStaff(b.dataset.staffWarn));
+
+  $$('[data-staff-chat-channel]').forEach(b=>b.onclick=()=>{state.staffChatChannel=b.dataset.staffChatChannel;renderStaffDashboard({reload:false});});
+  $('#staff-direct-select')?.addEventListener('change',e=>{if(e.target.value){state.staffChatChannel='direct:'+e.target.value;renderStaffDashboard({reload:false});}});
+  $('#staff-chat-form')?.addEventListener('submit',e=>{e.preventDefault();dashboardSendStaffChat();});
+
+  $('#owner-save-appearance')?.addEventListener('click',dashboardSaveAppearance);
+  $('#owner-save-runtime')?.addEventListener('click',dashboardSaveRuntime);
+
+  $('#content-save')?.addEventListener('click',()=>dashboardSaveContentBlock());
+  $$('[data-content-edit]').forEach(b=>b.onclick=()=>dashboardEditContentBlock(b.dataset.contentEdit));
+  $$('[data-content-delete]').forEach(b=>b.onclick=()=>dashboardDeleteContentBlock(b.dataset.contentDelete));
+
+  $('#asset-upload')?.addEventListener('click',dashboardUploadAsset);
+  $$('[data-asset-delete]').forEach(b=>b.onclick=()=>dashboardDeleteAsset(b.dataset.assetDelete,b.dataset.assetPath));
+
+  $('#badge-create')?.addEventListener('click',dashboardCreateBadge);
+  $('#badge-grant')?.addEventListener('click',()=>dashboardGrantBadge(true));
+  $('#badge-revoke')?.addEventListener('click',()=>dashboardGrantBadge(false));
+
+  $$('[data-char-save]').forEach(b=>b.onclick=()=>dashboardSaveCharacter(b));
+  $$('[data-ai-save]').forEach(b=>b.onclick=()=>dashboardSaveCharacterAi(b));
+  $$('[data-dialogue-add]').forEach(b=>b.onclick=()=>dashboardAddDialogue(b));
+  $$('[data-dialogue-delete]').forEach(b=>b.onclick=()=>dashboardDeleteDialogue(b.dataset.dialogueDelete));
+}
+
+async function dashboardTakeReport(id){
+  const {error}=await supabase.rpc('staff_assign_report',{p_report_id:id,p_assignee:state.profile.id});
+  if(error)return toast('Não foi possível assumir a denúncia.');
+  toast('Denúncia atribuída a você.');await renderStaffDashboard({reload:true});
+}
+async function dashboardSaveReport(id){
+  const status=$('[data-report-status="'+CSS.escape(id)+'"]')?.value||'em_analise';
+  const priority=$('[data-report-priority="'+CSS.escape(id)+'"]')?.value||'normal';
+  const assigned=$('[data-report-assignee="'+CSS.escape(id)+'"]')?.value||null;
+  const notes=$('[data-report-note="'+CSS.escape(id)+'"]')?.value||'';
+  const resolution=$('[data-report-resolution="'+CSS.escape(id)+'"]')?.value||'';
+  const {error}=await supabase.rpc('staff_update_report',{p_report_id:id,p_status:status,p_assigned_to:assigned||null,p_priority:priority,p_staff_notes:notes,p_resolution:resolution});
+  if(error)return toast('Não foi possível salvar o caso.');
+  toast('Caso atualizado.');await renderStaffDashboard({reload:true});
+}
+async function dashboardForwardReport(id){
+  const staff=state.adminSnapshot?.staff||[];
+  const options=staff.filter(x=>x.id!==state.profile.id).map((x,i)=>(i+1)+'. @'+x.handle+' · '+staffRoleLabel(x.role)).join('\n');
+  const pick=prompt('Encaminhar para qual número?\n'+options);
+  const target=staff[Number(pick)-1];
+  if(!target)return;
+  const note=prompt('Nota do encaminhamento:','caso encaminhado para revisão')||'';
+  const {error}=await supabase.rpc('staff_forward_report',{p_report_id:id,p_assignee:target.id,p_note:note});
+  if(error)return toast('O encaminhamento falhou.');
+  toast('Denúncia encaminhada.');await renderStaffDashboard({reload:true});
+}
+async function dashboardResolveAlert(id,status){
+  const resolution=status==='resolvido'?prompt('Resolução do alerta:','revisado pela moderação')||'':'';
+  const {error}=await supabase.rpc('staff_resolve_alert',{p_id:id,p_status:status,p_resolution:resolution});
+  if(error)return toast('O alerta não foi atualizado.');
+  toast('Alerta atualizado.');await renderStaffDashboard({reload:true});
+}
+async function dashboardDeleteContent(kind,id){
+  if(!confirm('Apagar este conteúdo público? A ação será auditada.'))return;
+  const {error}=await supabase.rpc('staff_delete_public_content',{p_kind:kind,p_id:id});
+  if(error)return toast('Não foi possível remover o conteúdo.');
+  toast('Conteúdo removido.');await renderStaffDashboard({reload:true});
+}
+async function dashboardSaveTerm(id=null){
+  const term=$('#term-text')?.value.trim()||'',category=$('#term-category')?.value||'outro',severity=$('#term-severity')?.value||'media',notes=$('#term-notes')?.value||'',enabled=Boolean($('#term-enabled')?.checked);
+  if(term.length<2)return toast('O termo precisa ter ao menos 2 caracteres.');
+  const {error}=await supabase.rpc('staff_upsert_moderation_term',{p_id:id,p_term:term,p_category:category,p_severity:severity,p_enabled:enabled,p_notes:notes});
+  if(error)return toast('Não foi possível salvar o termo.');
+  toast('Termo monitorado salvo.');await renderStaffDashboard({reload:true});
+}
+function dashboardEditTerm(id){
+  const t=(state.adminSnapshot?.terms||[]).find(x=>x.id===id);if(!t)return;
+  $('#term-text').value=t.term;$('#term-category').value=t.category;$('#term-severity').value=t.severity;$('#term-notes').value=t.notes||'';$('#term-enabled').checked=t.enabled;
+  const btn=$('#term-save');btn.textContent='salvar alteração';btn.onclick=()=>dashboardSaveTerm(id);
+  $('#term-text').focus();
+}
+async function dashboardDeleteTerm(id){
+  if(!confirm('Remover este termo da monitoração?'))return;
+  const {error}=await supabase.rpc('staff_delete_moderation_term',{p_id:id});
+  if(error)return toast('Não foi possível remover o termo.');
+  await renderStaffDashboard({reload:true});
+}
+async function dashboardBanUser(userId){
+  const reason=prompt('Motivo obrigatório do banimento/suspensão:','')||'';if(reason.trim().length<2)return;
+  const mode=prompt('Digite PERMANENTE ou a quantidade de horas (ex.: 24, 72, 168):','24')||'';
+  let until=null;
+  if(mode.trim().toUpperCase()!=='PERMANENTE'){
+    const hours=Number(mode);if(!Number.isFinite(hours)||hours<=0)return toast('Duração inválida.');
+    until=new Date(Date.now()+hours*3600000).toISOString();
+  }
+  const {error}=await supabase.rpc('staff_set_user_ban',{p_user_id:userId,p_banned:true,p_reason:reason,p_until:until});
+  if(error)return toast('O banimento foi recusado pela hierarquia ou pelo banco.');
+  toast(until?'Suspensão temporária aplicada.':'Banimento permanente aplicado.');await renderStaffDashboard({reload:true});
+}
+async function dashboardUnbanUser(userId){
+  const {error}=await supabase.rpc('staff_set_user_ban',{p_user_id:userId,p_banned:false,p_reason:'reativado pela equipe',p_until:null});
+  if(error)return toast('Não foi possível reativar.');
+  toast('Conta reativada.');await renderStaffDashboard({reload:true});
+}
+async function dashboardNotifyUser(userId){
+  const title=prompt('Título da notificação:','Mensagem da equipe AVESSO')||'';if(!title.trim())return;
+  const body=prompt('Mensagem para o usuário:','')||'';if(!body.trim())return;
+  const severity=prompt('Severidade: info, aviso, moderacao ou critico','aviso')||'aviso';
+  const {error}=await supabase.rpc('staff_send_user_notice',{p_user_id:userId,p_title:title,p_body:body,p_severity:severity});
+  if(error)return toast('A notificação não foi enviada.');
+  toast('Notificação enviada diretamente ao usuário.');
+}
+async function dashboardSetStaffRole(userId,role){
+  if(!confirm('Alterar cargo deste usuário para "'+role+'"?')){await renderStaffDashboard({reload:false});return;}
+  const {error}=await supabase.rpc('staff_set_role',{p_user_id:userId,p_role:role});
+  if(error)return toast('A hierarquia recusou essa alteração.');
+  toast('Cargo atualizado.');await loadIdentityMetadata();await renderStaffDashboard({reload:true});
+}
+async function dashboardWarnStaff(userId){
+  const reason=prompt('Motivo da advertência:','')||'';if(reason.trim().length<2)return;
+  const severity=prompt('Severidade: aviso, grave ou critico','aviso')||'aviso';
+  const {error}=await supabase.rpc('staff_warn_staff',{p_user_id:userId,p_reason:reason,p_severity:severity});
+  if(error)return toast('A advertência não foi aplicada.');
+  toast('Advertência registrada.');await renderStaffDashboard({reload:true});
+}
+async function dashboardSendStaffChat(){
+  const body=$('#staff-chat-input')?.value.trim()||'';if(!body)return;
+  const current=state.staffChatChannel||'all';
+  const direct=current.startsWith('direct:');
+  const recipient=direct?current.slice(7):null;
+  const channel=direct?'direct':current;
+  const {error}=await supabase.from('staff_chat_messages').insert({sender_id:state.profile.id,recipient_id:recipient,channel,body});
+  if(error)return toast('A mensagem interna não foi enviada.');
+  await renderStaffDashboard({reload:false});
+}
+async function dashboardSaveAppearance(){
+  const g=id=>$('#owner-color-'+id)?.value;
+  const args={
+    p_site_name:$('#owner-site-name')?.value||'AVESSO',p_tagline:$('#owner-site-tagline')?.value||'',
+    p_color_bg:g('bg'),p_color_panel:g('panel'),p_color_panel2:g('panel2'),p_color_ink:g('ink'),p_color_muted:g('muted'),
+    p_color_line:g('line'),p_color_acid:g('acid'),p_color_cyan:g('cyan'),p_color_coral:g('coral'),p_color_violet:g('violet'),
+    p_custom_css:$('#owner-custom-css')?.value||'',p_announcement:$('#owner-announcement')?.value||''
+  };
+  const {data,error}=await supabase.rpc('admin_update_site_settings',args);
+  if(error)return toast('Não foi possível salvar a aparência.');
+  state.siteSettings=data||state.siteSettings;applySiteSettings(state.siteSettings);toast('Aparência salva globalmente.');await renderStaffDashboard({reload:true});
+}
+async function dashboardSaveRuntime(){
+  const feed={page_size:Math.max(10,Math.min(100,Number($('#owner-feed-size')?.value)||40)),show_attention_tag:Boolean($('#owner-feed-attention')?.checked)};
+  const stories={enabled:Boolean($('#owner-story-enabled')?.checked),camera_enabled:Boolean($('#owner-story-camera')?.checked)};
+  const login={registration_enabled:Boolean($('#owner-login-registration')?.checked)};
+  const layout={density:$('#owner-layout-density')?.value||'compact'};
+  const {data,error}=await supabase.rpc('owner_update_runtime_settings',{p_feed_settings:feed,p_story_settings:stories,p_login_settings:login,p_layout_settings:layout});
+  if(error)return toast('Configurações de runtime não foram salvas.');
+  state.siteSettings=data||state.siteSettings;toast('Feed, stories, login e layout atualizados.');await renderStaffDashboard({reload:true});
+}
+async function dashboardSaveContentBlock(id=null){
+  const page=$('#content-page')?.value.trim()||'',key=$('#content-key')?.value.trim()||'',kind=$('#content-kind')?.value||'text',value=$('#content-value')?.value||'',enabled=Boolean($('#content-enabled')?.checked),sort=Number($('#content-sort')?.value)||100;
+  if(!page||!key)return toast('Página e chave são obrigatórias.');
+  const {error}=await supabase.rpc('owner_upsert_content_block',{p_id:id,p_page_slug:page,p_block_key:key,p_kind:kind,p_value:value,p_enabled:enabled,p_sort_order:sort});
+  if(error)return toast('O bloco não foi salvo.');
+  toast('Bloco salvo.');await renderStaffDashboard({reload:true});
+}
+function dashboardEditContentBlock(id){
+  const b=(state.adminSnapshot?.content_blocks||[]).find(x=>x.id===id);if(!b)return;
+  $('#content-page').value=b.page_slug;$('#content-key').value=b.block_key;$('#content-kind').value=b.kind;$('#content-value').value=b.value||'';$('#content-enabled').checked=b.enabled;$('#content-sort').value=b.sort_order;
+  const btn=$('#content-save');btn.textContent='salvar alteração';btn.onclick=()=>dashboardSaveContentBlock(id);
+}
+async function dashboardDeleteContentBlock(id){
+  if(!confirm('Apagar este bloco de conteúdo?'))return;
+  const {error}=await supabase.rpc('owner_delete_content_block',{p_id:id});
+  if(error)return toast('Não foi possível apagar o bloco.');
+  await renderStaffDashboard({reload:true});
+}
+async function dashboardUploadAsset(){
+  const file=$('#asset-file')?.files?.[0];if(!file)return toast('Escolha uma imagem.');
+  if(file.size>10*1024*1024)return toast('Asset acima de 10 MB.');
+  const type=$('#asset-type')?.value||'other',name=($('#asset-name')?.value||file.name).trim(),slug=($('#asset-slug')?.value||safeFileName(file.name).replace(/\.[^.]+$/,'')).trim().toLowerCase().replace(/[^a-z0-9_-]+/g,'-'),shortcode=$('#asset-shortcode')?.value||'';
+  const path=state.profile.id+'/'+type+'/'+Date.now()+'-'+safeFileName(file.name);
+  const {error:upErr}=await supabase.storage.from('avesso-admin-assets').upload(path,file,{upsert:false,contentType:file.type,cacheControl:'31536000'});
+  if(upErr)return toast('O upload do asset falhou.');
+  const {error}=await supabase.rpc('owner_upsert_admin_asset',{p_id:null,p_asset_type:type,p_name:name,p_slug:slug,p_storage_path:path,p_mime_type:file.type||'image/webp',p_shortcode:shortcode,p_meta:{},p_active:true});
+  if(error){await supabase.storage.from('avesso-admin-assets').remove([path]);return toast('O asset chegou ao storage, mas o catálogo recusou.');}
+  toast('Asset adicionado ao banco.');await renderStaffDashboard({reload:true});
+}
+async function dashboardDeleteAsset(id,path){
+  if(!confirm('Apagar este asset do catálogo e do storage?'))return;
+  const {error}=await supabase.rpc('owner_delete_admin_asset',{p_id:id});
+  if(error)return toast('Não foi possível apagar o asset.');
+  if(path)await supabase.storage.from('avesso-admin-assets').remove([path]);
+  await renderStaffDashboard({reload:true});
+}
+async function dashboardCreateBadge(){
+  const image=$('#badge-asset')?.value||'',name=$('#badge-name')?.value.trim()||'',slug=$('#badge-slug')?.value.trim()||'',description=$('#badge-description')?.value||'';
+  if(!image||!name||!slug)return toast('Imagem, nome e slug são obrigatórios.');
+  const {error}=await supabase.rpc('owner_upsert_badge',{p_id:null,p_slug:slug,p_name:name,p_description:description,p_image_path:image,p_active:true});
+  if(error)return toast('O emblema não foi criado.');
+  toast('Emblema criado.');await loadIdentityMetadata();await renderStaffDashboard({reload:true});
+}
+async function dashboardGrantBadge(grant){
+  const user=$('#badge-user')?.value,badge=$('#badge-id')?.value;if(!user||!badge)return toast('Escolha usuário e emblema.');
+  const {error}=await supabase.rpc('owner_grant_badge',{p_user_id:user,p_badge_id:badge,p_grant:grant});
+  if(error)return toast('Não foi possível alterar o emblema.');
+  toast(grant?'Emblema atribuído.':'Emblema removido.');await loadIdentityMetadata();await renderStaffDashboard({reload:true});
+}
+async function dashboardSaveCharacter(button){
+  const card=button.closest('[data-character-card]'),id=button.dataset.charSave;if(!card)return;
+  const args={p_id:id,p_name:card.querySelector('[data-char-name]').value,p_role:card.querySelector('[data-char-role]').value,p_bio:card.querySelector('[data-char-bio]').value,p_personality:card.querySelector('[data-char-personality]').value,p_accent_color:card.querySelector('[data-char-color]').value,p_avatar_url:card.querySelector('[data-char-avatar]').value,p_home_location:card.querySelector('[data-char-home]').value,p_presence_state:card.querySelector('[data-char-presence]').value,p_rarity:Number(card.querySelector('[data-char-rarity]').value)||50,p_ai_enabled:card.querySelector('[data-char-ai-enabled]').checked,p_is_active:card.querySelector('[data-char-active]').checked};
+  const {error}=await supabase.rpc('owner_update_character',args);
+  if(error)return toast('O habitante recusou a edição.');
+  toast('Habitante atualizado.');await loadWorldState();await renderStaffDashboard({reload:true});
+}
+async function dashboardSaveCharacterAi(button){
+  const card=button.closest('[data-character-card]'),id=button.dataset.aiSave;if(!card)return;
+  let behavior={},voice={};
+  try{behavior=JSON.parse(card.querySelector('[data-ai-behavior]').value||'{}');voice=JSON.parse(card.querySelector('[data-ai-voice]').value||'{}');}catch{return toast('JSON inválido nas regras da IA.');}
+  const args={p_character_id:id,p_model:card.querySelector('[data-ai-model]').value,p_persona_summary:card.querySelector('[data-ai-summary]').value,p_system_prompt:card.querySelector('[data-ai-prompt]').value,p_behavior_rules:behavior,p_voice_rules:voice,p_max_output_chars:Number(card.querySelector('[data-ai-max]').value)||420,p_ai_enabled:card.querySelector('[data-ai-enabled]').checked};
+  const {error}=await supabase.rpc('owner_upsert_character_ai',args);
+  if(error)return toast('A configuração de IA não foi salva.');
+  toast('IA do habitante atualizada.');await renderStaffDashboard({reload:true});
+}
+async function dashboardAddDialogue(button){
+  const card=button.closest('[data-character-card]'),id=button.dataset.dialogueAdd;if(!card)return;
+  const context=card.querySelector('[data-dialogue-context]').value.trim(),body=card.querySelector('[data-dialogue-body]').value.trim(),weight=Number(card.querySelector('[data-dialogue-weight]').value)||1;
+  if(!/^[a-z0-9_]{2,50}$/.test(context)||body.length<2)return toast('Contexto ou frase inválidos.');
+  const {error}=await supabase.rpc('owner_save_character_dialogue',{p_id:null,p_character_id:id,p_context:context,p_body:body,p_weight:weight,p_enabled:true});
+  if(error)return toast('A frase não foi salva.');
+  toast('Frase adicionada.');await renderStaffDashboard({reload:true});
+}
+async function dashboardDeleteDialogue(id){
+  if(!confirm('Apagar esta frase do repertório?'))return;
+  const {error}=await supabase.rpc('owner_delete_character_dialogue',{p_id:id});
+  if(error)return toast('Não foi possível apagar a frase.');
+  await renderStaffDashboard({reload:true});
+}
+
 function applyAppTabLayout(){
   const worldOpen=['residents','plaza','tower','profile','public_profile','messages','admin'].includes(state.tab);
   document.body.classList.toggle('avesso-feed-home',state.tab==='feed');
@@ -2563,7 +3128,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   applyAppWallpaper();
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
-  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Amigos & cúmplices',admin:'Painel do administrador'};
+  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Amigos & cúmplices',admin:'Dashboard'};
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
   trackAction('tab_view',state.tab,{tab:state.tab});
@@ -2573,7 +3138,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   else if(state.tab==='plaza')await renderPlaza();
   else if(state.tab==='tower')await renderTowerPage();
   else if(state.tab==='messages')await renderMessagesPage();
-  else if(state.tab==='admin')await renderAdminDashboard();
+  else if(state.tab==='admin')await renderStaffDashboard({reload:true});
   else {if(state.tab==='feed')await loadStoriesStrip();loadFeed();}
 });
 async function renderInhabitantsPage(){
