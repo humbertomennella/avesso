@@ -99,6 +99,209 @@ function applyAppWallpaper(){
   document.documentElement.dataset.wallpaperSurface=useProfileWallpaper?'profile':'app';
   document.body.classList.add('avesso-app-active');
 }
+
+function hydrateStories(rows=[]){
+  const ids=[...new Set(rows.map(x=>x.author_id).filter(Boolean))];
+  return (async()=>{
+    let profiles={};
+    if(ids.length){
+      const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',ids);
+      profiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));
+    }
+    return Promise.all(rows.map(async row=>{
+      let image_url='';
+      if(row.image_path){
+        const {data}=await supabase.storage.from('avesso-stories').createSignedUrl(row.image_path,3600);
+        image_url=data?.signedUrl||'';
+      }
+      return {...row,author:profiles[row.author_id]||{},image_url};
+    }));
+  })();
+}
+
+function storyTimeLeft(expiresAt){
+  const ms=Math.max(0,new Date(expiresAt)-Date.now());
+  const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);
+  return h>0?`${h}h ${m}m`:`${Math.max(1,m)}min`;
+}
+
+function storyCardHtml(story,{compact=false}={}){
+  const a=story.author||{};
+  return `<button class="story-card ${compact?'compact':''}" data-story-open="${story.id}" style="${story.image_url?`--story-thumb:url('${escapeAttr(story.image_url)}')`:''}">
+    <span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span>
+    <span class="story-card-copy"><b>${escapeHtml(a.display_name||'humano')}</b><small>${story.visibility==='amigos'?'amigos':'público'} · ${storyTimeLeft(story.expires_at)}</small></span>
+  </button>`;
+}
+
+async function loadStoriesStrip(){
+  const host=$('#stories-zone');
+  if(!host||!state.profile||!isFeedTab()){host?.classList.add('hidden');return;}
+  host.classList.remove('hidden');
+  const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(60);
+  if(error){host.innerHTML='<div class="stories-error">stories deram tela azul.</div>';return;}
+  const stories=await hydrateStories(data||[]);
+  const latestByAuthor=[],seen=new Set();
+  for(const s of stories){if(!seen.has(s.author_id)){seen.add(s.author_id);latestByAuthor.push(s);}}
+  host.innerHTML=`<div class="stories-head"><div><span class="section-code">STORIES // 24H</span><b>temporário, como toda boa decisão na internet</b></div><button id="story-create-feed">＋ postar story</button></div><div class="stories-strip"><button class="story-new-card" id="story-create-feed-card"><span class="story-ring self"><i>${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</i><em>＋</em></span><b>seu story</b><small>24h e acabou</small></button>${latestByAuthor.map(s=>storyCardHtml(s,{compact:true})).join('')}</div>`;
+  $('#story-create-feed')?.addEventListener('click',openStoryCreate);
+  $('#story-create-feed-card')?.addEventListener('click',openStoryCreate);
+  host.querySelectorAll('[data-story-open]').forEach(b=>b.onclick=()=>openStory(b.dataset.storyOpen));
+}
+
+function openStoryCreate(){
+  const dialog=$('#story-create-dialog');if(!dialog)return;
+  $('#story-create-message').textContent='';
+  $('#story-body').value='';
+  $('#story-image').value='';
+  $('#story-visibility').value='publico';
+  $('#story-image-preview').classList.add('hidden');
+  $('#story-image-preview').innerHTML='';
+  if(!dialog.open)dialog.showModal();
+  setTimeout(()=>$('#story-body')?.focus(),40);
+}
+
+async function publishStory(){
+  if(state.storyBusy)return;
+  const body=String($('#story-body')?.value||'').trim().slice(0,420);
+  const file=$('#story-image')?.files?.[0]||null;
+  const visibility=$('#story-visibility')?.value==='amigos'?'amigos':'publico';
+  if(!body&&!file)return toast('Story vazio dura zero horas. Eficiência admirável, utilidade discutível.');
+  if(file&&file.size>8*1024*1024)return toast('Imagem de story: até 8 MB. A fita VHS agradece.');
+  if(file&&!/^image\/(jpeg|png|webp|gif)$/i.test(file.type))return toast('Story aceita JPG, PNG, WEBP ou GIF.');
+  state.storyBusy=true;
+  const btn=$('#story-publish');if(btn){btn.disabled=true;btn.textContent='subindo para a internet...';}
+  let created=null,imagePath=null;
+  try{
+    const ins=await supabase.from('stories').insert({author_id:state.profile.id,body,visibility}).select().single();
+    if(ins.error)throw ins.error;
+    created=ins.data;
+    if(file){
+      imagePath=`${state.profile.id}/${created.id}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
+      const up=await supabase.storage.from('avesso-stories').upload(imagePath,file,{cacheControl:'3600',upsert:false,contentType:file.type});
+      if(up.error)throw up.error;
+      const upd=await supabase.from('stories').update({image_path:imagePath}).eq('id',created.id);
+      if(upd.error)throw upd.error;
+    }
+    $('#story-create-dialog')?.close();
+    toast('Story publicado. O relógio de 24h já está julgando.');
+    trackAction('story_posted','stories',{visibility,has_image:Boolean(file)});
+    await loadStoriesStrip();
+    if(state.tab==='profile')loadProfileStories(state.profile.id,'#profile-story-list');
+  }catch(err){
+    if(imagePath)await supabase.storage.from('avesso-stories').remove([imagePath]);
+    if(created?.id)await supabase.from('stories').delete().eq('id',created.id);
+    console.error('story publish',err);
+    toast('O story caiu antes de completar 24 horas.');
+  }finally{
+    state.storyBusy=false;if(btn){btn.disabled=false;btn.textContent='publicar por 24h';}
+  }
+}
+
+async function loadProfileStories(userId,selector){
+  const host=$(selector);if(!host||!userId)return;
+  const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').eq('author_id',userId).gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(20);
+  if(error){host.innerHTML='<p class="story-empty">Os stories se perderam no cache.</p>';return;}
+  const stories=await hydrateStories(data||[]);
+  host.innerHTML=stories.map(s=>storyCardHtml(s)).join('')||'<p class="story-empty">Nenhum story ativo. A internet sobreviveu.</p>';
+  host.querySelectorAll('[data-story-open]').forEach(b=>b.onclick=()=>openStory(b.dataset.storyOpen));
+}
+
+async function openStory(storyId){
+  const {data:story,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').eq('id',storyId).gt('expires_at',new Date().toISOString()).maybeSingle();
+  if(error||!story)return toast('Este story expirou ou você não pode vê-lo. O tempo venceu outra vez.');
+  const [authorRes,reactionsRes,commentsRes]=await Promise.all([
+    supabase.from('profiles').select('id,display_name,handle,avatar_url').eq('id',story.author_id).maybeSingle(),
+    supabase.from('story_reactions').select('story_id,user_id,reaction,created_at').eq('story_id',story.id),
+    supabase.from('story_comments').select('id,story_id,user_id,body,created_at').eq('story_id',story.id).order('created_at',{ascending:true}).limit(120)
+  ]);
+  let image_url='';
+  if(story.image_path){
+    const signed=await supabase.storage.from('avesso-stories').createSignedUrl(story.image_path,3600);
+    image_url=signed.data?.signedUrl||'';
+  }
+  const comments=commentsRes.data||[],commentIds=[...new Set(comments.map(x=>x.user_id))];
+  let commentProfiles={};
+  if(commentIds.length){
+    const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',commentIds);
+    commentProfiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));
+  }
+  const reactions=reactionsRes.data||[];
+  const reactionHtml=STORY_REACTIONS.map(([id,icon,label])=>{
+    const rows=reactions.filter(x=>x.reaction===id),active=rows.some(x=>x.user_id===state.profile.id);
+    return `<button class="story-reaction ${active?'active':''}" data-story-react="${id}"><span>${icon}</span>${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`;
+  }).join('');
+  const a=authorRes.data||{},canDelete=story.author_id===state.profile.id;
+  const commentsHtml=comments.map(row=>{const p=commentProfiles[row.user_id]||{};return `<article class="story-comment"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${escapeHtml(p.display_name||'alguém')}</b><small>@${escapeHtml(p.handle||'...')} · ${ago(row.created_at)}</small><p>${escapeHtml(row.body)}</p></div></article>`;}).join('')||'<p class="story-empty">Sem comentários. O silêncio também expira.</p>';
+  const host=$('#story-view-content');
+  host.innerHTML=`<article class="story-view-card">
+    <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${escapeHtml(a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
+    <div class="story-stage ${image_url?'has-image':''}" style="${image_url?`--story-image:url('${escapeAttr(image_url)}')`:''}">${image_url?`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||'usuário')}">`:''}${story.body?`<p>${escapeHtml(story.body)}</p>`:''}</div>
+    <div class="story-reactions">${reactionHtml}</div>
+    <section class="story-comments"><h3>respostas // sem plateia</h3><div class="story-comment-list">${commentsHtml}</div><div class="story-comment-compose"><textarea id="story-comment-body" maxlength="420" placeholder="responda antes que isso desapareça..."></textarea><div><button id="story-comment-emoticons" type="button">☻ avessícones</button><button id="story-comment-send" type="button">responder</button></div><div id="story-comment-palette" class="feed-emoticon-palette hidden">${avessoEmoticonButtons('data-story-comment-emoticon')}</div></div></section>
+  </article>`;
+  const dialog=$('#story-view-dialog');if(!dialog.open)dialog.showModal();
+  host.querySelectorAll('[data-story-react]').forEach(b=>b.onclick=()=>toggleStoryReaction(story.id,b.dataset.storyReact));
+  $('#story-comment-send').onclick=()=>sendStoryComment(story.id);
+  $('#story-comment-emoticons').onclick=()=>$('#story-comment-palette').classList.toggle('hidden');
+  host.querySelectorAll('[data-story-comment-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#story-comment-body');if(input){input.value+=`${input.value?' ':''}${b.dataset.storyCommentEmoticon}`;input.focus();}});
+  if(canDelete)$('#story-delete').onclick=()=>deleteStory(story);
+}
+
+async function toggleStoryReaction(storyId,reaction){
+  if(!STORY_REACTIONS.some(x=>x[0]===reaction))return;
+  const {data:existing}=await supabase.from('story_reactions').select('reaction').eq('story_id',storyId).eq('user_id',state.profile.id).maybeSingle();
+  const result=existing?.reaction===reaction
+    ?await supabase.from('story_reactions').delete().eq('story_id',storyId).eq('user_id',state.profile.id)
+    :await supabase.from('story_reactions').upsert({story_id:storyId,user_id:state.profile.id,reaction},{onConflict:'story_id,user_id'});
+  if(result.error)return toast('A reação ao story teve uma reação adversa.');
+  trackAction('story_reaction','stories',{story_id:storyId,reaction});
+  openStory(storyId);
+}
+
+async function sendStoryComment(storyId){
+  const input=$('#story-comment-body'),body=String(input?.value||'').trim().slice(0,420);
+  if(!body)return toast('Resposta vazia é só telepatia com interface.');
+  const {error}=await supabase.from('story_comments').insert({story_id:storyId,user_id:state.profile.id,body});
+  if(error)return toast('A resposta não chegou ao story.');
+  input.value='';trackAction('story_reply','stories',{story_id:storyId});openStory(storyId);
+}
+
+async function deleteStory(story){
+  if(!confirm('Apagar este story agora? Ele já estava com os dias contados.'))return;
+  if(story.image_path)await supabase.storage.from('avesso-stories').remove([story.image_path]);
+  const {error}=await supabase.from('stories').delete().eq('id',story.id).eq('author_id',state.profile.id);
+  if(error)return toast('O story se recusou a morrer antes do prazo.');
+  $('#story-view-dialog')?.close();toast('Story apagado.');
+  loadStoriesStrip();
+  if(state.tab==='profile')loadProfileStories(state.profile.id,'#profile-story-list');
+}
+
+async function notifyStoryEvent(row){
+  if(!row||row.recipient_id!==state.profile?.id)return;
+  const actor=await profileById(row.actor_id);
+  const label=row.kind==='comment'?'respondeu ao seu story':`reagiu ao seu story: ${STORY_REACTIONS.find(x=>x[0]===row.reaction)?.[2]||'reação'}`;
+  socialNotify({title:'STORY.EXE',body:`${actor?.display_name||'Alguém'} ${label}.`,avatar:actor?.avatar_url||'',kind:'story',action:()=>openStory(row.story_id)});
+  await supabase.from('story_notifications').update({read_at:new Date().toISOString()}).eq('id',row.id).eq('recipient_id',state.profile.id);
+}
+
+async function loadStoryNotifications(){
+  if(!state.profile?.id)return;
+  const {data}=await supabase.from('story_notifications').select('*').eq('recipient_id',state.profile.id).is('read_at',null).order('created_at',{ascending:false}).limit(5);
+  for(const row of [...(data||[])].reverse())await notifyStoryEvent(row);
+}
+
+function startStoryRealtime(){
+  if(state.storyChannel||!state.profile?.id)return;
+  state.storyChannel=supabase.channel(`avesso-stories-${state.profile.id}-${Date.now()}`)
+    .on('postgres_changes',{event:'*',schema:'public',table:'stories'},()=>{if(isFeedTab())loadStoriesStrip();if(state.tab==='profile')loadProfileStories(state.profile.id,'#profile-story-list');})
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'story_notifications',filter:`recipient_id=eq.${state.profile.id}`},payload=>notifyStoryEvent(payload.new))
+    .subscribe();
+}
+
+function stopStoryRealtime(){
+  if(state.storyChannel)supabase.removeChannel(state.storyChannel);
+  state.storyChannel=null;
+}
 function audioContext(){
   try{
     if(!state.audioCtx)state.audioCtx=new (window.AudioContext||window.webkitAudioContext)();
