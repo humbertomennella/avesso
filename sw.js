@@ -9,22 +9,32 @@ self.addEventListener('activate',event=>event.waitUntil((async()=>{
 
 
 self.addEventListener('push',event=>{
-  let payload={};
-  try{payload=event.data?.json?.()||{};}catch{
-    try{payload={body:event.data?.text?.()||''};}catch{}
-  }
-  const title=payload.title||'AVESSO';
-  const options={
-    body:payload.body||'Algo aconteceu no seu Canto.',
-    icon:payload.icon||new URL('assets/avatars/robo-01.svg',self.registration.scope).href,
-    badge:payload.badge||new URL('assets/avatars/robo-01.svg',self.registration.scope).href,
-    tag:payload.tag||'avesso-social',
-    renotify:true,
-    silent:false,
-    vibrate:[90,45,90],
-    data:{url:payload.url||self.registration.scope,kind:payload.kind||'interaction'}
-  };
-  event.waitUntil(self.registration.showNotification(title,options));
+  event.waitUntil((async()=>{
+    let payload={};
+    try{payload=event.data?.json?.()||{};}catch{
+      try{payload={body:event.data?.text?.()||''};}catch{}
+    }
+
+    const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    const visible=windows.some(client=>client.visibilityState==='visible'&&client.focused!==false);
+    if(visible){
+      windows.forEach(client=>client.postMessage?.({type:'AVESSO_PUSH_WHILE_VISIBLE',payload}));
+      return;
+    }
+
+    const title=payload.title||'AVESSO';
+    const options={
+      body:payload.body||'Algo aconteceu no seu Canto.',
+      icon:payload.icon||new URL('assets/avatars/robo-01.svg',self.registration.scope).href,
+      badge:payload.badge||new URL('assets/avatars/robo-01.svg',self.registration.scope).href,
+      tag:payload.tag||'avesso-social',
+      renotify:true,
+      silent:false,
+      vibrate:[90,45,90],
+      data:{url:payload.url||self.registration.scope,kind:payload.kind||'interaction'}
+    };
+    await self.registration.showNotification(title,options);
+  })());
 });
 
 self.addEventListener('notificationclick',event=>{
