@@ -12,6 +12,7 @@
 
   let installPrompt=null;
   let composerBound=false;
+  let draftBound=false;
   let pullStart=null;
   let swipeStart=null;
   let notificationRows=[];
@@ -286,6 +287,51 @@
     button.classList.toggle('hidden',standalone||!installPrompt);
   }
 
+  function draftKey(){
+    return 'avesso_post_draft_v1:'+String(q('#nav-handle')?.textContent||'anon').replace(/^@/,'');
+  }
+  function bindComposerDraft(){
+    if(draftBound)return;
+    const body=q('#post-body');if(!body)return;
+    draftBound=true;
+    try{
+      const saved=JSON.parse(localStorage.getItem(draftKey())||'null');
+      if(saved?.body&&!body.value)body.value=String(saved.body).slice(0,420);
+    }catch{}
+    body.addEventListener('input',()=>{
+      try{
+        const value=body.value||'';
+        if(value.trim())localStorage.setItem(draftKey(),JSON.stringify({body:value,savedAt:Date.now()}));
+        else localStorage.removeItem(draftKey());
+      }catch{}
+    });
+    q('#publish-post')?.addEventListener('click',()=>{
+      let tries=0;
+      const timer=setInterval(()=>{
+        tries++;
+        if(!String(body.value||'').trim()){
+          clearInterval(timer);
+          try{localStorage.removeItem(draftKey());}catch{}
+        }else if(tries>20)clearInterval(timer);
+      },120);
+    });
+  }
+
+  function syncNetworkIndicator(){
+    if(!isMobile())return;
+    let el=q('#mobile-network-state');
+    if(!el){
+      el=document.createElement('div');
+      el.id='mobile-network-state';
+      el.className='mobile-network-state hidden';
+      document.body.appendChild(el);
+    }
+    const offline=navigator.onLine===false;
+    el.classList.toggle('hidden',!offline);
+    el.textContent=offline?'SEM REDE // usando o que ficou salvo neste aparelho':'';
+    document.body.classList.toggle('avesso-offline',offline);
+  }
+
   function ensureComposerLauncher(){
     if(!isMobile())return;
     const composer=q('.composer');
@@ -545,6 +591,7 @@
     loadNotifications();
     enhanceMoreSheet();
     ensureComposerLauncher();
+    bindComposerDraft();
     syncLauncherAvatar();
     syncComposerVisibility();
     enhanceProfile();
@@ -598,6 +645,9 @@
         syncInstallButton();
       });
       window.matchMedia?.(MQ).addEventListener?.('change',syncAll);
+      window.addEventListener('online',syncNetworkIndicator);
+      window.addEventListener('offline',syncNetworkIndicator);
+      syncNetworkIndicator();
       window.addEventListener('hashchange',applyHashRoute);
       setTimeout(applyHashRoute,350);
     }catch(error){
