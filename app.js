@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -100,6 +100,53 @@ function applyAppWallpaper(){
   document.documentElement.style.setProperty('--avesso-app-wallpaper',`url("${wallpaperUrl(slug)}")`);
   document.documentElement.dataset.wallpaperSurface=useProfileWallpaper?'profile':'app';
   document.body.classList.add('avesso-app-active');
+}
+
+function adminCrownHtml(extraClass=''){
+  return '<span class="admin-crown-pixel '+escapeAttr(extraClass)+'" title="Administrador do AVESSO" aria-label="Administrador"><i></i></span>';
+}
+function applySiteSettings(settings=state.siteSettings||{}){
+  if(!settings)return;
+  const root=document.documentElement;
+  const vars={
+    '--bg':settings.color_bg,'--panel':settings.color_panel,'--panel2':settings.color_panel2,
+    '--ink':settings.color_ink,'--muted':settings.color_muted,'--line':settings.color_line,
+    '--acid':settings.color_acid,'--cyan':settings.color_cyan,'--coral':settings.color_coral,'--violet':settings.color_violet
+  };
+  Object.entries(vars).forEach(([name,value])=>{if(/^#[0-9a-f]{6}$/i.test(String(value||'')))root.style.setProperty(name,value);});
+  const cssId='avesso-admin-custom-css';
+  let style=document.getElementById(cssId);
+  if(!style){style=document.createElement('style');style.id=cssId;document.head.appendChild(style);}
+  style.textContent=String(settings.custom_css||'').slice(0,20000);
+  const siteName=String(settings.site_name||'AVESSO').trim()||'AVESSO';
+  const tagline=String(settings.tagline||'menos palco, mais presença').trim();
+  document.title=tagline?siteName+' — '+tagline:siteName;
+  document.querySelectorAll('.brand > span:not(.brand-mark)').forEach(el=>{el.textContent=siteName;});
+  let bar=document.getElementById('site-admin-announcement');
+  if(!bar){bar=document.createElement('div');bar.id='site-admin-announcement';bar.className='site-admin-announcement hidden';document.body.appendChild(bar);}
+  const announcement=String(settings.announcement||'').trim();
+  bar.textContent=announcement;
+  bar.classList.toggle('hidden',!announcement);
+}
+async function loadSiteSettings(){
+  const {data,error}=await supabase.from('site_settings').select('*').eq('id','global').maybeSingle();
+  if(error||!data)return;
+  state.siteSettings=data;
+  applySiteSettings(data);
+}
+async function loadOwnModeration(){
+  state.suspended=false;state.suspension=null;
+  if(!state.profile?.id)return;
+  const {data}=await supabase.from('user_moderation').select('suspended,reason,suspended_until,updated_at').eq('user_id',state.profile.id).maybeSingle();
+  if(!data)return;
+  const active=Boolean(data.suspended)&&(!data.suspended_until||new Date(data.suspended_until)>new Date());
+  state.suspended=active;
+  state.suspension=data;
+  document.body.classList.toggle('account-suspended',active);
+  if(active){
+    const until=data.suspended_until?' até '+new Date(data.suspended_until).toLocaleString('pt-BR'):'';
+    toast('Conta suspensa'+until+'. Você ainda pode consultar seu histórico, mas novas ações sociais estão bloqueadas.');
+  }
 }
 
 function hydrateStories(rows=[]){
@@ -1431,7 +1478,8 @@ async function enterApp(){
   state.profile=data;
   if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return;}
   await loadAdminAccess();
-  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?'<span class="nav-admin-crown" title="Administrador">♛</span>':'');
+  await loadOwnModeration();
+  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):'');
   $('#nav-handle').textContent='@'+data.handle;
   renderNavAvatar();
   applyAppWallpaper();
@@ -1476,7 +1524,8 @@ function leaveApp(){
   document.body.classList.remove('avesso-app-active');
   $('#online-friends-dock')?.classList.add('hidden');
   state.profile=null;
-  state.isAdmin=false;state.adminRole=null;state.adminSnapshot=null;
+  state.isAdmin=false;state.adminRole=null;state.adminSnapshot=null;state.suspended=false;state.suspension=null;
+  document.body.classList.remove('account-suspended');
   $('#admin-nav-button')?.classList.add('hidden');
   $('#app-view').classList.add('hidden');
   $('#marketing-view').classList.remove('hidden');
@@ -1890,7 +1939,8 @@ $('#publish-post').onclick=async()=>{
   if($('#post-media-link')?.value.trim()&&!external)return toast('Esse link não é um YouTube ou Spotify reconhecível.');
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
   if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||state.postGifUrl||external))return toast('Imagem e mídia incorporada privadas ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
-  if(body.length<3&&!state.postImageFile&&!state.postGifUrl&&!external)return toast('Dê ao menos uma frase, imagem ou link de YouTube/Spotify. Telepatia ainda não foi integrada.');
+  const minText=directed?2:12;
+  if(body.length<minText&&!state.postImageFile&&!state.postGifUrl&&!external)return toast(directed?'Para alguém, 2 caracteres bastam. Milagre burocrático.':'No feed aberto, use pelo menos 12 caracteres ou anexe mídia.');
   $('#publish-post').disabled=true;
   let image_url=state.postGifUrl||null,media_url=external?.url||null,media_kind=external?.kind||null;
   try{
@@ -1911,7 +1961,7 @@ $('#publish-post').onclick=async()=>{
     visibility:directed?$('#post-visibility').value:'publico'
   }).select('id').single();
   $('#publish-post').disabled=false;
-  if(error)return toast('Não foi possível publicar. Tente novamente.');
+  if(error){console.error('post insert failed',error);return toast(error.code==='23514'?'A publicação não passou pelas regras de tamanho/visibilidade.':'Não foi possível publicar. Tente novamente.');}
   $('#post-body').value='';$('#recipient-search').value='';$('#char-count').textContent='420';state.recipient=null;
   state.postImageFile=null;state.postGifUrl='';$('#post-image').value='';$('#image-preview').classList.add('hidden');
   if($('#post-gif-file'))$('#post-gif-file').value='';
@@ -2037,17 +2087,22 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       const total=rows.length+botRows.length;
       return `<button class="acid-reaction ${active?'active':''}" data-react-post="${p.id}" data-reaction="${id}" aria-pressed="${active}"><span>${icon}</span>${label}${total?` <b>${total}</b>`:''}${botRows.length?'<i class="character-reaction-mark" title="ALGO reagiu">ALGO</i>':''}</button>`;
     }).join('');
-    const ownerActions=p.author_id===state.profile.id?`<div class="post-owner-actions"><button data-post-edit="${p.id}">editar</button><button class="danger" data-post-delete="${p.id}">apagar</button></div>`:'';
+    const turned=Boolean(p.reshare_post_id||p.reshare_photo_id);
+    const ownerActions=p.author_id===state.profile.id?`<div class="post-owner-actions">${turned?'':'<button data-post-edit="'+p.id+'">editar</button>'}<button class="danger" data-post-delete="${p.id}">apagar</button></div>`:'';
+    const turnedBadge=turned?`<div class="post-turned-badge"><span>↻ VIRADO DO AVESSO</span><b>original: @${escapeHtml(p.reshare_author_handle||'alguém')}</b><small>virado por @${escapeHtml(p.author_handle||'alguém')}</small></div>`:'';
+    const effectiveImage=p.image_url?postImageSrc(p.image_url):(p.reshare_photo_storage_path?publicAlbumUrl(p.reshare_photo_storage_path):'');
+    const effectiveGif=Boolean(p.image_url&&isGifPostImage(p.image_url));
     return `<article class="post-card" data-post-card="${p.id}">
       <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       ${ownerActions}
+      ${turnedBadge}
       <p class="post-body" data-post-body="${p.id}">${escapeHtml(p.body)}</p>
       ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea>${['youtube','spotify'].includes(p.media_kind)?`<input type="url" data-post-media-link-edit="${p.id}" value="${escapeAttr(externalMediaShareUrl(p.media_url))}" placeholder="link do YouTube ou Spotify">`:''}<div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
-      ${p.image_url?`<figure class="post-image ${isGifPostImage(p.image_url)?'post-gif':''}"><img src="${escapeAttr(postImageSrc(p.image_url))}" alt="${isGifPostImage(p.image_url)?'GIF':'Imagem'} publicado por ${escapeAttr(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
+      ${effectiveImage?`<figure class="post-image ${effectiveGif?'post-gif':''}"><img class="post-image-open" ${p.reshare_photo_id?`data-photo-open="${p.reshare_photo_id}"`:`data-feed-image-open="${p.id}"`} src="${escapeAttr(effectiveImage)}" alt="${effectiveGif?'GIF':'Imagem'} publicado por ${escapeAttr(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
       ${feedMediaHtml(p.media_url,p.media_kind)}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
       ${conversationHtml}
-      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
+      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button><button class="turn-feed-button" data-turn-post="${p.id}">↻ virar no feed</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
       <div class="inline-reply hidden" data-reply-box="${p.id}"><label>RESPOSTA // fale com a pessoa, não com a métrica</label><textarea maxlength="420" placeholder="Escreva algo que valha o espaço que ocupa."></textarea><div class="reply-emoticon-row"><button type="button" data-reply-emoticons="${p.id}">☻ avessícones</button><div class="feed-emoticon-palette hidden" data-reply-emoticon-palette="${p.id}">${avessoEmoticonButtons('data-reply-emoticon')}</div></div><div><button data-reply-send="${p.id}">publicar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
     </article>`;
   }).join('');
@@ -2063,7 +2118,10 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
   $$('[data-post-edit]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postEdit}"]`)?.classList.remove('hidden'));
   $$('[data-post-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postCancel}"]`)?.classList.add('hidden'));
   $$('[data-post-save]').forEach(b=>b.onclick=()=>savePostEdit(b.dataset.postSave));
-  $$('[data-post-delete]').forEach(b=>b.onclick=()=>deleteOwnPost(b.dataset.postDelete));
+  $('[data-post-delete]').forEach(b=>b.onclick=()=>deleteOwnPost(b.dataset.postDelete));
+  $('[data-turn-post]').forEach(b=>b.onclick=()=>turnPostToFeed(b.dataset.turnPost));
+  $('[data-photo-open]').forEach(img=>img.onclick=()=>openAlbumPhotoViewer(img.dataset.photoOpen));
+  $('[data-feed-image-open]').forEach(img=>img.onclick=()=>openFeedImageViewer(img.dataset.feedImageOpen));
 }
 async function savePostEdit(postId){
   const panel=document.querySelector(`[data-post-edit-panel="${CSS.escape(postId)}"]`);
@@ -2168,15 +2226,100 @@ async function saveAdminWorldControls(){
   toast('Controles do Mundo do AVESSO atualizados.');
   renderAdminDashboard();
 }
+
+function adminApplyPreset(name){
+  const presets={
+    avesso:{bg:'#090b0c',panel:'#111517',panel2:'#191f21',ink:'#f5f3e8',muted:'#8e9999',line:'#293235',acid:'#d8ff3e',cyan:'#22d9ee',coral:'#ff5c4d',violet:'#9b7cff'},
+    phosphor:{bg:'#020503',panel:'#07100a',panel2:'#0b170e',ink:'#dfffe6',muted:'#78a383',line:'#1e4b2a',acid:'#74ff4b',cyan:'#45ffc7',coral:'#ff695c',violet:'#9e7cff'},
+    cyan:{bg:'#04080a',panel:'#071319',panel2:'#0c2028',ink:'#e8fbff',muted:'#7da5ad',line:'#1f4b56',acid:'#d8ff3e',cyan:'#28e8ff',coral:'#ff6a5f',violet:'#758dff'},
+    magenta:{bg:'#0b050c',panel:'#160b18',panel2:'#231027',ink:'#fff0fb',muted:'#ad83a8',line:'#53204d',acid:'#d8ff3e',cyan:'#29e4ff',coral:'#ff655b',violet:'#ff59d6'}
+  };
+  const p=presets[name];if(!p)return;
+  Object.entries(p).forEach(([key,value])=>{const input=$('#admin-color-'+key);if(input)input.value=value;});
+  const preview={...(state.siteSettings||{}),
+    color_bg:p.bg,color_panel:p.panel,color_panel2:p.panel2,color_ink:p.ink,color_muted:p.muted,
+    color_line:p.line,color_acid:p.acid,color_cyan:p.cyan,color_coral:p.coral,color_violet:p.violet
+  };
+  applySiteSettings(preview);
+}
+async function saveAdminSiteSettings(){
+  if(!state.isAdmin)return;
+  const args={
+    p_site_name:String($('#admin-site-name')?.value||'AVESSO').trim(),
+    p_tagline:String($('#admin-site-tagline')?.value||'').trim(),
+    p_color_bg:$('#admin-color-bg')?.value||'#090b0c',
+    p_color_panel:$('#admin-color-panel')?.value||'#111517',
+    p_color_panel2:$('#admin-color-panel2')?.value||'#191f21',
+    p_color_ink:$('#admin-color-ink')?.value||'#f5f3e8',
+    p_color_muted:$('#admin-color-muted')?.value||'#8e9999',
+    p_color_line:$('#admin-color-line')?.value||'#293235',
+    p_color_acid:$('#admin-color-acid')?.value||'#d8ff3e',
+    p_color_cyan:$('#admin-color-cyan')?.value||'#22d9ee',
+    p_color_coral:$('#admin-color-coral')?.value||'#ff5c4d',
+    p_color_violet:$('#admin-color-violet')?.value||'#9b7cff',
+    p_custom_css:String($('#admin-custom-css')?.value||'').slice(0,20000),
+    p_announcement:String($('#admin-announcement')?.value||'').slice(0,240)
+  };
+  const btn=$('#admin-site-save');if(btn)btn.disabled=true;
+  const {data,error}=await supabase.rpc('admin_update_site_settings',args);
+  if(btn)btn.disabled=false;
+  if(error)return toast('A aparência global não foi salva. O CSS ganhou consciência.');
+  state.siteSettings=data||args;
+  applySiteSettings(data||state.siteSettings);
+  toast('Aparência global atualizada.');
+  renderAdminDashboard();
+}
+async function adminToggleSuspension(userId,suspended){
+  if(!state.isAdmin||!userId)return;
+  let reason='';
+  if(suspended){
+    reason=prompt('Motivo da suspensão (fica no registro administrativo):','violação das regras do AVESSO')||'';
+    if(!reason.trim())return;
+  }
+  const {error}=await supabase.rpc('admin_set_user_suspension',{p_user_id:userId,p_suspended:suspended,p_reason:reason,p_until:null});
+  if(error)return toast('Não foi possível alterar a suspensão deste usuário.');
+  toast(suspended?'Usuário suspenso. A rede continua sem tribunal de praça pública.':'Usuário reativado.');
+  renderAdminDashboard();
+}
+async function adminSetRole(userId,role){
+  if(state.adminRole!=='owner'||!userId)return;
+  const {error}=await supabase.rpc('admin_set_user_role',{p_user_id:userId,p_role:role});
+  if(error)return toast('A função administrativa não foi alterada.');
+  toast(role==='none'?'Acesso administrativo removido.':'Papel administrativo atualizado.');
+  renderAdminDashboard();
+}
+async function adminDeleteContent(kind,id){
+  if(!state.isAdmin||!id)return;
+  const rpc={post:'admin_delete_post',response:'admin_delete_response',photo:'admin_delete_photo',story:'admin_delete_story'}[kind];
+  if(!rpc)return;
+  if(!confirm('Remover este conteúdo da rede? A ação será registrada no log administrativo.'))return;
+  const {error}=await supabase.rpc(rpc,{p_id:id});
+  if(error)return toast('A moderação não conseguiu remover o conteúdo.');
+  toast('Conteúdo removido pela moderação.');
+  if(isFeedTab())loadFeed();
+  renderAdminDashboard();
+}
+function adminContentCard(kind,row){
+  const author='@'+escapeHtml(row.author_handle||'...');
+  const body=escapeHtml(row.body||row.caption||('[ '+kind+' ]'));
+  const media=kind==='photo'&&row.storage_path?'<img src="'+escapeAttr(publicAlbumUrl(row.storage_path))+'" alt="">':'';
+  return '<article class="admin-content-card">'+media+'<div><header><b>'+author+'</b><small>'+ago(row.created_at)+'</small></header><p>'+body+'</p></div><button class="danger" data-admin-delete-kind="'+kind+'" data-admin-delete-id="'+escapeAttr(row.id)+'">remover</button></article>';
+}
+function adminAuditRow(row){
+  const labels={
+    update_site_settings:'aparência alterada',suspend_user:'usuário suspenso',restore_user:'usuário reativado',
+    set_admin_role:'papel administrativo',delete_post:'post removido',delete_response:'resposta removida',
+    delete_photo:'foto removida',delete_story:'story removido'
+  };
+  return '<div class="admin-audit-row"><b>'+escapeHtml(labels[row.action]||row.action||'ação')+'</b><span>'+escapeHtml(row.target_type||'sistema')+(row.target_id?' · '+escapeHtml(String(row.target_id).slice(0,12)):'')+'</span><time>'+ago(row.created_at)+'</time></div>';
+}
+
 async function renderAdminDashboard(){
   if(state.tab!=='admin')return;
-  if(!state.isAdmin){
-    await goToFeedHome();
-    return;
-  }
+  if(!state.isAdmin){await goToFeedHome();return;}
   $('#feed-status').classList.add('hidden');
   const host=$('#feed-list');
-  host.innerHTML='<section class="admin-shell"><div class="admin-loading">ADMIN.SYS // carregando privilégios sem transformar isso em LinkedIn...</div></section>';
+  host.innerHTML='<section class="admin-shell"><div class="admin-loading">ADMIN.SYS // carregando a chave mestra sem fingir que isso é um SaaS...</div></section>';
   const {data,error}=await supabase.rpc('admin_dashboard_snapshot');
   if(state.tab!=='admin')return;
   if(error){
@@ -2189,61 +2332,123 @@ async function renderAdminDashboard(){
   const users=Array.isArray(data?.recent_users)?data.recent_users:[];
   const reports=Array.isArray(data?.reports)?data.reports:[];
   const world=data?.world||{};
+  const site=data?.site||state.siteSettings||{};
+  const recentPosts=Array.isArray(data?.recent_posts)?data.recent_posts:[];
+  const recentResponses=Array.isArray(data?.recent_responses)?data.recent_responses:[];
+  const recentPhotos=Array.isArray(data?.recent_photos)?data.recent_photos:[];
+  const recentStories=Array.isArray(data?.recent_stories)?data.recent_stories:[];
+  const audit=Array.isArray(data?.audit)?data.audit:[];
+
   const statCards=[
     ['habitantes',counts.users??0,'contas registradas'],
     ['novos // 7d',counts.users_7d??0,'entraram nesta semana'],
     ['online',counts.online_now??0,'presenças agora'],
+    ['suspensos',counts.suspended_users??0,'bloqueados para novas ações'],
     ['publicações',counts.posts??0,'posts no sistema'],
     ['respostas',counts.responses??0,'respostas humanas'],
     ['stories',counts.stories_active??0,'ativos agora'],
-    ['mensagens',counts.direct_messages??0,'mensagens diretas'],
+    ['mensagens',counts.direct_messages??0,'somente contagem, não conteúdo'],
     ['amizades',counts.friendships??0,'conexões aceitas'],
     ['denúncias',counts.reports_open??0,'abertas']
   ].map(([label,value,detail])=>'<article><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(String(value))+'</strong><small>'+escapeHtml(detail)+'</small></article>').join('');
+
   const usersHtml=users.map(user=>{
     const presence=adminPresenceLabel(user);
-    return '<button class="admin-user-row" data-profile-id="'+escapeAttr(user.id)+'">'+
-      '<span class="admin-user-avatar">'+avatarHtml(user.avatar_url,user.display_name||'?')+'</span>'+
-      '<span><b>'+escapeHtml(user.display_name||'sem nome')+'</b><small>@'+escapeHtml(user.handle||'...')+'</small></span>'+
+    const isSelf=user.id===state.profile.id;
+    const status=user.suspended?'SUSPENSO':(user.admin_role?user.admin_role.toUpperCase():'USUÁRIO');
+    const roleControl=state.adminRole==='owner'
+      ?'<select class="admin-role-select" data-admin-role-user="'+escapeAttr(user.id)+'" '+(isSelf?'disabled':'')+'>'+
+        '<option value="none" '+(!user.admin_role?'selected':'')+'>usuário</option>'+
+        '<option value="admin" '+(user.admin_role==='admin'?'selected':'')+'>admin</option>'+
+        '<option value="owner" '+(user.admin_role==='owner'?'selected':'')+'>owner</option></select>'
+      :'<span class="admin-role-label">'+escapeHtml(user.admin_role||'usuário')+'</span>';
+    return '<article class="admin-user-row '+(user.suspended?'is-suspended':'')+'">'+
+      '<button class="admin-user-profile" data-profile-id="'+escapeAttr(user.id)+'"><span class="admin-user-avatar">'+avatarHtml(user.avatar_url,user.display_name||'?')+'</span>'+
+      '<span><b>'+escapeHtml(user.display_name||'sem nome')+'</b><small>@'+escapeHtml(user.handle||'...')+'</small></span></button>'+
       '<em class="'+presence+'">'+presence+'</em>'+
+      '<strong class="admin-account-state" title="'+escapeAttr(user.suspension_reason||'')+'">'+status+'</strong>'+
       '<time>'+ago(user.created_at)+'</time>'+
-    '</button>';
-  }).join('')||'<p class="admin-empty">Nenhum perfil. A administração alcançou eficiência absoluta por falta de cidadãos.</p>';
+      '<div class="admin-user-controls">'+roleControl+
+        (isSelf?'<span class="admin-self-tag">VOCÊ</span>':'<button class="'+(user.suspended?'restore':'danger')+'" data-admin-suspend-user="'+escapeAttr(user.id)+'" data-admin-suspend-value="'+(user.suspended?'0':'1')+'">'+(user.suspended?'reativar':'suspender')+'</button>')+
+      '</div></article>';
+  }).join('')||'<p class="admin-empty">Nenhum perfil. Administração perfeita por ausência de humanidade.</p>';
+
   const reportsHtml=reports.map(report=>{
     const target=report.reported_profile?.handle?'@'+report.reported_profile.handle:(report.post_id?'post '+String(report.post_id).slice(0,8):'conteúdo');
-    return '<article class="admin-report-card">'+
-      '<header><div><b>'+escapeHtml(String(report.reason||'denúncia'))+'</b><small>'+escapeHtml(report.reporter?.handle?'@'+report.reporter.handle:'reportante')+' · '+ago(report.created_at)+'</small></div><select data-admin-report-status="'+escapeAttr(report.id)+'">'+adminReportStatusOptions(report.status)+'</select></header>'+
-      '<p>'+escapeHtml(report.details||'sem detalhes')+'</p>'+
-      '<footer><span>alvo: '+escapeHtml(target)+'</span>'+(report.post_id?'<code>'+escapeHtml(String(report.post_id))+'</code>':'')+'</footer>'+
-    '</article>';
-  }).join('')||'<p class="admin-empty">Nenhuma denúncia na fila. Ou todos amadureceram, hipótese estatisticamente ousada.</p>';
-  host.innerHTML=`<section class="admin-shell">
-    <header class="admin-hero">
-      <div><span class="section-code">ADMIN.SYS // ACESSO ${escapeHtml((state.adminRole||'admin').toUpperCase())}</span><h2>Painel do AVESSO <span>♛</span></h2><p>Visão operacional da rede. Sem gráfico 3D, porque ainda temos algum respeito por computadores.</p></div>
-      <button id="admin-refresh" type="button">↻ atualizar</button>
-    </header>
-    <div class="admin-stats">${statCards}</div>
-    <div class="admin-grid">
-      <section class="admin-panel">
-        <div class="admin-panel-head"><div><span class="section-code">CONTAS // RECENTES</span><h3>Novos habitantes</h3></div><small>${users.length} exibidos</small></div>
-        <div class="admin-user-list">${usersHtml}</div>
-      </section>
-      <section class="admin-panel admin-world-panel">
-        <div class="admin-panel-head"><div><span class="section-code">MUNDO // CONTROLES</span><h3>Estado global</h3></div><strong>${world.world_events_enabled?'ONLINE':'PAUSADO'}</strong></div>
-        <label class="admin-switch"><input id="admin-world-events" type="checkbox" ${world.world_events_enabled?'checked':''}><span><b>eventos do mundo</b><small>habilita os acontecimentos gerais dos habitantes</small></span></label>
-        <label class="admin-switch"><input id="admin-world-interventions" type="checkbox" ${world.world_interventions_enabled?'checked':''}><span><b>interferências visuais</b><small>libera intervenções de interface quando a regra permitir</small></span></label>
-        <label class="admin-world-message">mensagem do sistema<textarea id="admin-world-message" maxlength="240">${escapeHtml(world.message||'')}</textarea></label>
-        <button id="admin-world-save" type="button">salvar controles</button>
-      </section>
-    </div>
-    <section class="admin-panel admin-reports-panel">
-      <div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // DENÚNCIAS</span><h3>Fila de revisão</h3></div><small>${reports.length} carregadas</small></div>
-      <div class="admin-report-list">${reportsHtml}</div>
-    </section>
-  </section>`;
+    return '<article class="admin-report-card"><header><div><b>'+escapeHtml(String(report.reason||'denúncia'))+'</b>'+
+      '<small>'+escapeHtml(report.reporter?.handle?'@'+report.reporter.handle:'reportante')+' · '+ago(report.created_at)+'</small></div>'+
+      '<select data-admin-report-status="'+escapeAttr(report.id)+'">'+adminReportStatusOptions(report.status)+'</select></header>'+
+      '<p>'+escapeHtml(report.details||'sem detalhes')+'</p><footer><span>alvo: '+escapeHtml(target)+'</span>'+
+      (report.post_id?'<code>'+escapeHtml(String(report.post_id))+'</code>':'')+'</footer></article>';
+  }).join('')||'<p class="admin-empty">Nenhuma denúncia na fila. Estranhamente civilizado.</p>';
+
+  const colorFields=[
+    ['bg','fundo',site.color_bg||'#090b0c','--bg'],
+    ['panel','painel',site.color_panel||'#111517','--panel'],
+    ['panel2','painel 2',site.color_panel2||'#191f21','--panel2'],
+    ['ink','texto',site.color_ink||'#f5f3e8','--ink'],
+    ['muted','texto apagado',site.color_muted||'#8e9999','--muted'],
+    ['line','linhas',site.color_line||'#293235','--line'],
+    ['acid','ácido',site.color_acid||'#d8ff3e','--acid'],
+    ['cyan','ciano',site.color_cyan||'#22d9ee','--cyan'],
+    ['coral','coral',site.color_coral||'#ff5c4d','--coral'],
+    ['violet','violeta',site.color_violet||'#9b7cff','--violet']
+  ].map(([key,label,value,cssVar])=>'<label><span>'+label+'</span><input id="admin-color-'+key+'" data-admin-color-var="'+cssVar+'" type="color" value="'+escapeAttr(value)+'"></label>').join('');
+
+  const moderationContent=
+    '<div class="admin-content-column"><h4>PUBLICAÇÕES</h4>'+recentPosts.map(x=>adminContentCard('post',x)).join('')+'</div>'+
+    '<div class="admin-content-column"><h4>RESPOSTAS</h4>'+recentResponses.map(x=>adminContentCard('response',x)).join('')+'</div>'+
+    '<div class="admin-content-column"><h4>FOTOS</h4>'+recentPhotos.map(x=>adminContentCard('photo',x)).join('')+'</div>'+
+    '<div class="admin-content-column"><h4>STORIES</h4>'+recentStories.map(x=>adminContentCard('story',x)).join('')+'</div>';
+
+  host.innerHTML='<section class="admin-shell">'+
+    '<header class="admin-hero"><div><span class="section-code">ADMIN.SYS // ACESSO '+escapeHtml((state.adminRole||'admin').toUpperCase())+'</span>'+
+    '<h2>Painel do AVESSO '+adminCrownHtml('admin-hero-crown')+'</h2>'+
+    '<p>Controle operacional, visual e de moderação. Mensagens privadas continuam privadas. Poder total não precisa virar bisbilhotagem.</p></div>'+
+    '<button id="admin-refresh" type="button">↻ atualizar</button></header>'+
+
+    '<div class="admin-stats">'+statCards+'</div>'+
+
+    '<section class="admin-panel admin-appearance-panel"><div class="admin-panel-head"><div><span class="section-code">APARÊNCIA // CHAVE MESTRA</span>'+
+    '<h3>Personalização global</h3></div><small>cores + CSS global</small></div>'+
+    '<div class="admin-site-copy"><label>nome da rede<input id="admin-site-name" maxlength="40" value="'+escapeAttr(site.site_name||'AVESSO')+'"></label>'+
+    '<label>frase principal<input id="admin-site-tagline" maxlength="120" value="'+escapeAttr(site.tagline||'menos palco, mais presença')+'"></label></div>'+
+    '<label class="admin-announcement">aviso global<textarea id="admin-announcement" maxlength="240" placeholder="vazio = sem aviso">'+escapeHtml(site.announcement||'')+'</textarea></label>'+
+    '<div class="admin-presets"><span>PRESETS</span><button data-admin-preset="avesso">AVESSO</button><button data-admin-preset="phosphor">Fósforo</button>'+
+    '<button data-admin-preset="cyan">Ciano</button><button data-admin-preset="magenta">Magenta CRT</button></div>'+
+    '<div class="admin-color-grid">'+colorFields+'</div>'+
+    '<label class="admin-custom-css"><span>CSS GLOBAL // 20.000 caracteres</span><textarea id="admin-custom-css" spellcheck="false" placeholder="/* você realmente pediu a chave mestra */">'+escapeHtml(site.custom_css||'')+'</textarea>'+
+    '<small>Este campo altera qualquer parte visual do AVESSO. Sem JavaScript e sem HTML injetável.</small></label>'+
+    '<button id="admin-site-save" class="admin-primary" type="button">salvar aparência global</button></section>'+
+
+    '<div class="admin-grid"><section class="admin-panel"><div class="admin-panel-head"><div><span class="section-code">CONTAS // GERÊNCIA</span><h3>Habitantes</h3></div>'+
+    '<small>'+users.length+' carregados</small></div><div class="admin-user-list">'+usersHtml+'</div></section>'+
+    '<section class="admin-panel admin-world-panel"><div class="admin-panel-head"><div><span class="section-code">MUNDO // CONTROLES</span><h3>Estado global</h3></div>'+
+    '<strong>'+(world.world_events_enabled?'ONLINE':'PAUSADO')+'</strong></div>'+
+    '<label class="admin-switch"><input id="admin-world-events" type="checkbox" '+(world.world_events_enabled?'checked':'')+'><span><b>eventos do mundo</b><small>habilita acontecimentos gerais</small></span></label>'+
+    '<label class="admin-switch"><input id="admin-world-interventions" type="checkbox" '+(world.world_interventions_enabled?'checked':'')+'><span><b>interferências visuais</b><small>libera intervenções quando a regra permitir</small></span></label>'+
+    '<label class="admin-world-message">mensagem do sistema<textarea id="admin-world-message" maxlength="240">'+escapeHtml(world.message||'')+'</textarea></label>'+
+    '<button id="admin-world-save" type="button">salvar controles</button></section></div>'+
+
+    '<section class="admin-panel admin-content-moderation"><div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // CONTEÚDO PÚBLICO</span>'+
+    '<h3>Remoção direta</h3></div><small>ações registradas</small></div><div class="admin-content-grid">'+moderationContent+'</div></section>'+
+
+    '<section class="admin-panel admin-reports-panel"><div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // DENÚNCIAS</span><h3>Fila de revisão</h3></div>'+
+    '<small>'+reports.length+' carregadas</small></div><div class="admin-report-list">'+reportsHtml+'</div></section>'+
+
+    '<section class="admin-panel admin-audit-panel"><div class="admin-panel-head"><div><span class="section-code">AUDITORIA // QUEM FEZ O QUÊ</span><h3>Registro administrativo</h3></div>'+
+    '<small>'+audit.length+' eventos</small></div><div class="admin-audit-list">'+(audit.map(adminAuditRow).join('')||'<p class="admin-empty">Nenhuma ação administrativa registrada ainda.</p>')+'</div></section>'+
+  '</section>';
+
   $('#admin-refresh')?.addEventListener('click',renderAdminDashboard);
   $('#admin-world-save')?.addEventListener('click',saveAdminWorldControls);
+  $('#admin-site-save')?.addEventListener('click',saveAdminSiteSettings);
+  host.querySelectorAll('[data-admin-preset]').forEach(b=>b.onclick=()=>adminApplyPreset(b.dataset.adminPreset));
+  host.querySelectorAll('[data-admin-color-var]').forEach(input=>input.oninput=()=>document.documentElement.style.setProperty(input.dataset.adminColorVar,input.value));
   host.querySelectorAll('[data-admin-report-status]').forEach(select=>select.onchange=()=>setAdminReportStatus(select.dataset.adminReportStatus,select.value));
+  host.querySelectorAll('[data-admin-suspend-user]').forEach(b=>b.onclick=()=>adminToggleSuspension(b.dataset.adminSuspendUser,b.dataset.adminSuspendValue==='1'));
+  host.querySelectorAll('[data-admin-role-user]').forEach(select=>select.onchange=()=>adminSetRole(select.dataset.adminRoleUser,select.value));
+  host.querySelectorAll('[data-admin-delete-kind]').forEach(b=>b.onclick=()=>adminDeleteContent(b.dataset.adminDeleteKind,b.dataset.adminDeleteId));
   bindProfileLinks();
 }
 
@@ -3719,7 +3924,7 @@ async function saveProfileSettings(){
   if(error)return toast('O perfil resistiu à mudança. Tente novamente.');
   state.profile=data;
   await supabase.auth.updateUser({data:{display_name}}).catch(()=>{});
-  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?'<span class="nav-admin-crown" title="Administrador">♛</span>':''); renderNavAvatar();
+  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):''); renderNavAvatar();
   toast('Seu Canto foi atualizado. Identidade salva sem pedir aprovação do algoritmo.');
   renderProfile();
 }
@@ -3745,11 +3950,12 @@ function renderAlbumPhotos(host,photos,userId,editable,reactions=[]){
   if(!host)return;
   host.dataset.albumUser=userId;
   host.innerHTML=photos.map((photo,index)=>`<article class="album-photo" data-album-photo="${photo.id}">
-    <img src="${escapeAttr(photo._url)}" alt="${escapeAttr(photo.caption||'Foto do álbum')}" loading="${index<10?'eager':'lazy'}" decoding="async" fetchpriority="${index<4?'high':'auto'}">
+    <button class="album-photo-open" type="button" data-photo-open="${photo.id}" aria-label="Abrir foto e conversa"><img src="${escapeAttr(photo._url)}" alt="${escapeAttr(photo.caption||'Foto do álbum')}" loading="${index<10?'eager':'lazy'}" decoding="async" fetchpriority="${index<4?'high':'auto'}"></button>
     <div class="album-photo-meta"><p data-photo-caption="${photo.id}">${escapeHtml(photo.caption||'sem legenda. corajoso.')}</p><small>${ago(photo.created_at)}</small></div>
     <div class="photo-reactions" data-photo-reactions="${photo.id}">${albumReactionButtons(photo.id,reactions)}</div>
     ${editable?`<div class="album-owner-actions"><button data-photo-edit="${photo.id}">editar legenda</button><button class="album-delete" data-photo-delete="${photo.id}" data-storage-path="${escapeAttr(photo.storage_path)}">apagar foto</button></div><div class="album-caption-edit hidden" data-photo-edit-panel="${photo.id}"><input maxlength="180" value="${escapeAttr(photo.caption||'')}" placeholder="legenda"><div><button data-photo-save="${photo.id}">salvar</button><button data-photo-cancel="${photo.id}">cancelar</button></div></div>`:''}
   </article>`).join('')||'<p class="album-empty">Álbum vazio. Nenhuma lembrança foi monetizada.</p>';
+  host.querySelectorAll('[data-photo-open]').forEach(b=>b.onclick=()=>openAlbumPhotoViewer(b.dataset.photoOpen));
   host.querySelectorAll('[data-photo-react]').forEach(b=>b.onclick=()=>togglePhotoReaction(b.dataset.photoReact,b.dataset.reaction,userId,editable));
   host.querySelectorAll('[data-photo-delete]').forEach(b=>b.onclick=()=>deleteAlbumPhoto(b.dataset.photoDelete,b.dataset.storagePath));
   host.querySelectorAll('[data-photo-edit]').forEach(b=>b.onclick=()=>host.querySelector(`[data-photo-edit-panel="${b.dataset.photoEdit}"]`)?.classList.remove('hidden'));
@@ -3821,6 +4027,179 @@ async function togglePhotoReaction(photoId,reaction,userId,editable){
   delete state.albumDataCache[userId];
   loadAlbum(userId,editable);
 }
+function ensureImageViewer(){
+  let dialog=$('#avesso-image-viewer');
+  if(dialog)return dialog;
+  dialog=document.createElement('dialog');
+  dialog.id='avesso-image-viewer';
+  dialog.className='avesso-image-viewer';
+  dialog.innerHTML='<button class="image-viewer-close" type="button" aria-label="Fechar">×</button><div id="image-viewer-content"></div>';
+  document.body.appendChild(dialog);
+  dialog.querySelector('.image-viewer-close').onclick=()=>dialog.close();
+  dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+  return dialog;
+}
+function imageViewerCommentHtml(row,ownerId=''){
+  const canDelete=row.user_id===state.profile?.id||ownerId===state.profile?.id;
+  return '<article class="image-viewer-comment">'+
+    '<span class="mini-avatar">'+avatarHtml(row.author?.avatar_url,row.author?.display_name||'?')+'</span>'+
+    '<div><header><button class="user-link" data-profile-id="'+escapeAttr(row.user_id)+'">'+escapeHtml(row.author?.display_name||'alguém')+'</button>'+
+    '<small>@'+escapeHtml(row.author?.handle||'...')+' · '+ago(row.created_at)+'</small></header>'+
+    '<p>'+escapeHtml(row.body)+'</p>'+
+    (canDelete?'<button class="image-comment-delete" data-photo-comment-delete="'+escapeAttr(row.id)+'" data-photo-comment-photo="'+escapeAttr(row.photo_id)+'">apagar</button>':'')+
+    '</div></article>';
+}
+async function loadPhotoViewerData(photoId){
+  const {data:photo,error}=await supabase.from('profile_photos').select('*').eq('id',photoId).maybeSingle();
+  if(error||!photo)return null;
+  const [ownerRes,commentsRes,reactionsRes]=await Promise.all([
+    supabase.from('profiles').select('id,display_name,handle,avatar_url').eq('id',photo.user_id).maybeSingle(),
+    supabase.from('photo_comments').select('id,photo_id,user_id,body,created_at,edited_at').eq('photo_id',photoId).order('created_at',{ascending:true}),
+    supabase.from('photo_reactions').select('photo_id,user_id,reaction,created_at').eq('photo_id',photoId)
+  ]);
+  const comments=commentsRes.data||[];
+  const ids=[...new Set(comments.map(x=>x.user_id).filter(Boolean))];
+  let profiles={};
+  if(ids.length){
+    const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',ids);
+    profiles=Object.fromEntries((data||[]).map(x=>[x.id,x]));
+  }
+  return{
+    photo:{...photo,_url:publicAlbumUrl(photo.storage_path)},
+    owner:ownerRes.data||{},
+    comments:comments.map(x=>({...x,author:profiles[x.user_id]||{}})),
+    reactions:reactionsRes.data||[]
+  };
+}
+async function openAlbumPhotoViewer(photoId){
+  if(!photoId)return;
+  const dialog=ensureImageViewer();
+  const host=$('#image-viewer-content');
+  host.innerHTML='<div class="image-viewer-loading">abrindo pixels...</div>';
+  if(!dialog.open)dialog.showModal();
+  const data=await loadPhotoViewerData(photoId);
+  if(!data){host.innerHTML='<div class="image-viewer-error">A foto sumiu atrás do servidor.</div>';return;}
+  const photo=data.photo,owner=data.owner,comments=data.comments,reactions=data.reactions;
+  const reactionButtons=PHOTO_REACTIONS.map(([id,icon,label])=>{
+    const rows=reactions.filter(x=>x.reaction===id);
+    const active=rows.some(x=>x.user_id===state.profile.id);
+    return '<button class="'+(active?'active':'')+'" data-viewer-photo-react="'+id+'" data-photo-id="'+photo.id+'"><span>'+icon+'</span>'+escapeHtml(label)+(rows.length?' <b>'+rows.length+'</b>':'')+'</button>';
+  }).join('');
+  host.innerHTML='<section class="image-viewer-grid">'+
+    '<div class="image-viewer-stage"><img src="'+escapeAttr(photo._url)+'" alt="'+escapeAttr(photo.caption||'Foto do álbum')+'"></div>'+
+    '<aside class="image-viewer-social">'+
+      '<header class="image-viewer-owner"><span class="mini-avatar">'+avatarHtml(owner.avatar_url,owner.display_name||'?')+'</span><div>'+
+      '<button class="user-link" data-profile-id="'+escapeAttr(owner.id||photo.user_id)+'">'+escapeHtml(owner.display_name||'alguém')+'</button>'+
+      '<small>@'+escapeHtml(owner.handle||'...')+' · '+ago(photo.created_at)+'</small></div></header>'+
+      '<p class="image-viewer-caption">'+escapeHtml(photo.caption||'sem legenda. corajoso.')+'</p>'+
+      '<div class="image-viewer-actions"><button class="turn-feed-button" data-viewer-turn-photo="'+photo.id+'">↻ virar no feed</button></div>'+
+      '<div class="image-viewer-reactions">'+reactionButtons+'</div>'+
+      '<section class="image-viewer-comments"><header><b>CONVERSA // '+comments.length+'</b><small>comentários sem pódio</small></header>'+
+      '<div class="image-viewer-comment-list">'+(comments.map(c=>imageViewerCommentHtml(c,photo.user_id)).join('')||'<p class="image-viewer-empty">Ninguém comentou. A imagem sobreviveu.</p>')+'</div></section>'+
+      '<form id="photo-viewer-comment-form" class="image-viewer-comment-form"><textarea maxlength="420" placeholder="comente a imagem..."></textarea><button type="submit">comentar</button></form>'+
+    '</aside></section>';
+  bindProfileLinks();
+  host.querySelectorAll('[data-viewer-photo-react]').forEach(b=>b.onclick=()=>toggleViewerPhotoReaction(photo.id,b.dataset.viewerPhotoReact));
+  host.querySelector('[data-viewer-turn-photo]')?.addEventListener('click',()=>turnPhotoToFeed(photo.id));
+  host.querySelector('#photo-viewer-comment-form')?.addEventListener('submit',e=>{e.preventDefault();sendPhotoViewerComment(photo.id);});
+  host.querySelectorAll('[data-photo-comment-delete]').forEach(b=>b.onclick=()=>deletePhotoViewerComment(b.dataset.photoCommentDelete,b.dataset.photoCommentPhoto));
+}
+async function sendPhotoViewerComment(photoId){
+  const form=$('#photo-viewer-comment-form'),input=form?.querySelector('textarea');
+  const body=String(input?.value||'').trim();
+  if(body.length<2)return toast('Comentário curto demais até para 56K.');
+  const {error}=await supabase.from('photo_comments').insert({photo_id:photoId,user_id:state.profile.id,body});
+  if(error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'O comentário caiu atrás da imagem.');
+  await openAlbumPhotoViewer(photoId);
+}
+async function deletePhotoViewerComment(commentId,photoId){
+  if(!confirm('Apagar este comentário?'))return;
+  const {error}=await supabase.from('photo_comments').delete().eq('id',commentId);
+  if(error)return toast('O comentário se agarrou ao banco.');
+  await openAlbumPhotoViewer(photoId);
+}
+async function toggleViewerPhotoReaction(photoId,reaction){
+  const {data:existing}=await supabase.from('photo_reactions').select('reaction').eq('photo_id',photoId).eq('user_id',state.profile.id).maybeSingle();
+  let result;
+  if(existing?.reaction===reaction)result=await supabase.from('photo_reactions').delete().eq('photo_id',photoId).eq('user_id',state.profile.id);
+  else result=await supabase.from('photo_reactions').upsert({photo_id:photoId,user_id:state.profile.id,reaction},{onConflict:'photo_id,user_id'});
+  if(result.error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'A reação tropeçou.');
+  await openAlbumPhotoViewer(photoId);
+}
+async function turnPhotoToFeed(photoId){
+  if(!photoId)return;
+  const {data,error}=await supabase.rpc('virar_foto',{p_photo_id:photoId});
+  if(error)return toast(state.suspended?'Sua conta está suspensa para novas publicações.':'Não foi possível virar esta foto no feed.');
+  toast('Foto virada no feed. O original continua com crédito, como deveria.');
+  trackAction('photo_turned','feed',{photo_id:photoId,post_id:data});
+  if(isFeedTab())loadFeed();
+  loadImpact();
+}
+async function turnPostToFeed(postId){
+  if(!postId)return;
+  const {data,error}=await supabase.rpc('virar_post',{p_post_id:postId});
+  if(error)return toast(state.suspended?'Sua conta está suspensa para novas publicações.':'Não foi possível virar esta publicação.');
+  toast('Publicação virada no feed. A origem ficou presa nela, sem truque de autoria.');
+  trackAction('post_turned','feed',{source_post_id:postId,post_id:data});
+  if(isFeedTab())loadFeed();
+  loadImpact();
+}
+async function openFeedImageViewer(postId){
+  if(!postId)return;
+  const dialog=ensureImageViewer(),host=$('#image-viewer-content');
+  host.innerHTML='<div class="image-viewer-loading">abrindo pixels...</div>';
+  if(!dialog.open)dialog.showModal();
+  const {data:post,error}=await supabase.from('feed_attention').select('*').eq('id',postId).maybeSingle();
+  if(error||!post){host.innerHTML='<div class="image-viewer-error">A publicação não está mais disponível.</div>';return;}
+  const imageUrl=post.image_url?postImageSrc(post.image_url):(post.reshare_photo_storage_path?publicAlbumUrl(post.reshare_photo_storage_path):'');
+  if(!imageUrl){host.innerHTML='<div class="image-viewer-error">Essa publicação perdeu a imagem no caminho.</div>';return;}
+  const thread=await loadThreadData([post]);
+  const comments=thread.responses[post.id]||[];
+  const reactions=thread.reactions[post.id]||[];
+  const reactionButtons=ACID_REACTIONS.map(([id,icon,label])=>{
+    const rows=reactions.filter(x=>x.reaction===id);
+    const active=rows.some(x=>x.user_id===state.profile.id);
+    return '<button class="'+(active?'active':'')+'" data-viewer-post-react="'+id+'"><span>'+icon+'</span>'+escapeHtml(label)+(rows.length?' <b>'+rows.length+'</b>':'')+'</button>';
+  }).join('');
+  const turned=post.reshare_author_id?
+    '<div class="post-turned-badge"><span>↻ VIRADO DO AVESSO</span><b>original: @'+escapeHtml(post.reshare_author_handle||'alguém')+'</b><small>virado por @'+escapeHtml(post.author_handle||'alguém')+'</small></div>':'';
+  const commentHtml=comments.map(c=>'<article class="image-viewer-comment"><span class="mini-avatar">'+avatarHtml(c.author?.avatar_url,c.author?.display_name||'?')+'</span><div><header><button class="user-link" data-profile-id="'+escapeAttr(c.author_id)+'">'+escapeHtml(c.author?.display_name||'alguém')+'</button><small>@'+escapeHtml(c.author?.handle||'...')+' · '+ago(c.created_at)+'</small></header><p>'+escapeHtml(c.body)+'</p></div></article>').join('');
+  host.innerHTML='<section class="image-viewer-grid">'+
+    '<div class="image-viewer-stage"><img src="'+escapeAttr(imageUrl)+'" alt="Imagem da publicação"></div>'+
+    '<aside class="image-viewer-social">'+
+      '<header class="image-viewer-owner"><span class="mini-avatar">'+avatarHtml(post.author_avatar,post.author_name||'?')+'</span><div>'+
+      '<button class="user-link" data-profile-id="'+post.author_id+'">'+escapeHtml(post.author_name||'alguém')+'</button><small>@'+escapeHtml(post.author_handle||'...')+' · '+ago(post.created_at)+'</small></div></header>'+
+      turned+
+      '<p class="image-viewer-caption">'+escapeHtml(post.body||'')+'</p>'+
+      '<div class="image-viewer-actions"><button class="turn-feed-button" data-viewer-turn-post="'+post.id+'">↻ virar no feed</button></div>'+
+      '<div class="image-viewer-reactions">'+reactionButtons+'</div>'+
+      '<section class="image-viewer-comments"><header><b>CONVERSA // '+comments.length+'</b><small>sem algoritmo premiando interrupção</small></header><div class="image-viewer-comment-list">'+(commentHtml||'<p class="image-viewer-empty">Ainda sem comentários.</p>')+'</div></section>'+
+      '<form id="post-viewer-comment-form" class="image-viewer-comment-form"><textarea maxlength="420" placeholder="entre na conversa..."></textarea><button type="submit">comentar</button></form>'+
+    '</aside></section>';
+  bindProfileLinks();
+  host.querySelector('[data-viewer-turn-post]')?.addEventListener('click',()=>turnPostToFeed(post.id));
+  host.querySelectorAll('[data-viewer-post-react]').forEach(b=>b.onclick=()=>toggleViewerPostReaction(post.id,b.dataset.viewerPostReact));
+  host.querySelector('#post-viewer-comment-form')?.addEventListener('submit',e=>{e.preventDefault();sendPostViewerComment(post.id);});
+}
+async function sendPostViewerComment(postId){
+  const input=$('#post-viewer-comment-form')?.querySelector('textarea');
+  const body=String(input?.value||'').trim();
+  if(body.length<2)return toast('Comentário curto demais.');
+  const {error}=await supabase.from('responses').insert({post_id:postId,author_id:state.profile.id,body});
+  if(error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'O comentário caiu no vazio.');
+  if(isFeedTab())loadFeed();
+  await openFeedImageViewer(postId);
+}
+async function toggleViewerPostReaction(postId,reaction){
+  const {data:existing}=await supabase.from('post_reactions').select('reaction').eq('post_id',postId).eq('user_id',state.profile.id).maybeSingle();
+  let result;
+  if(existing?.reaction===reaction)result=await supabase.from('post_reactions').delete().eq('post_id',postId).eq('user_id',state.profile.id);
+  else result=await supabase.from('post_reactions').upsert({post_id:postId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'post_id,user_id'});
+  if(result.error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'A reação caiu no vazio.');
+  if(isFeedTab())loadFeed();
+  await openFeedImageViewer(postId);
+}
+
 
 function profileMediaCardHtml(row,editable=false){
   const label=row.media_kind==='youtube'?'▶ YOUTUBE':row.media_kind==='spotify'?'♫ SPOTIFY':row.media_kind==='video'?'▶ VÍDEO':'♫ ÁUDIO';
@@ -3891,7 +4270,7 @@ async function renderProfile(){
   $('#feed-list').innerHTML=`<section class="profile-control" style="--profile-wallpaper:url('${wallpaperUrl(state.profile.profile_wallpaper)}')">
     <header class="profile-control-hero">
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
-      <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${escapeHtml(state.profile.display_name)}${state.isAdmin?'<span class="admin-crown" title="Administrador do AVESSO" aria-label="Administrador">♛</span>':''}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
+      <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${escapeHtml(state.profile.display_name)}${state.isAdmin?adminCrownHtml('profile-admin-crown'):''}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
@@ -4205,4 +4584,5 @@ function showAuthLinkError(){
   if(!$('#auth-dialog').open)$('#auth-dialog').showModal();
 }
 
+await loadSiteSettings();
 const {data:{session}}=await supabase.auth.getSession();state.session=session;if(session)enterApp();else showAuthLinkError();
