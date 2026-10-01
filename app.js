@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -396,7 +396,7 @@ async function registerNotificationWorker(){
   }catch{return null;}
 }
 async function browserNotify({title='AVESSO',body='',avatar='',kind='message',action=null}={}){
-  if(!document.hidden||!('Notification' in window)||Notification.permission!=='granted')return;
+  if((!document.hidden&&document.hasFocus())||!('Notification' in window)||Notification.permission!=='granted')return;
   const icon=avatar?new URL(avatar,SITE_URL).href:new URL('assets/avatars/robo-01.svg',SITE_URL).href;
   const options={
     body,
@@ -1351,8 +1351,111 @@ function noteFriendPresence(profile){
     });
   }
 }
-function stopDirectRealtime(){
+function stopDirectRealtime({resetWatch=true}={}){
+  clearTimeout(state.directReconnectTimer);state.directReconnectTimer=null;
+  clearInterval(state.directPollTimer);state.directPollTimer=null;
   if(state.directChannel){supabase.removeChannel(state.directChannel);state.directChannel=null;}
+  state.directChannelStatus='CLOSED';
+  if(resetWatch){
+    state.directWatchStartedAt=null;
+    state.directSeenIds=new Set();
+  }
+}
+function rememberDirectMessage(id){
+  if(!id)return false;
+  if(state.directSeenIds.has(id))return false;
+  state.directSeenIds.add(id);
+  if(state.directSeenIds.size>400){
+    const first=state.directSeenIds.values().next().value;
+    state.directSeenIds.delete(first);
+  }
+  return true;
+}
+function scheduleDirectReconnect(){
+  if(state.directReconnectTimer||!state.profile?.id)return;
+  state.directReconnectTimer=setTimeout(()=>{
+    state.directReconnectTimer=null;
+    if(state.directChannel){supabase.removeChannel(state.directChannel);state.directChannel=null;}
+    startDirectRealtime();
+  },1400);
+}
+async function directAttachmentUrl(path){
+  if(!path)return'';
+  const cached=state.directAttachmentUrlCache[path];
+  if(cached&&cached.expiresAt>Date.now()+30000)return cached.url;
+  const {data}=await supabase.storage.from('avesso-chat').createSignedUrl(path,3600);
+  const url=data?.signedUrl||'';
+  if(url)state.directAttachmentUrlCache[path]={url,expiresAt:Date.now()+3300000};
+  return url;
+}
+async function hydrateDirectMessage(m){
+  if(!m?.attachment_path)return m;
+  return {...m,attachment_url:await directAttachmentUrl(m.attachment_path)};
+}
+function appendDirectMessage(m,{replaceId=null}={}){
+  const log=$('#dm-log');if(!log||!m)return;
+  if(m.id&&log.querySelector(`[data-dm-id="${CSS.escape(String(m.id))}"]`))return;
+  const html=dmMessageHtml(m);
+  if(replaceId){
+    const old=log.querySelector(`[data-dm-id="${CSS.escape(String(replaceId))}"]`);
+    if(old){old.outerHTML=html;log.scrollTop=log.scrollHeight;return;}
+  }
+  log.querySelector('.dm-empty')?.remove();
+  log.insertAdjacentHTML('beforeend',html);
+  log.scrollTop=log.scrollHeight;
+}
+async function markDirectRead(id){
+  if(!id||!state.profile?.id)return;
+  await supabase.from('direct_messages').update({read_at:new Date().toISOString()}).eq('id',id).eq('recipient_id',state.profile.id).is('read_at',null);
+}
+async function receiveIncomingDirectMessage(m,{source='realtime'}={}){
+  if(!m?.id||m.recipient_id!==state.profile?.id||m.sender_id===state.profile.id)return;
+  if(!rememberDirectMessage(m.id))return;
+  const sender=await profileById(m.sender_id);
+  const attention=m.message_kind==='attention';
+  const muted=isPeerMuted(m.sender_id);
+  if(!muted){
+    socialNotify({
+      title:attention?`${sender?.display_name||'Alguém'} chamou sua atenção`:`Mensagem de ${sender?.display_name||'alguém'}`,
+      body:attention?'CHAMAR ATENÇÃO. O protocolo de 2006 foi executado.':(m.message_kind==='image'?'enviou uma imagem':m.message_kind==='audio'?'enviou uma mensagem de voz':m.message_kind==='file'?'enviou um arquivo':String(m.body||'').slice(0,90)),
+      avatar:sender?.avatar_url||'',
+      kind:attention?'attention':'message',
+      sound:!attention,
+      action:()=>openFriendChat(m.sender_id)
+    });
+  }
+
+  const sameChat=state.chatWindowOpen&&state.directPeerId===m.sender_id;
+  if(attention&&!muted){
+    if(document.hidden||!document.hasFocus()){
+      state.pendingAttentionPeerId=m.sender_id;
+      if(sameChat)autoMinimizeChat();
+    }else{
+      await receiveAttention(m.sender_id,m);
+    }
+  }else if(sameChat){
+    const hydrated=await hydrateDirectMessage(m);
+    appendDirectMessage(hydrated);
+    if(!document.hidden&&document.hasFocus())markDirectRead(m.id);
+  }
+
+  if(state.tab==='messages'&&!sameChat)renderMessagesPage();
+}
+async function pollDirectInbox(){
+  if(!state.profile?.id||!state.directWatchStartedAt)return;
+  const {data,error}=await supabase.from('direct_messages')
+    .select('*')
+    .eq('recipient_id',state.profile.id)
+    .is('read_at',null)
+    .gt('created_at',state.directWatchStartedAt)
+    .order('created_at',{ascending:true})
+    .limit(30);
+  if(error)return;
+  for(const m of data||[])await receiveIncomingDirectMessage(m,{source:'poll'});
+}
+function startDirectFallbackPoll(){
+  clearInterval(state.directPollTimer);
+  state.directPollTimer=setInterval(()=>pollDirectInbox(),4000);
 }
 async function notifyPendingFriendRequests(){
   if(!state.profile?.id)return;
@@ -1377,27 +1480,10 @@ async function notifyPendingFriendRequests(){
 function startDirectRealtime(){
   if(state.directChannel||!state.profile?.id)return;
   const me=state.profile.id;
+  if(!state.directWatchStartedAt)state.directWatchStartedAt=new Date(Date.now()-1500).toISOString();
+  startDirectFallbackPoll();
   state.directChannel=supabase.channel(`avesso-social-${me}-${Date.now()}`)
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages'},async payload=>{
-      const m=payload.new||{};
-      if(m.sender_id!==me&&m.recipient_id!==me)return;
-      if(m.sender_id===me){if(state.chatWindowOpen&&state.directPeerId===m.recipient_id)refreshChatWindow();return;}
-      const sender=await profileById(m.sender_id);
-      const attention=m.message_kind==='attention';
-      const muted=isPeerMuted(m.sender_id);
-      if(!muted){
-        socialNotify({
-          title:attention?`${sender?.display_name||'Alguém'} chamou sua atenção`:`Mensagem de ${sender?.display_name||'alguém'}`,
-          body:attention?'CHAMAR ATENÇÃO. O protocolo de 2006 foi executado.':(m.message_kind==='image'?'enviou uma imagem':m.message_kind==='audio'?'enviou uma mensagem de voz':m.message_kind==='file'?'enviou um arquivo':String(m.body||'').slice(0,90)),
-          avatar:sender?.avatar_url||'',kind:attention?'attention':'message',
-          sound:!attention,
-          action:()=>openFriendChat(m.sender_id)
-        });
-        if(attention)await receiveAttention(m.sender_id);
-      }
-      if(state.tab==='messages')renderMessagesPage();
-      if((muted||!attention)&&state.chatWindowOpen&&state.directPeerId===m.sender_id)refreshChatWindow();
-    })
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>receiveIncomingDirectMessage(payload.new||{}, {source:'realtime'}))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'friendships'},async payload=>{
       const f=payload.new||{};
       if(f.addressee_id!==me||f.status!=='pending')return;
@@ -1419,7 +1505,7 @@ function startDirectRealtime(){
       const p=payload.new||{};
       if(p.id!==me)noteFriendPresence(p);
       if(state.tab==='messages')renderMessagesPage();
-      if(state.chatWindowOpen&&state.directPeerId===p.id)openChatWindow(p.id,{keepMinimized:true});
+      if(state.chatWindowOpen&&state.directPeerId===p.id&&!state.chatWindowMinimized)updateChatPeerHeader(p);
     })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'guestbook_entries'},async payload=>{
       const row=payload.new||{};
@@ -1434,8 +1520,13 @@ function startDirectRealtime(){
       });
       if(state.tab==='profile')loadGuestbook(me,'#profile-guestbook');
     })
-    .subscribe();
+    .subscribe(status=>{
+      state.directChannelStatus=status;
+      if(status==='SUBSCRIBED')pollDirectInbox();
+      if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))scheduleDirectReconnect();
+    });
 }
+
 async function loadDirectConversation(peerId){
   if(!peerId)return[];
   const me=state.profile.id;
