@@ -2526,15 +2526,6 @@ async function refreshDirectMessageBubble(messageId){
     repairLegacyVoicePlayers(log);
   }
 }
-function dmReactionSummary(m){
-  const rows=Array.isArray(m?._reactions)?m._reactions:[];
-  return DM_REACTIONS.map(icon=>{
-    const hit=rows.filter(r=>r.reaction===icon);
-    if(!hit.length)return'';
-    const active=hit.some(r=>r.user_id===state.profile.id);
-    return `<button type="button" class="dm-reaction-chip ${active?'active':''}" data-dm-react="${escapeAttr(icon)}" data-message-id="${escapeAttr(m.id)}" aria-pressed="${active}"><span>${escapeHtml(icon)}</span>${hit.length>1?`<b>${hit.length}</b>`:''}</button>`;
-  }).join('');
-}
 function dmMessageHtml(m){
   const mine=m.sender_id===state.profile.id;
   const messageId=escapeAttr(String(m.id||`local-${Date.now()}`));
@@ -2602,7 +2593,7 @@ function updateChatPeerHeader(peer){
 
 async function renderMessagesPage(){
   if(state.tab!=='messages')return;
-  const friends=await acceptedFriendProfiles();
+  const friends=(await acceptedFriendProfiles())||[];
   if(state.tab!=='messages')return;
   $('#feed-status').classList.add('hidden');
   $('#feed-list').innerHTML=`<section class="messages-hub">
@@ -2624,7 +2615,6 @@ document.addEventListener('pointerdown',e=>{
   if(emoji&&!emoji.classList.contains('hidden')&&!e.target.closest('#dm-emoticon-palette,#dm-emoticons'))emoji.classList.add('hidden');
   const postEmoji=$('#post-emoticon-palette');
   if(postEmoji&&!postEmoji.classList.contains('hidden')&&!e.target.closest('#post-emoticon-palette,#post-emoticons'))postEmoji.classList.add('hidden');
-  if(!e.target.closest('[data-dm-message-menu],[data-dm-menu-toggle]'))closeDmMessageMenus();
 });
 
 function preferredVoiceMime(){
