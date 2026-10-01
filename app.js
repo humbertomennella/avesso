@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -145,7 +145,8 @@ async function loadStoriesStrip(){
   host.innerHTML=`<div class="stories-head"><div><span class="section-code">STORIES // 24H</span><b>temporário, como toda boa decisão na internet</b></div><button id="story-create-feed">＋ postar story</button></div><div class="stories-strip"><button class="story-new-card" id="story-create-feed-card"><span class="story-ring self"><i>${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</i><em>＋</em></span><b>seu story</b><small>24h e acabou</small></button>${latestByAuthor.map(s=>storyCardHtml(s,{compact:true})).join('')}</div>`;
   $('#story-create-feed')?.addEventListener('click',openStoryCreate);
   $('#story-create-feed-card')?.addEventListener('click',openStoryCreate);
-  host.querySelectorAll('[data-story-open]').forEach(b=>b.onclick=()=>openStory(b.dataset.storyOpen));
+  const storySequence=latestByAuthor.map(s=>s.id);
+  host.querySelectorAll('[data-story-open]').forEach(b=>b.onclick=()=>openStory(b.dataset.storyOpen,{sequence:storySequence}));
 }
 
 function openStoryCreate(){
@@ -177,7 +178,7 @@ async function publishStory(){
     created=ins.data;
     if(file){
       imagePath=`${state.profile.id}/${created.id}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
-      const up=await supabase.storage.from('avesso-stories').upload(imagePath,file,{cacheControl:'3600',upsert:false,contentType:file.type});
+      const up=await supabase.storage.from('avesso-stories').upload(imagePath,file,{cacheControl:'86400',upsert:false,contentType:file.type});
       if(up.error)throw up.error;
       const upd=await supabase.from('stories').update({image_path:imagePath}).eq('id',created.id);
       if(upd.error)throw upd.error;
@@ -203,13 +204,44 @@ async function loadProfileStories(userId,selector){
   if(error){host.innerHTML='<p class="story-empty">Os stories se perderam no cache.</p>';return;}
   const stories=await hydrateStories(data||[]);
   host.innerHTML=stories.map(s=>storyCardHtml(s)).join('')||'<p class="story-empty">Nenhum story ativo. A internet sobreviveu.</p>';
-  host.querySelectorAll('[data-story-open]').forEach(b=>b.onclick=()=>openStory(b.dataset.storyOpen));
+  const storySequence=stories.map(s=>s.id);
+  host.querySelectorAll('[data-story-open]').forEach(b=>b.onclick=()=>openStory(b.dataset.storyOpen,{sequence:storySequence}));
 }
 
-async function openStory(storyId){
+
+const STORY_VIEW_MS=10000;
+function clearStoryTimer(){
+  if(state.storyTimer){clearTimeout(state.storyTimer);state.storyTimer=null;}
+}
+function closeStoryViewer(){
+  clearStoryTimer();
+  state.storyCurrentId=null;
+  const dialog=$('#story-view-dialog');
+  if(dialog?.open)dialog.close();
+}
+function scheduleStoryAdvance(){
+  clearStoryTimer();
+  const dialog=$('#story-view-dialog');
+  if(!dialog?.open||!state.storyCurrentId)return;
+  state.storyTimer=setTimeout(()=>{
+    const currentIndex=state.storySequence.indexOf(state.storyCurrentId);
+    const nextId=currentIndex>=0?state.storySequence[currentIndex+1]:null;
+    if(nextId)openStory(nextId,{sequence:state.storySequence,auto:true});
+    else closeStoryViewer();
+  },STORY_VIEW_MS);
+}
+function pauseStoryTimer(){clearStoryTimer();}
+function resumeStoryTimer(){if($('#story-view-dialog')?.open)scheduleStoryAdvance();}
+
+async function openStory(storyId,options={}){
   const {data:story,error}=await supabase.from('stories').select('id,author_id,body,image_path,visibility,created_at,expires_at').eq('id',storyId).gt('expires_at',new Date().toISOString()).maybeSingle();
   if(error||!story)return toast('Este story expirou ou você não pode vê-lo. O tempo venceu outra vez.');
   if(isPeerBlocked(story.author_id))return toast('Este usuário está bloqueado. O story ficou do outro lado da porta.');
+  const suppliedSequence=Array.isArray(options.sequence)?options.sequence.filter(Boolean):[];
+  if(suppliedSequence.length)state.storySequence=[...new Set(suppliedSequence)];
+  else if(!state.storySequence.includes(storyId))state.storySequence=[storyId];
+  state.storyCurrentId=storyId;
+  clearStoryTimer();
   const [authorRes,reactionsRes,commentsRes]=await Promise.all([
     supabase.from('profiles').select('id,display_name,handle,avatar_url').eq('id',story.author_id).maybeSingle(),
     supabase.from('story_reactions').select('story_id,user_id,reaction,created_at').eq('story_id',story.id),
@@ -236,7 +268,7 @@ async function openStory(storyId){
   const host=$('#story-view-content');
   host.innerHTML=`<article class="story-view-card">
     <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${escapeHtml(a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
-    <div class="story-stage ${image_url?'has-image':''}" style="${image_url?`--story-image:url('${escapeAttr(image_url)}')`:''}">${image_url?`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||'usuário')}">`:''}${story.body?`<p>${escapeHtml(story.body)}</p>`:''}</div>
+    <div class="story-stage ${image_url?'has-image':''}" style="${image_url?`--story-image:url('${escapeAttr(image_url)}')`:''}">${image_url?`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||'usuário')}" decoding="async" fetchpriority="high">`:''}${story.body?`<p>${escapeHtml(story.body)}</p>`:''}</div>
     <div class="story-reactions">${reactionHtml}</div>
     <section class="story-comments"><h3>respostas // sem plateia</h3><div class="story-comment-list">${commentsHtml}</div><div class="story-comment-compose"><textarea id="story-comment-body" maxlength="420" placeholder="responda antes que isso desapareça..."></textarea><div><button id="story-comment-emoticons" type="button">☻ avessícones</button><button id="story-comment-send" type="button">responder</button></div><div id="story-comment-palette" class="feed-emoticon-palette hidden">${avessoEmoticonButtons('data-story-comment-emoticon')}</div></div></section>
   </article>`;
@@ -245,7 +277,11 @@ async function openStory(storyId){
   $('#story-comment-send').onclick=()=>sendStoryComment(story.id);
   $('#story-comment-emoticons').onclick=()=>$('#story-comment-palette').classList.toggle('hidden');
   host.querySelectorAll('[data-story-comment-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#story-comment-body');if(input){input.value+=`${input.value?' ':''}${b.dataset.storyCommentEmoticon}`;input.focus();}});
+  const commentInput=$('#story-comment-body');
+  commentInput?.addEventListener('focus',pauseStoryTimer);
+  commentInput?.addEventListener('blur',resumeStoryTimer);
   if(canDelete)$('#story-delete').onclick=()=>deleteStory(story);
+  scheduleStoryAdvance();
 }
 
 async function toggleStoryReaction(storyId,reaction){
@@ -256,7 +292,7 @@ async function toggleStoryReaction(storyId,reaction){
     :await supabase.from('story_reactions').upsert({story_id:storyId,user_id:state.profile.id,reaction},{onConflict:'story_id,user_id'});
   if(result.error)return toast('A reação ao story teve uma reação adversa.');
   trackAction('story_reaction','stories',{story_id:storyId,reaction});
-  openStory(storyId);
+  openStory(storyId,{sequence:state.storySequence});
 }
 
 async function sendStoryComment(storyId){
@@ -264,7 +300,7 @@ async function sendStoryComment(storyId){
   if(!body)return toast('Resposta vazia é só telepatia com interface.');
   const {error}=await supabase.from('story_comments').insert({story_id:storyId,user_id:state.profile.id,body});
   if(error)return toast('A resposta não chegou ao story.');
-  input.value='';trackAction('story_reply','stories',{story_id:storyId});openStory(storyId);
+  input.value='';trackAction('story_reply','stories',{story_id:storyId});openStory(storyId,{sequence:state.storySequence});
 }
 
 async function deleteStory(story){
@@ -272,7 +308,7 @@ async function deleteStory(story){
   if(story.image_path)await supabase.storage.from('avesso-stories').remove([story.image_path]);
   const {error}=await supabase.from('stories').delete().eq('id',story.id).eq('author_id',state.profile.id);
   if(error)return toast('O story se recusou a morrer antes do prazo.');
-  $('#story-view-dialog')?.close();toast('Story apagado.');
+  closeStoryViewer();toast('Story apagado.');
   loadStoriesStrip();
   if(state.tab==='profile')loadProfileStories(state.profile.id,'#profile-story-list');
 }
@@ -437,7 +473,23 @@ const PHOTO_REACTIONS=[
   ['pixel_aprovado','▣','pixel aprovado'],
   ['quase_arte','✦','quase arte']
 ];
-function publicAlbumUrl(path){return supabase.storage.from('avesso-albums').getPublicUrl(path).data.publicUrl;}
+function publicAlbumUrl(path){
+  if(!path)return '';
+  if(state.albumUrlCache[path])return state.albumUrlCache[path];
+  const url=supabase.storage.from('avesso-albums').getPublicUrl(path).data.publicUrl;
+  state.albumUrlCache[path]=url;
+  return url;
+}
+function warmAlbumImages(urls=[]){
+  urls.slice(0,16).forEach((url,index)=>{
+    if(!url||state.albumPreloaded[url])return;
+    const img=new Image();
+    img.decoding='async';
+    if(index<6)img.fetchPriority='high';
+    img.src=url;
+    state.albumPreloaded[url]=true;
+  });
+}
 function guestbookImageUrl(path){return supabase.storage.from('avesso-recados').getPublicUrl(path).data.publicUrl;}
 function richText(value=''){const escaped=escapeHtml(value).replace(/\n/g,'<br>');return escaped.replace(/(https?:\/\/[^\s<]+)/g,'<a class="guestbook-link" href="$1" target="_blank" rel="noopener noreferrer">$1</a>');}
 function safeFileName(name='arquivo'){return name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/-+/g,'-').slice(-90)||'arquivo';}
@@ -745,7 +797,15 @@ $('.dialog-close').onclick=()=>$('#auth-dialog').close();
 $('.avatar-dialog-close').onclick=()=>$('#avatar-dialog').close();
 $('.wallpaper-dialog-close').onclick=()=>$('#wallpaper-dialog').close();
 $('.story-create-close').onclick=()=>$('#story-create-dialog').close();
-$('.story-view-close').onclick=()=>$('#story-view-dialog').close();
+$('.story-view-close').onclick=closeStoryViewer;
+const storyViewDialog=$('#story-view-dialog');
+storyViewDialog?.addEventListener('click',e=>{
+  if(e.target===storyViewDialog)closeStoryViewer();
+});
+storyViewDialog?.addEventListener('close',()=>{
+  clearStoryTimer();
+  state.storyCurrentId=null;
+});
 $('#story-publish').onclick=publishStory;
 $('#story-image').onchange=e=>{
   const file=e.target.files?.[0]||null,box=$('#story-image-preview');
@@ -766,7 +826,7 @@ $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
 async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await loadBlockedPeers();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.blockedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.blockedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();closeStoryViewer();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -1734,13 +1794,15 @@ async function loadAlbum(userId,editable=false){
   const host=$(editable?'#profile-album':'#public-album');if(!host)return;
   const {data:photos,error}=await supabase.from('profile_photos').select('*').eq('user_id',userId).order('created_at',{ascending:false}).limit(60);
   if(error){host.innerHTML='<p>O álbum caiu atrás do servidor.</p>';return;}
-  const ids=(photos||[]).map(p=>p.id);
+  const albumPhotos=(photos||[]).map(photo=>({...photo,_url:publicAlbumUrl(photo.storage_path)}));
+  warmAlbumImages(albumPhotos.map(photo=>photo._url));
+  const ids=albumPhotos.map(p=>p.id);
   let reactions=[];
   if(ids.length){const r=await supabase.from('photo_reactions').select('*').in('photo_id',ids);reactions=r.data||[];}
-  host.innerHTML=(photos||[]).map(photo=>{
+  host.innerHTML=albumPhotos.map((photo,index)=>{
     const rs=reactions.filter(r=>r.photo_id===photo.id);
     const buttons=PHOTO_REACTIONS.map(([id,icon,label])=>{const rows=rs.filter(r=>r.reaction===id);const active=rows.some(r=>r.user_id===state.profile.id);return `<button class="photo-reaction ${active?'active':''}" data-photo-react="${photo.id}" data-reaction="${id}">${icon} ${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`}).join('');
-    return `<article class="album-photo"><img src="${escapeAttr(publicAlbumUrl(photo.storage_path))}" alt="${escapeAttr(photo.caption||'Foto do álbum')}" loading="lazy"><div class="album-photo-meta"><p>${escapeHtml(photo.caption||'sem legenda. corajoso.')}</p><small>${ago(photo.created_at)}</small></div><div class="photo-reactions">${buttons}</div>${editable?`<button class="album-delete" data-photo-delete="${photo.id}" data-storage-path="${escapeAttr(photo.storage_path)}">apagar foto</button>`:''}</article>`;
+    return `<article class="album-photo"><img src="${escapeAttr(photo._url)}" alt="${escapeAttr(photo.caption||'Foto do álbum')}" loading="${index<10?'eager':'lazy'}" decoding="async" fetchpriority="${index<4?'high':'auto'}"><div class="album-photo-meta"><p>${escapeHtml(photo.caption||'sem legenda. corajoso.')}</p><small>${ago(photo.created_at)}</small></div><div class="photo-reactions">${buttons}</div>${editable?`<button class="album-delete" data-photo-delete="${photo.id}" data-storage-path="${escapeAttr(photo.storage_path)}">apagar foto</button>`:''}</article>`;
   }).join('')||'<p class="album-empty">Álbum vazio. Nenhuma lembrança foi monetizada.</p>';
   $$('[data-photo-react]').forEach(b=>b.onclick=()=>togglePhotoReaction(b.dataset.photoReact,b.dataset.reaction,userId,editable));
   $$('[data-photo-delete]').forEach(b=>b.onclick=()=>deleteAlbumPhoto(b.dataset.photoDelete,b.dataset.storagePath));
@@ -1752,7 +1814,7 @@ async function uploadAlbumPhoto(){
   const caption=String($('#album-caption').value||'').slice(0,180);
   const path=`${state.profile.id}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
   const btn=$('#album-upload');btn.disabled=true;btn.textContent='enviando...';
-  const {error:upErr}=await supabase.storage.from('avesso-albums').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type});
+  const {error:upErr}=await supabase.storage.from('avesso-albums').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
   if(upErr){btn.disabled=false;btn.textContent='adicionar foto';return toast('A foto não conseguiu entrar no álbum.');}
   const {error}=await supabase.from('profile_photos').insert({user_id:state.profile.id,storage_path:path,caption});
   btn.disabled=false;btn.textContent='adicionar foto';
@@ -1928,9 +1990,8 @@ async function openPublicProfile(userId){
   state.tab='public_profile';state.publicProfileId=userId;bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   applyAppTabLayout();$('#feed-status').classList.add('hidden');
-  const [profileRes,postsRes,friendship]=await Promise.all([
+  const [profileRes,friendship]=await Promise.all([
     supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen').eq('id',userId).maybeSingle(),
-    supabase.from('posts').select('id,body,image_url,created_at').eq('author_id',userId).eq('visibility','publico').order('created_at',{ascending:false}).limit(20),
     getFriendshipWith(userId)
   ]);
   if(state.tab!=='public_profile'||state.publicProfileId!==userId)return;
@@ -1959,7 +2020,6 @@ async function openPublicProfile(userId){
       <div id="public-guestbook-list" class="guestbook-list"><p>carregando recados...</p></div>
     </section>
     <section class="public-album"><h2>Álbum de ${escapeHtml(p.display_name)}</h2><div id="public-album" class="profile-album-grid"><p>abrindo gavetas...</p></div></section>
-    <div class="public-posts"><h2>O que ${escapeHtml(p.display_name)} deixou por aqui</h2>${(postsRes.data||[]).map(post=>`<article class="post-card"><span class="post-meta">${ago(post.created_at)}</span><p class="post-body">${escapeHtml(post.body)}</p>${post.image_url?`<figure class="post-image"><img src="${escapeHtml(post.image_url)}" loading="lazy"></figure>`:''}</article>`).join('')||'<p class="feed-status">Nada público ainda.</p>'}</div>
   </section>`;
   $('#back-from-profile').onclick=()=>document.querySelector('[data-app-tab="feed"]')?.click();
   $('[data-add-friend]')?.addEventListener('click',e=>requestFriend(e.currentTarget.dataset.addFriend));
