@@ -1178,6 +1178,37 @@ async function blockChatPeer(peerId){
   if(isFeedTab()){loadFeed();if(state.tab==='feed')loadStoriesStrip();}
   toast(`${peer?.display_name||'Usuário'} foi bloqueado. Ele também saiu do seu feed.`);
 }
+
+function ensureReportUserDialog(){
+  let dialog=$('#report-user-dialog');
+  if(dialog)return dialog;
+  dialog=document.createElement('dialog');
+  dialog.id='report-user-dialog';
+  dialog.className='report-user-dialog';
+  dialog.innerHTML='<form method="dialog" class="report-user-card"><header><span class="section-code">DENUNCIA // PERFIL</span><button value="cancel" aria-label="Fechar">×</button></header><h3 id="report-user-title">Denunciar usuario</h3><p>Informe o motivo e inclua contexto suficiente para revisao.</p><label>motivo<select id="report-user-reason"><option value="assedio">assedio</option><option value="odio">discriminacao</option><option value="spam">spam</option><option value="risco">risco</option><option value="outro">outro</option></select></label><label>detalhes<textarea id="report-user-details" maxlength="500" placeholder="descreva o ocorrido..."></textarea></label><footer><button value="cancel">cancelar</button><button id="report-user-submit" value="default">enviar denuncia</button></footer></form>';
+  document.body.appendChild(dialog);
+  return dialog;
+}
+async function reportUser(userId){
+  if(!userId||userId===state.profile?.id)return toast('Nao e possivel denunciar o proprio perfil.');
+  const peer=await profileById(userId);
+  const dialog=ensureReportUserDialog();
+  dialog.dataset.userId=userId;
+  $('#report-user-title').textContent='Denunciar '+(peer?.display_name||'usuario');
+  $('#report-user-details').value='';
+  $('#report-user-reason').value='outro';
+  $('#report-user-submit').onclick=async e=>{
+    e.preventDefault();
+    const reason=$('#report-user-reason').value;
+    const details=String($('#report-user-details').value||'').trim();
+    if(details.length<5)return toast('Inclua mais contexto.');
+    const {error}=await supabase.from('reports').insert({reporter_id:state.profile.id,reported_profile_id:userId,reason,details});
+    if(error){console.error('report user',error);return toast('A denuncia nao foi enviada.');}
+    dialog.close();
+    toast('Denuncia enviada para a equipe.');
+  };
+  dialog.showModal();
+}
 async function unblockPeer(peerId){
   if(!peerId||!state.profile?.id)return;
   const button=document.querySelector(`[data-unblock="${CSS.escape(peerId)}"]`);
@@ -3655,6 +3686,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
         <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${identityNameHtml(peer.id,peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
         <button id="dm-visit-profile">↗ visitar o Canto</button>
         <button id="dm-mute-peer">${muted?'🔊 desmutar':'🔇 mutar'} notificações</button>
+        <button id="dm-report-peer">⚑ denunciar usuário</button>
         <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
         <label class="dm-away-setting"><span>MINHA AUSÊNCIA AUTOMÁTICA</span><select id="dm-away-after"><option value="5">5 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option><option value="20">20 minutos</option><option value="30">30 minutos</option><option value="0">nunca</option></select></label><label class="dm-chat-listening-setting"><input id="dm-show-listening" type="checkbox" ${state.profile.chat_listening_visible!==false?'checked':''}><span><b>mostrar minha música nas conversas</b><small>o Canto pode continuar mostrando mesmo se você esconder daqui</small></span></label><div class="dm-status-setting"><span>MEU STATUS</span><div><input id="dm-status-message" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"><button id="dm-save-status" type="button">salvar</button></div></div>
         <div class="dm-theme-section"><span>TEMA // PIXEL 199X → 2026</span><div class="dm-theme-grid">${CHAT_THEMES.map(([id,label,color])=>`<button type="button" class="chat-theme-choice ${theme===id?'active':''}" data-chat-theme="${id}" title="${escapeAttr(label)}"><i style="--theme-color:${color}"></i><b>${escapeHtml(label)}</b></button>`).join('')}</div></div>
@@ -3709,6 +3741,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('#dm-options').onclick=e=>{e.stopPropagation();$('#dm-options-menu').classList.toggle('hidden');$('#dm-emoticon-palette')?.classList.add('hidden');};
   $('#dm-visit-profile').onclick=()=>{openPublicProfile(peerId);$('#dm-options-menu')?.classList.add('hidden');};
   $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
+  $('#dm-report-peer').onclick=()=>reportUser(peerId);
   $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
   const awaySelect=$('#dm-away-after');if(awaySelect){awaySelect.value=String(state.profile.away_after_minutes??10);awaySelect.onchange=e=>saveAwayAfterMinutes(e.target.value);}
   const showListening=$('#dm-show-listening');if(showListening)showListening.onchange=e=>saveChatListeningVisibility(e.target.checked);
@@ -4553,7 +4586,7 @@ async function openPublicProfile(userId){
     : '<div class="guestbook-locked">Recados são para amigos. Civilização mínima, aparentemente.</div>';
   $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
-    <header class="public-profile-hero"><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div class="public-profile-identity"><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><div class="public-profile-name-row"><h1>${identityNameHtml(p.id,p.display_name,'public-profile-name')}</h1><span class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</span></div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><div class="public-profile-sound-row"><div id="public-now-playing">${nowPlayingHtml(p)}</div><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div></div><p class="public-profile-bio">${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <header class="public-profile-hero"><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div class="public-profile-identity"><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><div class="public-profile-name-row"><h1>${identityNameHtml(p.id,p.display_name,'public-profile-name')}</h1><span class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</span></div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><div class="public-profile-sound-row"><div id="public-now-playing">${nowPlayingHtml(p)}</div><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div></div><p class="public-profile-bio">${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}<button class="report-profile-button" data-report-profile="${p.id}">⚑ denunciar</button></div></div></header>
     <section class="public-story-section">
       <span class="section-code">STORIES // AINDA NÃO EXPIRARAM</span>
       <h2>Stories de ${escapeHtml(p.display_name)}</h2>
@@ -4574,6 +4607,7 @@ async function openPublicProfile(userId){
   $('[data-accept-public]')?.addEventListener('click',async e=>{await answerFriendRequest(e.currentTarget.dataset.acceptPublic,true);openPublicProfile(userId);});
   $('[data-message-friend]')?.addEventListener('click',e=>openFriendChat(e.currentTarget.dataset.messageFriend));
   $('[data-unfriend-public]')?.addEventListener('click',async e=>{if(confirm('Desfazer amizade? Sem textão de despedida.')){await supabase.from('friendships').delete().eq('id',e.currentTarget.dataset.unfriendPublic);openPublicProfile(userId);}});
+  $('[data-report-profile]')?.addEventListener('click',e=>reportUser(e.currentTarget.dataset.reportProfile));
   $('#guestbook-submit')?.addEventListener('click',()=>sendGuestbookEntry(userId));
   loadGuestbook(userId,'#public-guestbook-list');
   loadAlbum(userId,false);
