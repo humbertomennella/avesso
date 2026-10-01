@@ -390,7 +390,8 @@ function armBrowserNotifications(){
 async function registerNotificationWorker(){
   if(state.notificationRegistration||!('serviceWorker' in navigator))return state.notificationRegistration;
   try{
-    state.notificationRegistration=await navigator.serviceWorker.register(new URL('sw.js',SITE_URL).href,{scope:new URL('./',SITE_URL).pathname});
+    state.notificationRegistration=await navigator.serviceWorker.register(new URL('sw.js',SITE_URL).href,{scope:new URL('./',SITE_URL).pathname,updateViaCache:'none'});
+    state.notificationRegistration.update().catch(()=>{});
     return state.notificationRegistration;
   }catch{return null;}
 }
