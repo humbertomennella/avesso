@@ -17,6 +17,7 @@
   let notificationRows=[];
   let currentNotificationKey='';
   let notificationFilter='all';
+  let feedMoreObserver=null;
 
   const escapeHtml=(value='')=>String(value).replace(/[&<>"']/g,c=>({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
@@ -446,6 +447,30 @@
     },{passive:true});
   }
 
+  function bindInfiniteFeed(){
+    if(!isMobile())return;
+    const button=q('#feed-load-more');
+    if(!button)return;
+    if(feedMoreObserver)feedMoreObserver.disconnect();
+    feedMoreObserver=new IntersectionObserver(entries=>{
+      const entry=entries[0];
+      if(entry?.isIntersecting&&!button.disabled)button.click();
+    },{root:null,rootMargin:'500px 0px 500px 0px',threshold:0.01});
+    feedMoreObserver.observe(button);
+  }
+
+  function bindChatProgressiveHistory(){
+    const log=q('#dm-log');
+    if(!log||log.dataset.progressiveHistoryBound)return;
+    log.dataset.progressiveHistoryBound='1';
+    log.addEventListener('scroll',()=>{
+      if(log.scrollTop<90){
+        const old=q('#dm-load-older',log);
+        if(old&&!old.disabled)old.click();
+      }
+    },{passive:true});
+  }
+
   function syncFeedLoading(){
     if(!isMobile())return;
     const status=q('#feed-status');
@@ -508,6 +533,8 @@
     syncComposerVisibility();
     enhanceProfile();
     syncFeedLoading();
+    bindInfiniteFeed();
+    bindChatProgressiveHistory();
   }
 
   function installObservers(){
