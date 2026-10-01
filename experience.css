@@ -772,3 +772,28 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   pointer-events:none;
 }
 .mobile-network-state.hidden{display:none!important}
+
+
+/* CHAT NEW MESSAGE INDICATOR */
+.dm-msn-conversation{position:relative!important}
+.dm-new-messages{
+  position:absolute;
+  z-index:24;
+  left:50%;
+  bottom:10px;
+  min-height:34px;
+  padding:0 12px;
+  border:1px solid #6b8790;
+  border-radius:999px;
+  background:#f7fbfb;
+  color:#28464d;
+  box-shadow:0 6px 18px #0005;
+  transform:translateX(-50%);
+  font:800 .51rem var(--mono);
+}
+@media (max-width:820px){
+  .dm-new-messages{
+    min-height:40px;
+    bottom:8px;
+  }
+}
