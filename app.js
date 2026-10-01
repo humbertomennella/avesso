@@ -105,6 +105,84 @@ function applyAppWallpaper(){
 function adminCrownHtml(extraClass=''){
   return '<span class="admin-crown-pixel '+escapeAttr(extraClass)+'" title="Administrador do AVESSO" aria-label="Administrador"><i></i></span>';
 }
+
+function staffRoleLabel(role=''){
+  return {moderator:'Moderador',senior_admin:'Administrador-Sênior',owner:'Administrador Geral'}[role]||'';
+}
+function adminAssetPublicUrl(path=''){
+  return path?supabase.storage.from('avesso-admin-assets').getPublicUrl(path).data.publicUrl:'';
+}
+function badgeHtmlForUser(userId){
+  const rows=state.userBadges?.[userId]||[];
+  return rows.map(row=>{
+    const badge=state.badgeCatalog?.[row.badge_id];if(!badge)return'';
+    const asset=state.customAssets.find(a=>a.id===badge.asset_id);
+    const url=asset?adminAssetPublicUrl(asset.storage_path):'';
+    return url?'<img class="identity-badge" src="'+escapeAttr(url)+'" alt="'+escapeAttr(badge.name||'emblema')+'" title="'+escapeAttr(badge.name||'Emblema AVESSO')+'">':'';
+  }).join('');
+}
+function identityNameHtml(userId,name,extraClass=''){
+  const role=state.staffDirectory?.[userId]?.role||'';
+  const crown=role==='owner'?adminCrownHtml('identity-owner-crown'):'';
+  const staff=role&&role!=='owner'?'<span class="identity-staff-role '+escapeAttr(role)+'" title="'+escapeAttr(staffRoleLabel(role))+'">'+escapeHtml(role==='moderator'?'MOD':'SR')+'</span>':'';
+  return '<span class="identity-name '+escapeAttr(extraClass)+'">'+escapeHtml(name||'alguém')+crown+staff+badgeHtmlForUser(userId)+'</span>';
+}
+function hydrateCustomAssets(){
+  state.customAssetBySlug={};
+  state.customEmoticons=[];
+  for(const asset of state.customAssets||[]){
+    const key=asset.asset_type+':'+asset.slug;
+    state.customAssetBySlug[key]=asset;
+    const url=adminAssetPublicUrl(asset.storage_path);
+    if(asset.asset_type==='wallpaper'&&!WALLPAPER_OPTIONS.some(x=>x[0]===asset.slug)){
+      WALLPAPER_OPTIONS.push([asset.slug,asset.name,'arquivo do administrador']);
+      CHAT_WALLPAPERS.push([asset.slug,asset.name,'arquivo do administrador']);
+    }
+    if(asset.asset_type==='avatar'&&!AVATAR_OPTIONS.some(x=>x[1]===url))AVATAR_OPTIONS.push([asset.name,url,'admin']);
+    if(asset.asset_type==='emoticon')state.customEmoticons.push({...asset,url,token:asset.shortcode?.trim()||(':'+asset.slug+':')});
+  }
+}
+async function loadIdentityRegistry(){
+  const [staffRes,badgeRes,userBadgeRes,assetRes]=await Promise.all([
+    supabase.rpc('staff_directory_public'),
+    supabase.from('badges').select('id,name,slug,asset_id,description'),
+    supabase.from('user_badges').select('user_id,badge_id,assigned_at'),
+    supabase.from('admin_assets').select('id,asset_type,name,slug,storage_path,mime_type,shortcode,meta,active').eq('active',true)
+  ]);
+  const staff=Array.isArray(staffRes.data)?staffRes.data:[];
+  state.staffDirectory=Object.fromEntries(staff.map(x=>[x.user_id,x]));
+  state.staffByHandle=Object.fromEntries(staff.map(x=>[x.handle,x]));
+  state.badgeCatalog=Object.fromEntries((badgeRes.data||[]).map(x=>[x.id,x]));
+  state.userBadges={};
+  for(const row of userBadgeRes.data||[])(state.userBadges[row.user_id]??=[]).push(row);
+  state.customAssets=assetRes.data||[];
+  hydrateCustomAssets();
+}
+async function loadSiteOverrides(){
+  const {data}=await supabase.from('site_overrides').select('*').eq('enabled',true).order('sort_order',{ascending:true});
+  for(const row of data||[]){
+    let nodes=[];
+    try{nodes=[...document.querySelectorAll(row.selector)];}catch{continue;}
+    for(const el of nodes){
+      if(row.action==='text')el.textContent=row.value;
+      else if(row.action==='src'&&'src' in el)el.src=row.value;
+      else if(row.action==='alt'&&'alt' in el)el.alt=row.value;
+      else if(row.action==='hide')el.classList.add('cms-hidden');
+      else if(row.action==='show')el.classList.remove('cms-hidden');
+      else if(row.action==='append_text')el.append(document.createTextNode(row.value));
+      else if(row.action==='prepend_text')el.prepend(document.createTextNode(row.value));
+      else if(row.action==='background_image')el.style.backgroundImage='url("'+String(row.value).replaceAll('"','%22')+'")';
+    }
+  }
+}
+async function loadStaffNotifications(){
+  if(!state.profile?.id)return;
+  const {data}=await supabase.from('user_staff_notifications').select('id,title,body,severity,created_at').eq('user_id',state.profile.id).is('read_at',null).order('created_at',{ascending:true}).limit(20);
+  for(const row of data||[]){
+    socialNotify({title:row.title,body:row.body,kind:'staff',sound:row.severity==='critico'});
+    await supabase.from('user_staff_notifications').update({read_at:new Date().toISOString()}).eq('id',row.id).eq('user_id',state.profile.id);
+  }
+}
 function applySiteSettings(settings=state.siteSettings||{}){
   if(!settings)return;
   const root=document.documentElement;
