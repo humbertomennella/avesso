@@ -5294,3 +5294,21 @@ body:has(.dm-floating-window:not(.hidden):not(.minimized)) .online-friends-dock{
     grid-template-columns:1fr 1fr;
   }
 }
+
+
+/* O status musical no cabeçalho não precisa parecer um outdoor. */
+.profile-hero-listening .now-playing-status,
+.public-profile header #public-now-playing .now-playing-status{
+  width:min(470px,100%);
+  margin:5px 0 2px;
+  padding:6px 7px;
+  box-shadow:inset 2px 0 0 var(--acid);
+}
+.profile-hero-listening .now-playing-status b,
+.public-profile header #public-now-playing .now-playing-status b{
+  font-size:.46rem;
+}
+.profile-hero-listening .now-playing-status small,
+.public-profile header #public-now-playing .now-playing-status small{
+  font-size:.55rem;
+}
