@@ -70,6 +70,14 @@
     q('[data-app-tab="'+tab+'"]')?.click();
   }
 
+  function targetFromUrl(url=''){
+    try{
+      const hash=new URL(url,location.href).hash.replace(/^#/,'');
+      const match=hash.match(/^(post|story|photo|chat|profile)\/([^/?#]+)/i);
+      return match?{type:match[1].toLowerCase(),id:decodeURIComponent(match[2])}:null;
+    }catch{return null;}
+  }
+
   function rememberNotification(detail={}){
     loadNotifications();
     notificationRows.unshift({
@@ -78,7 +86,7 @@
       title:String(detail.title||'AVESSO').slice(0,140),
       body:String(detail.body||'').slice(0,260),
       createdAt:Number(detail.createdAt||Date.now()),
-      target:detail.target||null,
+      target:detail.target||targetFromUrl(detail.url)||null,
       read:false
     });
     notificationRows=notificationRows.slice(0,60);
