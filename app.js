@@ -1581,6 +1581,140 @@ async function toggleVoiceRecording(){
     toast('Não consegui abrir o microfone. A tecnologia continua com senso de humor.');
   }
 }
+const CHAT_GEOMETRY_KEY='avesso.chat.geometry.v2';
+function chatDesktopEnabled(){
+  return window.matchMedia('(min-width: 761px) and (pointer:fine)').matches;
+}
+function defaultChatGeometry(){
+  const width=Math.min(560,Math.max(360,window.innerWidth-44));
+  const height=Math.min(680,Math.max(320,window.innerHeight-70));
+  return {left:Math.max(8,window.innerWidth-width-22),top:Math.max(8,window.innerHeight-height-18),width,height};
+}
+function clampChatGeometry(geometry={}){
+  const gap=6;
+  const minWidth=Math.min(340,Math.max(300,window.innerWidth-gap*2));
+  const minHeight=Math.min(300,Math.max(240,window.innerHeight-gap*2));
+  const maxWidth=Math.max(minWidth,window.innerWidth-gap*2);
+  const maxHeight=Math.max(minHeight,window.innerHeight-gap*2);
+  const width=Math.min(maxWidth,Math.max(minWidth,Number(geometry.width)||560));
+  const height=Math.min(maxHeight,Math.max(minHeight,Number(geometry.height)||650));
+  const left=Math.min(window.innerWidth-width-gap,Math.max(gap,Number(geometry.left)||gap));
+  const top=Math.min(window.innerHeight-height-gap,Math.max(gap,Number(geometry.top)||gap));
+  return {left,top,width,height};
+}
+function loadChatGeometry(){
+  if(state.chatGeometry)return state.chatGeometry;
+  try{
+    const saved=JSON.parse(localStorage.getItem(CHAT_GEOMETRY_KEY)||'null');
+    state.chatGeometry=clampChatGeometry(saved||defaultChatGeometry());
+  }catch{state.chatGeometry=clampChatGeometry(defaultChatGeometry());}
+  return state.chatGeometry;
+}
+function saveChatGeometry(){
+  if(!state.chatGeometry)return;
+  try{localStorage.setItem(CHAT_GEOMETRY_KEY,JSON.stringify(state.chatGeometry));}catch{}
+}
+function applyChatGeometry(){
+  const win=$('#dm-floating-window');if(!win)return;
+  if(!chatDesktopEnabled()){
+    ['left','top','right','bottom','width','height'].forEach(prop=>win.style.removeProperty(prop));
+    win.classList.remove('maximized','desktop-windowed');
+    return;
+  }
+  win.classList.add('desktop-windowed');
+  if(state.chatMaximized){
+    win.classList.add('maximized');
+    Object.assign(win.style,{left:'6px',top:'6px',right:'auto',bottom:'auto',width:'calc(100vw - 12px)',height:state.chatWindowMinimized?'38px':'calc(100vh - 12px)'});
+    return;
+  }
+  win.classList.remove('maximized');
+  const g=loadChatGeometry();
+  Object.assign(win.style,{left:`${g.left}px`,top:`${g.top}px`,right:'auto',bottom:'auto',width:`${g.width}px`,height:state.chatWindowMinimized?'38px':`${g.height}px`});
+}
+function toggleChatMaximize(){
+  if(!state.chatWindowOpen||!chatDesktopEnabled())return;
+  if(state.chatWindowMinimized){state.chatWindowMinimized=false;ensureChatWindow().classList.remove('minimized');}
+  state.chatMaximized=!state.chatMaximized;
+  const button=$('#dm-maximize');
+  if(button){button.textContent=state.chatMaximized?'❐':'□';button.title=state.chatMaximized?'Restaurar tamanho':'Maximizar';}
+  applyChatGeometry();
+}
+function ensureChatResizeHandles(win){
+  if(!chatDesktopEnabled())return;
+  ['n','e','s','w','ne','nw','se','sw'].forEach(dir=>{
+    if(win.querySelector(`[data-chat-resize="${dir}"]`))return;
+    const handle=document.createElement('span');
+    handle.className=`dm-resize-handle dm-resize-${dir}`;
+    handle.dataset.chatResize=dir;
+    handle.setAttribute('aria-hidden','true');
+    win.appendChild(handle);
+  });
+}
+function startChatPointerAction(event,mode){
+  if(!chatDesktopEnabled()||event.button!==0)return;
+  if(state.chatMaximized)return;
+  if(mode!=='move'&&state.chatWindowMinimized)return;
+  const win=ensureChatWindow();
+  const rect=win.getBoundingClientRect();
+  const start={x:event.clientX,y:event.clientY,left:rect.left,top:rect.top,width:rect.width,height:state.chatWindowMinimized?loadChatGeometry().height:rect.height};
+  const minW=Math.min(340,Math.max(300,window.innerWidth-12));
+  const minH=Math.min(300,Math.max(240,window.innerHeight-12));
+  document.documentElement.classList.add('dm-window-interacting');
+  event.preventDefault();
+  const move=ev=>{
+    const dx=ev.clientX-start.x,dy=ev.clientY-start.y;
+    let left=start.left,top=start.top,width=start.width,height=start.height;
+    if(mode==='move'){
+      left=start.left+dx;top=start.top+dy;
+    }else{
+      if(mode.includes('e'))width=start.width+dx;
+      if(mode.includes('s'))height=start.height+dy;
+      if(mode.includes('w')){width=start.width-dx;left=start.left+dx;}
+      if(mode.includes('n')){height=start.height-dy;top=start.top+dy;}
+      if(width<minW){if(mode.includes('w'))left-=minW-width;width=minW;}
+      if(height<minH){if(mode.includes('n'))top-=minH-height;height=minH;}
+    }
+    const maxW=window.innerWidth-12,maxH=window.innerHeight-12;
+    if(width>maxW){if(mode.includes('w'))left-=maxW-width;width=maxW;}
+    if(height>maxH){if(mode.includes('n'))top-=maxH-height;height=maxH;}
+    left=Math.max(6,Math.min(left,window.innerWidth-width-6));
+    top=Math.max(6,Math.min(top,window.innerHeight-(state.chatWindowMinimized?38:height)-6));
+    state.chatGeometry={left,top,width,height};
+    Object.assign(win.style,{left:`${left}px`,top:`${top}px`,right:'auto',bottom:'auto',width:`${width}px`,height:state.chatWindowMinimized?'38px':`${height}px`});
+  };
+  const up=()=>{
+    window.removeEventListener('pointermove',move);
+    window.removeEventListener('pointerup',up);
+    document.documentElement.classList.remove('dm-window-interacting');
+    state.chatGeometry=clampChatGeometry(state.chatGeometry||start);
+    saveChatGeometry();
+    applyChatGeometry();
+  };
+  window.addEventListener('pointermove',move);
+  window.addEventListener('pointerup',up,{once:true});
+}
+function installChatDesktopWindowing(){
+  const win=ensureChatWindow();
+  if(!chatDesktopEnabled()){applyChatGeometry();return;}
+  ensureChatResizeHandles(win);
+  const head=$('#dm-floating-head');
+  if(head){
+    head.onpointerdown=e=>{
+      if(e.target.closest('button,.dm-window-controls,.dm-options-menu'))return;
+      startChatPointerAction(e,'move');
+    };
+    head.ondblclick=e=>{
+      if(e.target.closest('button,.dm-window-controls,.dm-options-menu'))return;
+      toggleChatMaximize();
+    };
+  }
+  win.querySelectorAll('[data-chat-resize]').forEach(handle=>{
+    handle.onpointerdown=e=>{e.stopPropagation();startChatPointerAction(e,handle.dataset.chatResize);};
+  });
+  applyChatGeometry();
+}
+window.addEventListener('resize',()=>{if(state.chatWindowOpen)applyChatGeometry();});
+
 function ensureChatWindow(){
   let win=$('#dm-floating-window');
   if(!win){win=document.createElement('section');win.id='dm-floating-window';win.className='dm-floating-window hidden';document.body.appendChild(win);}
@@ -1605,7 +1739,7 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
       <span class="dm-msn-appmark">▓ AVESSO.MSG</span>
       <button id="dm-restore-name" class="dm-title-peer" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}</button>
       <span class="dm-msn-era">56K // 2026</span>
-      <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'□':'_'}</button><button id="dm-close" title="Fechar">×</button></div>
+      <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'□':'_'}</button><button id="dm-maximize" title="${state.chatMaximized?'Restaurar tamanho':'Maximizar'}">${state.chatMaximized?'❐':'□'}</button><button id="dm-close" title="Fechar">×</button></div>
     </div>
     <header class="dm-floating-head">
       <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
@@ -1648,6 +1782,7 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
       <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem... ou grave voz no celular sem fingir que 2006 tinha tudo."><button>Enviar</button></form>
     </div>`;
   $('#dm-minimize').onclick=toggleChatMinimize;
+  $('#dm-maximize').onclick=toggleChatMaximize;
   $('#dm-close').onclick=()=>closeChatWindow();
   $('#dm-restore-name').onclick=e=>{e.stopPropagation();if(state.chatWindowMinimized)toggleChatMinimize();else $('#dm-input')?.focus();};
   $('#dm-peer-avatar').onclick=()=>openPublicProfile(peerId);
@@ -1666,7 +1801,7 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
   $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
   $$('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
   $$('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
-  $('#dm-floating-head').ondblclick=e=>{if(e.target.closest('.dm-window-controls,.dm-kebab,.dm-options-menu'))return;toggleChatMinimize();};
+  installChatDesktopWindowing();
   syncVoiceRecordingUI();
   const log=$('#dm-log');if(log)log.scrollTop=log.scrollHeight;
 }
@@ -1676,6 +1811,7 @@ async function refreshChatWindow(){
   await openChatWindow(state.directPeerId,{keepMinimized:true});
   state.chatWindowMinimized=minimized;
   ensureChatWindow().classList.toggle('minimized',minimized);
+  applyChatGeometry();
 }
 function toggleChatMinimize(){
   if(!state.chatWindowOpen)return;
@@ -1684,6 +1820,7 @@ function toggleChatMinimize(){
   win.classList.toggle('minimized',state.chatWindowMinimized);
   const button=$('#dm-minimize');
   if(button){button.textContent=state.chatWindowMinimized?'□':'_';button.title=state.chatWindowMinimized?'Restaurar':'Minimizar';}
+  applyChatGeometry();
   if(!state.chatWindowMinimized)setTimeout(()=>$('#dm-input')?.focus(),80);
 }
 function closeChatWindow(silent=false){
