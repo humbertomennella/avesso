@@ -4224,3 +4224,212 @@ html.msn-screen-nudge body{
   .post-actions{flex-wrap:wrap}
   .post-owner-actions button{flex:1}
 }
+
+
+/* AVESSO NAV + FEED + MINICHAT 2026-10-01 */
+
+/* Navegação lateral com um painel próprio, sem virar um retângulo corporativo morto. */
+.app-nav nav{
+  position:relative;
+  isolation:isolate;
+  gap:4px!important;
+  padding:30px 8px 10px!important;
+  border:1px solid #28363a;
+  background:
+    linear-gradient(180deg,#080d10e8,#07090bdd),
+    repeating-linear-gradient(0deg,#22d9ee08 0 1px,transparent 1px 4px),
+    radial-gradient(circle at 14% 12%,#d8ff3e13,transparent 30%),
+    radial-gradient(circle at 84% 78%,#9b7cff12,transparent 34%);
+  box-shadow:
+    inset 0 0 0 1px #ffffff05,
+    6px 6px 0 #02040566;
+  overflow:hidden;
+}
+.app-nav nav:before{
+  content:"NAV.EXE // ROTAS";
+  position:absolute;
+  left:10px;
+  top:9px;
+  color:var(--cyan);
+  font:800 .46rem/1 var(--mono);
+  letter-spacing:.12em;
+  opacity:.82;
+}
+.app-nav nav:after{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  pointer-events:none;
+  background:
+    linear-gradient(90deg,transparent 0 46%,#d8ff3e08 46% 47%,transparent 47% 100%),
+    linear-gradient(0deg,transparent 0 72%,#22d9ee08 72% 73%,transparent 73% 100%);
+}
+.app-nav nav button{
+  position:relative;
+  z-index:1;
+  border:1px solid transparent!important;
+  border-left:2px solid transparent!important;
+}
+.app-nav nav button:hover{
+  border-color:#26383d!important;
+  border-left-color:var(--cyan)!important;
+  background:#0e1619d9!important;
+}
+.app-nav nav button.active{
+  border-color:#314047!important;
+  border-left-color:var(--acid)!important;
+  background:
+    linear-gradient(90deg,#d8ff3e14,transparent 78%),
+    #0c1214!important;
+  box-shadow:inset 18px 0 28px #d8ff3e05;
+}
+
+/* Música/vídeo no feed é link. Não precisamos reinventar Napster com upload acidental. */
+.media-link-toggle{
+  cursor:pointer!important;
+}
+.media-link-toggle.active{
+  border-color:#101307!important;
+  box-shadow:inset 0 -2px 0 #101307;
+}
+.media-link-row{
+  grid-template-columns:auto minmax(0,1fr) 28px!important;
+}
+.media-link-row>button{
+  width:28px;
+  height:28px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:1px solid #465559;
+  background:#101719;
+  color:#aab5b2;
+  cursor:pointer;
+  font:800 .72rem/1 var(--mono);
+}
+.media-link-row>button:hover{
+  border-color:var(--coral);
+  color:var(--coral);
+}
+.media-link-row small{
+  grid-column:2/4!important;
+}
+
+/* Dono da publicação: ações no topo direito, onde controles costumam morar. Milagre ergonômico. */
+.post-card{
+  padding-top:18px;
+}
+.post-card .post-route{
+  padding-right:118px;
+}
+.post-owner-actions{
+  position:absolute;
+  top:14px;
+  right:14px;
+  z-index:3;
+  display:flex!important;
+  gap:4px!important;
+  margin:0!important;
+}
+.post-owner-actions button{
+  min-width:48px;
+  padding:5px 7px!important;
+  background:#090d0fee!important;
+  border:1px solid #38464a!important;
+  color:#9eaaa7!important;
+  font:700 .48rem/1 var(--mono)!important;
+  box-shadow:2px 2px 0 #020405;
+}
+.post-owner-actions button:hover{
+  color:var(--acid)!important;
+  border-color:var(--acid)!important;
+}
+.post-owner-actions .danger:hover{
+  color:#ff8178!important;
+  border-color:#ff8178!important;
+}
+
+/* Meu Canto também usa link, então dois campos + ação. */
+.profile-media-upload.link-only{
+  grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) auto!important;
+}
+
+/* Barra minimizada: restaura e fecha. Maximizar enquanto minimizado era UI escrita por um poltergeist. */
+@media(min-width:761px) and (pointer:fine){
+  .dm-floating-window.desktop-windowed.minimized{
+    height:42px!important;
+    min-height:42px!important;
+    max-height:42px!important;
+    width:min(350px,calc(100vw - 24px))!important;
+    border-color:#5f7479!important;
+    box-shadow:5px 5px 0 #020405,0 0 20px #22d9ee12!important;
+  }
+  .dm-floating-window.minimized .dm-msn-titlebar{
+    height:40px!important;
+    min-height:40px!important;
+    padding:5px 6px 5px 8px!important;
+    grid-template-columns:auto minmax(0,1fr) auto!important;
+    gap:7px!important;
+    cursor:pointer!important;
+  }
+  .dm-floating-window.minimized .dm-msn-era{
+    display:none!important;
+  }
+  .dm-floating-window.minimized #dm-maximize{
+    display:none!important;
+  }
+  .dm-floating-window.minimized .dm-window-controls{
+    gap:5px!important;
+  }
+  .dm-floating-window.minimized .dm-window-controls button{
+    width:30px!important;
+    height:28px!important;
+    display:grid!important;
+    place-items:center!important;
+    padding:0!important;
+    border:1px solid #53666b!important;
+    background:#091013!important;
+    color:#d9e3df!important;
+    box-shadow:inset 0 0 0 1px #ffffff08!important;
+    font:800 .72rem/1 var(--mono)!important;
+  }
+  .dm-floating-window.minimized #dm-minimize{
+    color:var(--acid)!important;
+  }
+  .dm-floating-window.minimized #dm-close{
+    color:#ff8178!important;
+  }
+  .dm-floating-window.minimized .dm-title-peer{
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+    text-align:left!important;
+  }
+  .dm-floating-window.minimized .dm-msn-appmark{
+    font-size:.58rem!important;
+    white-space:nowrap!important;
+  }
+}
+
+@media(max-width:760px){
+  .app-nav nav{
+    padding:6px!important;
+    border:1px solid var(--line)!important;
+    background:#111517ee!important;
+    box-shadow:none!important;
+    overflow-x:auto!important;
+  }
+  .app-nav nav:before,
+  .app-nav nav:after{display:none!important}
+  .post-card .post-route{padding-right:0}
+  .post-owner-actions{
+    position:static!important;
+    justify-content:flex-end;
+    margin:8px 0 0!important;
+  }
+  .profile-media-upload.link-only{grid-template-columns:1fr!important}
+  .media-link-row{grid-template-columns:1fr 28px!important}
+  .media-link-row>span{grid-column:1/3}
+  .media-link-row small{grid-column:1/3!important}
+}
