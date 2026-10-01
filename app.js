@@ -1677,7 +1677,8 @@ async function enterApp(){
   startDirectRealtime();
   await primeFriendPresenceCache();
   startFriendPresenceWatch();
-  Promise.allSettled([loadFeed(),loadImpact(),loadStoriesStrip(),loadMutedPeers()]).then(()=>{});
+  startStaffNotificationRealtime();
+  Promise.allSettled([loadFeed(),loadImpact(),loadStoriesStrip(),loadMutedPeers(),loadStaffNotifications()]).then(()=>{});
   registerNotificationWorker();
   armBrowserNotifications();
   startStoryRealtime();
@@ -1702,13 +1703,15 @@ function leaveApp(){
   stopPlazaRealtime();
   stopDirectRealtime();
   stopStoryRealtime();
+  if(state.staffChannel){supabase.removeChannel(state.staffChannel);state.staffChannel=null;}
+  if(state.staffNotificationChannel){supabase.removeChannel(state.staffNotificationChannel);state.staffNotificationChannel=null;}
   stopCornerMusic();
   closeStoryViewer();
   closeChatWindow(true);
   document.body.classList.remove('avesso-app-active');
   $('#online-friends-dock')?.classList.add('hidden');
   state.profile=null;
-  state.isAdmin=false;state.adminRole=null;state.adminSnapshot=null;state.suspended=false;state.suspension=null;
+  state.isAdmin=false;state.adminRole=null;state.adminSnapshot=null;state.staffRole=null;state.staffRank=0;state.staffRoles={};state.staffSnapshot=null;state.suspended=false;state.suspension=null;
   document.body.classList.remove('account-suspended');
   $('#admin-nav-button')?.classList.add('hidden');
   $('#app-view').classList.add('hidden');
