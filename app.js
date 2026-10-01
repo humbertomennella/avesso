@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -1790,22 +1790,51 @@ async function changePassword(){
   $('#profile-password').value='';$('#profile-password-confirm').value='';
   toast('Senha alterada. A antiga pode se aposentar em paz.');
 }
+function albumReactionButtons(photoId,reactions=[]){
+  const rs=reactions.filter(r=>r.photo_id===photoId);
+  return PHOTO_REACTIONS.map(([id,icon,label])=>{
+    const rows=rs.filter(r=>r.reaction===id);
+    const active=rows.some(r=>r.user_id===state.profile.id);
+    return `<button class="photo-reaction ${active?'active':''}" data-photo-react="${photoId}" data-reaction="${id}">${icon} ${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`;
+  }).join('');
+}
+function renderAlbumPhotos(host,photos,userId,editable,reactions=[]){
+  if(!host)return;
+  host.dataset.albumUser=userId;
+  host.innerHTML=photos.map((photo,index)=>`<article class="album-photo" data-album-photo="${photo.id}">
+    <img src="${escapeAttr(photo._url)}" alt="${escapeAttr(photo.caption||'Foto do álbum')}" loading="${index<10?'eager':'lazy'}" decoding="async" fetchpriority="${index<4?'high':'auto'}">
+    <div class="album-photo-meta"><p>${escapeHtml(photo.caption||'sem legenda. corajoso.')}</p><small>${ago(photo.created_at)}</small></div>
+    <div class="photo-reactions" data-photo-reactions="${photo.id}">${albumReactionButtons(photo.id,reactions)}</div>
+    ${editable?`<button class="album-delete" data-photo-delete="${photo.id}" data-storage-path="${escapeAttr(photo.storage_path)}">apagar foto</button>`:''}
+  </article>`).join('')||'<p class="album-empty">Álbum vazio. Nenhuma lembrança foi monetizada.</p>';
+  host.querySelectorAll('[data-photo-react]').forEach(b=>b.onclick=()=>togglePhotoReaction(b.dataset.photoReact,b.dataset.reaction,userId,editable));
+  host.querySelectorAll('[data-photo-delete]').forEach(b=>b.onclick=()=>deleteAlbumPhoto(b.dataset.photoDelete,b.dataset.storagePath));
+}
+function updateAlbumReactions(host,photos,reactions,userId,editable){
+  if(!host||host.dataset.albumUser!==userId)return;
+  photos.forEach(photo=>{
+    const box=host.querySelector(`[data-photo-reactions="${CSS.escape(photo.id)}"]`);
+    if(box)box.innerHTML=albumReactionButtons(photo.id,reactions);
+  });
+  host.querySelectorAll('[data-photo-react]').forEach(b=>b.onclick=()=>togglePhotoReaction(b.dataset.photoReact,b.dataset.reaction,userId,editable));
+}
 async function loadAlbum(userId,editable=false){
   const host=$(editable?'#profile-album':'#public-album');if(!host)return;
+  const cached=state.albumDataCache[userId];
+  if(cached?.photos?.length)renderAlbumPhotos(host,cached.photos,userId,editable,cached.reactions||[]);
   const {data:photos,error}=await supabase.from('profile_photos').select('*').eq('user_id',userId).order('created_at',{ascending:false}).limit(60);
-  if(error){host.innerHTML='<p>O álbum caiu atrás do servidor.</p>';return;}
+  if(error){if(!cached)host.innerHTML='<p>O álbum caiu atrás do servidor.</p>';return;}
+  if(!host.isConnected)return;
   const albumPhotos=(photos||[]).map(photo=>({...photo,_url:publicAlbumUrl(photo.storage_path)}));
   warmAlbumImages(albumPhotos.map(photo=>photo._url));
+  renderAlbumPhotos(host,albumPhotos,userId,editable,cached?.reactions||[]);
+  state.albumDataCache[userId]={photos:albumPhotos,reactions:cached?.reactions||[]};
   const ids=albumPhotos.map(p=>p.id);
-  let reactions=[];
-  if(ids.length){const r=await supabase.from('photo_reactions').select('*').in('photo_id',ids);reactions=r.data||[];}
-  host.innerHTML=albumPhotos.map((photo,index)=>{
-    const rs=reactions.filter(r=>r.photo_id===photo.id);
-    const buttons=PHOTO_REACTIONS.map(([id,icon,label])=>{const rows=rs.filter(r=>r.reaction===id);const active=rows.some(r=>r.user_id===state.profile.id);return `<button class="photo-reaction ${active?'active':''}" data-photo-react="${photo.id}" data-reaction="${id}">${icon} ${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`}).join('');
-    return `<article class="album-photo"><img src="${escapeAttr(photo._url)}" alt="${escapeAttr(photo.caption||'Foto do álbum')}" loading="${index<10?'eager':'lazy'}" decoding="async" fetchpriority="${index<4?'high':'auto'}"><div class="album-photo-meta"><p>${escapeHtml(photo.caption||'sem legenda. corajoso.')}</p><small>${ago(photo.created_at)}</small></div><div class="photo-reactions">${buttons}</div>${editable?`<button class="album-delete" data-photo-delete="${photo.id}" data-storage-path="${escapeAttr(photo.storage_path)}">apagar foto</button>`:''}</article>`;
-  }).join('')||'<p class="album-empty">Álbum vazio. Nenhuma lembrança foi monetizada.</p>';
-  $$('[data-photo-react]').forEach(b=>b.onclick=()=>togglePhotoReaction(b.dataset.photoReact,b.dataset.reaction,userId,editable));
-  $$('[data-photo-delete]').forEach(b=>b.onclick=()=>deleteAlbumPhoto(b.dataset.photoDelete,b.dataset.storagePath));
+  if(!ids.length){state.albumDataCache[userId]={photos:albumPhotos,reactions:[]};return;}
+  const r=await supabase.from('photo_reactions').select('*').in('photo_id',ids);
+  const reactions=r.data||[];
+  state.albumDataCache[userId]={photos:albumPhotos,reactions};
+  updateAlbumReactions(host,albumPhotos,reactions,userId,editable);
 }
 async function uploadAlbumPhoto(){
   const file=$('#album-file')?.files?.[0];if(!file)return toast('Escolha uma foto primeiro. A telepatia continua em beta.');
@@ -1819,12 +1848,13 @@ async function uploadAlbumPhoto(){
   const {error}=await supabase.from('profile_photos').insert({user_id:state.profile.id,storage_path:path,caption});
   btn.disabled=false;btn.textContent='adicionar foto';
   if(error){await supabase.storage.from('avesso-albums').remove([path]);return toast('A foto chegou, o álbum fingiu que não conhece.');}
-  $('#album-file').value='';$('#album-caption').value='';toast('Foto adicionada. Nenhum filtro de pôr do sol obrigatório.');loadAlbum(state.profile.id,true);
+  $('#album-file').value='';$('#album-caption').value='';delete state.albumDataCache[state.profile.id];toast('Foto adicionada. Nenhum filtro de pôr do sol obrigatório.');loadAlbum(state.profile.id,true);
 }
 async function deleteAlbumPhoto(id,path){
   if(!confirm('Apagar esta foto do seu Canto?'))return;
   await supabase.from('profile_photos').delete().eq('id',id).eq('user_id',state.profile.id);
   await supabase.storage.from('avesso-albums').remove([path]);
+  delete state.albumDataCache[state.profile.id];
   loadAlbum(state.profile.id,true);
 }
 async function togglePhotoReaction(photoId,reaction,userId,editable){
@@ -1832,6 +1862,7 @@ async function togglePhotoReaction(photoId,reaction,userId,editable){
   const {data:existing}=await supabase.from('photo_reactions').select('reaction').eq('photo_id',photoId).eq('user_id',state.profile.id).maybeSingle();
   if(existing?.reaction===reaction)await supabase.from('photo_reactions').delete().eq('photo_id',photoId).eq('user_id',state.profile.id);
   else await supabase.from('photo_reactions').upsert({photo_id:photoId,user_id:state.profile.id,reaction},{onConflict:'photo_id,user_id'});
+  delete state.albumDataCache[userId];
   loadAlbum(userId,editable);
 }
 
