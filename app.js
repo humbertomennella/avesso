@@ -557,6 +557,50 @@ function scheduleStoryAdvance(){
 function pauseStoryTimer(){clearStoryTimer();}
 function resumeStoryTimer(){if($('#story-view-dialog')?.open)scheduleStoryAdvance();}
 
+function storyProgressHtml(storyId){
+  const seq=state.storySequence||[];
+  if(!seq.length)return'';
+  const current=Math.max(0,seq.indexOf(storyId));
+  return `<div class="story-progress" aria-hidden="true">${seq.map((id,index)=>`<i class="${index<current?'done':index===current?'active':''}"></i>`).join('')}</div>`;
+}
+function openStoryOffset(delta){
+  const seq=state.storySequence||[];
+  const index=seq.indexOf(state.storyCurrentId);
+  if(index<0)return;
+  const next=seq[index+delta];
+  if(next)openStory(next,{sequence:seq});
+  else if(delta>0)closeStoryViewer();
+}
+function bindStoryStageGestures(stage){
+  if(!stage||stage.dataset.gesturesBound)return;
+  stage.dataset.gesturesBound='1';
+  let start=null,holdTimer=null;
+  const clear=()=>{clearTimeout(holdTimer);holdTimer=null;};
+  stage.addEventListener('pointerdown',e=>{
+    if(e.target.closest('video,button,a,input,textarea'))return;
+    start={x:e.clientX,y:e.clientY,t:Date.now()};
+    holdTimer=setTimeout(()=>pauseStoryTimer(),260);
+  });
+  stage.addEventListener('pointerup',e=>{
+    if(!start)return;
+    const s=start;start=null;clear();
+    const dx=e.clientX-s.x,dy=e.clientY-s.y,elapsed=Date.now()-s.t;
+    if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.3){
+      dx<0?openStoryOffset(1):openStoryOffset(-1);
+      return;
+    }
+    if(Math.abs(dy)>90&&Math.abs(dy)>Math.abs(dx)*1.2){
+      closeStoryViewer();return;
+    }
+    if(elapsed<260&&Math.abs(dx)<16&&Math.abs(dy)<16){
+      const rect=stage.getBoundingClientRect();
+      const local=e.clientX-rect.left;
+      if(local<rect.width*.34)openStoryOffset(-1);
+      else if(local>rect.width*.66)openStoryOffset(1);
+    }else resumeStoryTimer();
+  });
+  stage.addEventListener('pointercancel',()=>{start=null;clear();resumeStoryTimer();});
+}
 async function openStory(storyId,options={}){
   const {data:story,error}=await supabase.from('stories').select('id,author_id,body,image_path,media_type,visibility,created_at,expires_at').eq('id',storyId).gt('expires_at',new Date().toISOString()).maybeSingle();
   if(error||!story){if(options.auto)closeStoryViewer();return toast('Este story expirou ou você não pode vê-lo. O tempo venceu outra vez.');}
@@ -566,6 +610,9 @@ async function openStory(storyId,options={}){
   else if(!state.storySequence.includes(storyId))state.storySequence=[storyId];
   state.storyCurrentId=storyId;
   clearStoryTimer();
+  if(story.author_id!==state.profile.id){
+    supabase.from('story_views').upsert({story_id:story.id,user_id:state.profile.id,viewed_at:new Date().toISOString()},{onConflict:'story_id,user_id'}).then(()=>{});
+  }
   const [authorRes,reactionsRes,commentsRes]=await Promise.all([
     supabase.from('profiles').select('id,display_name,handle,avatar_url').eq('id',story.author_id).maybeSingle(),
     supabase.from('story_reactions').select('story_id,user_id,reaction,created_at').eq('story_id',story.id),
@@ -590,14 +637,31 @@ async function openStory(storyId,options={}){
   }).join('');
   const a=authorRes.data||{},canDelete=story.author_id===state.profile.id;
   const commentsHtml=comments.map(row=>{const p=commentProfiles[row.user_id]||{};return `<article class="story-comment"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${identityNameHtml(row.user_id,p.display_name||'alguém')}</b><small>@${escapeHtml(p.handle||'...')} · ${ago(row.created_at)}</small><p>${escapeHtml(row.body)}</p></div></article>`;}).join('')||'<p class="story-empty">Sem comentários. O silêncio também expira.</p>';
+  let viewsHtml='';
+  if(canDelete){
+    const {data:viewRows}=await supabase.from('story_views').select('user_id,viewed_at').eq('story_id',story.id).order('viewed_at',{ascending:false}).limit(120);
+    const viewerIds=[...new Set((viewRows||[]).map(x=>x.user_id))];
+    let viewerProfiles={};
+    if(viewerIds.length){
+      const {data:viewerData}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',viewerIds);
+      viewerProfiles=Object.fromEntries((viewerData||[]).map(p=>[p.id,p]));
+    }
+    viewsHtml=`<details class="story-views"><summary>visto por <b>${viewRows?.length||0}</b></summary><div>${(viewRows||[]).map(row=>{const p=viewerProfiles[row.user_id]||{};return `<button type="button" data-profile-id="${row.user_id}"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><span><b>${escapeHtml(p.display_name||'alguém')}</b><small>@${escapeHtml(p.handle||'...')} · ${ago(row.viewed_at)}</small></span></button>`}).join('')||'<p>ninguém ainda.</p>'}</div></details>`;
+  }
   const host=$('#story-view-content');
   host.innerHTML=`<article class="story-view-card">
+    ${storyProgressHtml(story.id)}
     <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${identityNameHtml(story.author_id,a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
-    <div class="story-stage ${image_url?'has-image':''} ${storyIsVideo?'has-video':''}" style="${image_url&&!storyIsVideo?`--story-image:url('${escapeAttr(image_url)}')`:''}">${image_url?(storyIsVideo?`<video class="story-video" src="${escapeAttr(image_url)}" controls playsinline preload="metadata"></video>`:`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||'usuário')}" decoding="async" fetchpriority="high">`):''}${story.body?`<p>${escapeHtml(story.body)}</p>`:''}</div>
+    <div class="story-stage ${image_url?'has-image':''} ${storyIsVideo?'has-video':''}" style="${image_url&&!storyIsVideo?`--story-image:url('${escapeAttr(image_url)}')`:''}">${image_url?(storyIsVideo?`<video class="story-video" src="${escapeAttr(image_url)}" controls playsinline preload="metadata"></video>`:`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||'usuário')}" decoding="async" fetchpriority="high">`):''}${story.body?`<p>${escapeHtml(story.body)}</p>`:''}<button type="button" class="story-nav story-nav-prev" aria-label="Story anterior">‹</button><button type="button" class="story-nav story-nav-next" aria-label="Próximo story">›</button></div>
+    ${viewsHtml}
     <div class="story-reactions">${reactionHtml}</div>
     <section class="story-comments"><h3>respostas // sem plateia</h3><div class="story-comment-list">${commentsHtml}</div><div class="story-comment-compose"><textarea id="story-comment-body" maxlength="420" placeholder="responda antes que isso desapareça..."></textarea><div><button id="story-comment-emoticons" type="button">☻ avessícones</button><button id="story-comment-send" type="button">responder</button></div><div id="story-comment-palette" class="feed-emoticon-palette hidden">${avessoEmoticonButtons('data-story-comment-emoticon')}</div></div></section>
   </article>`;
   const dialog=$('#story-view-dialog');if(!dialog.open)dialog.showModal();
+  host.querySelector('.story-nav-prev')?.addEventListener('click',()=>openStoryOffset(-1));
+  host.querySelector('.story-nav-next')?.addEventListener('click',()=>openStoryOffset(1));
+  bindStoryStageGestures(host.querySelector('.story-stage'));
+  host.querySelectorAll('[data-profile-id]').forEach(b=>b.onclick=()=>openPublicProfile(b.dataset.profileId));
   host.querySelectorAll('[data-story-react]').forEach(b=>b.onclick=()=>toggleStoryReaction(story.id,b.dataset.storyReact));
   $('#story-comment-send').onclick=()=>sendStoryComment(story.id);
   $('#story-comment-emoticons').onclick=()=>$('#story-comment-palette').classList.toggle('hidden');
