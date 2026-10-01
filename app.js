@@ -3702,7 +3702,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('#dm-attention').onclick=sendAttention;
   $('#dm-emoticons').onclick=e=>{e.stopPropagation();$('#dm-emoticon-palette').classList.toggle('hidden');$('#dm-options-menu')?.classList.add('hidden');};
   $('#dm-emoticon-close').onclick=e=>{e.stopPropagation();$('#dm-emoticon-palette').classList.add('hidden');$('#dm-input')?.focus();};
-  $('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();syncDmComposerAction();});
+  $$('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();syncDmComposerAction();});
   $('#dm-attach').onclick=()=>$('#dm-file-input').click();
   $('#dm-file-input').onchange=e=>{const file=e.target.files?.[0];if(file)sendDirectAttachment(file);};
   bindHoldToTalk();
