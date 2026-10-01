@@ -42,6 +42,7 @@ create table if not exists public.staff_chat_messages(
   created_at timestamptz not null default now()
 );
 alter table public.staff_chat_messages add column if not exists recipient_id uuid references public.profiles(id) on delete cascade;
+alter table public.staff_chat_messages drop constraint if exists staff_chat_messages_channel_check;
 alter table public.staff_chat_messages drop constraint if exists staff_chat_channel_check;
 alter table public.staff_chat_messages add constraint staff_chat_channel_check check(channel in ('all','moderators','senior','direct'));
 create index if not exists staff_chat_recipient_created_idx on public.staff_chat_messages(recipient_id,created_at desc);
