@@ -4093,12 +4093,19 @@ function updateChatPeerHeader(peer){
 async function renderMessagesPage(){
   if(state.tab!=='messages')return;
   const friends=(await acceptedFriendProfiles())||[];
+  const {data:unreadRows}=await supabase.from('direct_messages')
+    .select('sender_id')
+    .eq('recipient_id',state.profile.id)
+    .is('read_at',null)
+    .limit(500);
+  const unreadBy={};
+  (unreadRows||[]).forEach(row=>{unreadBy[row.sender_id]=(unreadBy[row.sender_id]||0)+1;});
   if(state.tab!=='messages')return;
   $('#feed-status').classList.add('hidden');
   $('#feed-list').innerHTML=`<section class="messages-hub">
     <header class="messages-hub-head"><div><span class="section-code">MSN.EXE // AMIZADES HUMANAS</span><h2>Amigos & cúmplices</h2><p>Sua lista de gente que você aceitou voluntariamente. Clique em alguém e a janela aparece, porque 2006 ainda tinha algumas ideias úteis.</p></div>
     <div class="messages-head-controls"><label class="presence-picker">aparecer como <select id="presence-mode-select"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><button id="notification-permission-button" class="notification-permission-button">${notificationPermissionLabel()}</button></div></header>
-    <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f),muted=isPeerMuted(f.id);return `<button class="compact-friend" data-open-chat="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${identityNameHtml(f.id,f.display_name)}${muted?' <i class="muted-mark">🔇</i>':''}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}${muted?' · mutado':''}</em></button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
+    <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f),muted=isPeerMuted(f.id),unread=unreadBy[f.id]||0;return `<button class="compact-friend" data-open-chat="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${identityNameHtml(f.id,f.display_name)}${muted?' <i class="muted-mark">🔇</i>':''}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}${muted?' · mutado':''}</em>${unread?`<strong class="friend-unread-badge">${unread>99?'99+':unread}</strong>`:''}</button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
   </section>`;
   $('#presence-mode-select').value=state.profile.presence_mode||'online';
   $('#presence-mode-select').onchange=e=>setPresenceMode(e.target.value);
