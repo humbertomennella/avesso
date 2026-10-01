@@ -847,19 +847,44 @@ async function saveQuickChatStatus(){
   state.profile=data;
   toast(status_message?'Status salvo. Agora ele pode ser julgado em silêncio.':'Status removido.');
 }
+function applyChatAppearance({theme=state.profile?.chat_theme||'bbs_cyan',wallpaper=state.profile?.chat_wallpaper||'none'}={}){
+  const win=$('#dm-floating-window');
+  if(!win)return;
+  CHAT_THEMES.forEach(([id])=>win.classList.remove(`theme-${id}`));
+  win.classList.add(chatThemeClass(theme));
+  win.style.setProperty('--dm-chat-wallpaper',chatWallpaperCss(wallpaper));
+  win.dataset.chatTheme=theme;
+  win.dataset.chatWallpaper=wallpaper;
+  win.querySelectorAll('[data-chat-theme]').forEach(b=>b.classList.toggle('active',b.dataset.chatTheme===theme));
+  win.querySelectorAll('[data-chat-wallpaper]').forEach(b=>b.classList.toggle('active',b.dataset.chatWallpaper===wallpaper));
+}
 async function setChatTheme(theme){
   if(!CHAT_THEMES.some(x=>x[0]===theme)||!state.profile?.id)return;
+  const previous=state.profile.chat_theme||'bbs_cyan';
+  state.profile={...state.profile,chat_theme:theme};
+  applyChatAppearance({theme,wallpaper:state.profile.chat_wallpaper||'none'});
   const {data,error}=await supabase.from('profiles').update({chat_theme:theme,updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
-  if(error)return toast('A tinta digital derramou antes de chegar na janela.');
+  if(error){
+    state.profile={...state.profile,chat_theme:previous};
+    applyChatAppearance({theme:previous,wallpaper:state.profile.chat_wallpaper||'none'});
+    return toast('A tinta digital derramou antes de chegar na janela.');
+  }
   state.profile=data;
-  if(state.chatWindowOpen&&state.directPeerId)openChatWindow(state.directPeerId,{keepMinimized:true});
+  applyChatAppearance();
 }
 async function setChatWallpaper(slug){
   if(!CHAT_WALLPAPERS.some(x=>x[0]===slug)||!state.profile?.id)return;
+  const previous=state.profile.chat_wallpaper||'none';
+  state.profile={...state.profile,chat_wallpaper:slug};
+  applyChatAppearance({theme:state.profile.chat_theme||'bbs_cyan',wallpaper:slug});
   const {data,error}=await supabase.from('profiles').update({chat_wallpaper:slug,updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
-  if(error)return toast('O papel de parede caiu atrás do modem.');
+  if(error){
+    state.profile={...state.profile,chat_wallpaper:previous};
+    applyChatAppearance({theme:state.profile.chat_theme||'bbs_cyan',wallpaper:previous});
+    return toast('O papel de parede caiu atrás do modem.');
+  }
   state.profile=data;
-  if(state.chatWindowOpen&&state.directPeerId)openChatWindow(state.directPeerId,{keepMinimized:true});
+  applyChatAppearance();
 }
 async function blockChatPeer(peerId){
   if(!peerId||peerId===state.profile?.id)return;
@@ -2191,7 +2216,7 @@ function renderOnlineFriendsDock(){
       const statusLabel=entry.mode==='online'?'online':entry.mode==='away'?'ausente':'offline';
       return `<button class="online-friend-item ${entry.mode}" data-online-friend="${friend.id}" type="button">
         <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
-        <span class="online-friend-copy"><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${statusLabel}</strong><em>${np?`♫ ${escapeHtml(np.title)}`:entry.mode==='offline'?'◌ fora da rede':'♫ silêncio detectado'}</em></span>
+        <span class="online-friend-copy"><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${statusLabel}</strong><span class="online-friend-status-message">${escapeHtml(friend.status_message||'sem status. provavelmente ocupado existindo.')}</span><em>${np?`♫ ${escapeHtml(np.title)}`:entry.mode==='offline'?'◌ fora da rede':'♫ silêncio detectado'}</em></span>
       </button>`;
     }).join('')||'<div class="online-friends-empty">Nenhum cúmplice adicionado ainda. Estatisticamente tranquilo.</div>');
   }
@@ -2916,8 +2941,8 @@ function startChatPointerAction(event,mode){
   const win=ensureChatWindow();
   const rect=win.getBoundingClientRect();
   const start={x:event.clientX,y:event.clientY,left:rect.left,top:rect.top,width:rect.width,height:state.chatWindowMinimized?loadChatGeometry().height:rect.height};
-  const minW=Math.min(300,Math.max(280,window.innerWidth-12));
-  const minH=Math.min(280,Math.max(250,window.innerHeight-12));
+  const minW=Math.min(330,Math.max(300,window.innerWidth-12));
+  const minH=Math.min(320,Math.max(280,window.innerHeight-12));
   document.documentElement.classList.add('dm-window-interacting');
   event.preventDefault();
   const move=ev=>{
@@ -2994,6 +3019,8 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   const win=ensureChatWindow();
   win.className=`dm-floating-window ${chatThemeClass(theme)} ${state.chatWindowMinimized?'minimized':''}`;
   win.style.setProperty('--dm-chat-wallpaper',chatWallpaperCss(chatWallpaper));
+  win.dataset.chatTheme=theme;
+  win.dataset.chatWallpaper=chatWallpaper;
   win.innerHTML=`<div class="dm-msn-titlebar" id="dm-floating-head">
       <span class="dm-msn-appmark">▓ AVESSO.MSG</span>
       <button id="dm-restore-name" class="dm-title-peer" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}</button>
@@ -3067,21 +3094,36 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   installChatScrollContainment(win);
   pinChatToLatest(win);
   repairLegacyVoicePlayers(win);
-  setTimeout(()=>pinChatToLatest(win),180);
-  setTimeout(()=>pinChatToLatest(win),650);
 }
 function pinChatToLatest(root=ensureChatWindow()){
   const log=root?.querySelector?.('#dm-log')||$('#dm-log');
   if(!log)return;
+  let active=true;
   const stick=()=>{
-    log.scrollTop=Math.max(0,log.scrollHeight-log.clientHeight);
+    if(!active)return;
+    log.scrollTop=log.scrollHeight;
   };
   stick();
-  requestAnimationFrame(()=>{stick();requestAnimationFrame(stick);});
+  queueMicrotask(stick);
+  requestAnimationFrame(()=>requestAnimationFrame(stick));
+  [40,120,280,650,1000].forEach(ms=>setTimeout(stick,ms));
+  const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(stick):null;
+  observer?.observe(log);
   log.querySelectorAll('img,audio').forEach(media=>{
     const event=media.tagName==='IMG'?'load':'loadedmetadata';
     media.addEventListener(event,stick,{once:true});
   });
+  const release=()=>{
+    active=false;
+    observer?.disconnect();
+    log.removeEventListener('wheel',release);
+    log.removeEventListener('pointerdown',release);
+    log.removeEventListener('touchstart',release);
+  };
+  log.addEventListener('wheel',release,{once:true,passive:true});
+  log.addEventListener('pointerdown',release,{once:true,passive:true});
+  log.addEventListener('touchstart',release,{once:true,passive:true});
+  setTimeout(release,1300);
 }
 function installChatScrollContainment(win){
   if(!win)return;
@@ -3159,9 +3201,12 @@ async function receiveAttention(peerId,message=null){
   if(!alreadyOpen)await openChatWindow(peerId,{keepMinimized:false});
   else if(message)appendDirectMessage(message);
   state.chatWindowMinimized=false;
+  state.chatMaximized=false;
   const win=ensureChatWindow();
-  win.classList.remove('minimized','hidden','docked-minimized');
+  win.classList.remove('minimized','hidden','docked-minimized','maximized');
+  win.style.zIndex='12550';
   applyChatGeometry();
+  pinChatToLatest(win);
   if(message?.id&&!document.hidden)markDirectRead(message.id);
   triggerChatNudge(peerId);
   playUiSound('attention');
@@ -3170,6 +3215,7 @@ async function receiveAttention(peerId,message=null){
     return;
   }
   triggerScreenNudge();
+  setTimeout(()=>{if(win)win.style.removeProperty('z-index');},1800);
 }
 async function sendDirectMessage(e){
   e?.preventDefault();
@@ -3512,7 +3558,7 @@ async function renderProfile(){
   $('#feed-list').innerHTML=`<section class="profile-control" style="--profile-wallpaper:url('${wallpaperUrl(state.profile.profile_wallpaper)}')">
     <header class="profile-control-hero">
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
-      <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><div class="profile-auto-listening"><span>AUTOMÁTICO // OUVINDO AGORA</span><div id="profile-hero-listening" class="profile-hero-listening">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><button id="open-avatar-picker">mudar foto de perfil</button></div>
+      <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${escapeHtml(state.profile.display_name)}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
