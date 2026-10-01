@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -839,7 +839,7 @@ $('#logout').onclick=()=>supabase.auth.signOut();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
 async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await loadBlockedPeers();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
-function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.blockedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();closeStoryViewer();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
+function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.blockedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();stopCornerMusic();closeStoryViewer();closeChatWindow(true);document.body.classList.remove('avesso-app-active');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
 async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
@@ -918,6 +918,119 @@ function externalMediaShareUrl(raw){
   const parsed=parseExternalMediaLink(raw);
   return parsed?.canonical||String(raw||'');
 }
+function cornerMusicEmbed(raw){
+  const parsed=parseExternalMediaLink(raw);
+  if(!parsed)return null;
+  if(parsed.kind==='youtube'){
+    const match=parsed.url.match(/\/embed\/([A-Za-z0-9_-]+)/);
+    const id=match?.[1]||'';
+    if(!id)return null;
+    const params=new URLSearchParams({
+      autoplay:'1',
+      controls:'0',
+      loop:'1',
+      playlist:id,
+      playsinline:'1',
+      rel:'0',
+      modestbranding:'1'
+    });
+    return {kind:'youtube',src:`${parsed.url}?${params.toString()}`};
+  }
+  if(parsed.kind==='spotify'){
+    const join=parsed.url.includes('?')?'&':'?';
+    return {kind:'spotify',src:`${parsed.url}${join}autoplay=1&theme=0`};
+  }
+  return null;
+}
+function clearCornerMusicHost(){
+  document.getElementById('corner-music-host')?.remove();
+}
+function stopCornerMusic(){
+  clearCornerMusicHost();
+  if(state.cornerMusicGestureHandler){
+    document.removeEventListener('pointerdown',state.cornerMusicGestureHandler,true);
+    document.removeEventListener('keydown',state.cornerMusicGestureHandler,true);
+  }
+  state.cornerMusicGestureHandler=null;
+  state.cornerMusicProfileId=null;
+}
+function mountCornerMusic(profile){
+  if(!profile?.corner_music_enabled||!profile.corner_music_url)return false;
+  if(state.tab!=='public_profile'||state.publicProfileId!==profile.id)return false;
+  const media=cornerMusicEmbed(profile.corner_music_url);
+  if(!media)return false;
+  clearCornerMusicHost();
+  const host=document.createElement('div');
+  host.id='corner-music-host';
+  host.className='corner-music-host';
+  host.setAttribute('aria-hidden','true');
+  const iframe=document.createElement('iframe');
+  iframe.src=media.src;
+  iframe.title='';
+  iframe.tabIndex=-1;
+  iframe.allow='autoplay; encrypted-media; fullscreen; picture-in-picture';
+  iframe.referrerPolicy='strict-origin-when-cross-origin';
+  host.appendChild(iframe);
+  document.body.appendChild(host);
+  return true;
+}
+function startCornerMusic(profile){
+  stopCornerMusic();
+  if(!profile?.corner_music_enabled||!profile.corner_music_url)return;
+  if(!cornerMusicEmbed(profile.corner_music_url))return;
+  state.cornerMusicProfileId=profile.id;
+  mountCornerMusic(profile);
+
+  // Navegadores modernos podem bloquear áudio automático sem uma interação humana.
+  // Se isso acontecer, a primeira interação do visitante tenta iniciar novamente,
+  // mantendo o player completamente invisível.
+  const retry=()=>{
+    if(state.tab!=='public_profile'||state.publicProfileId!==profile.id){
+      stopCornerMusic();return;
+    }
+    mountCornerMusic(profile);
+    document.removeEventListener('pointerdown',retry,true);
+    document.removeEventListener('keydown',retry,true);
+    if(state.cornerMusicGestureHandler===retry)state.cornerMusicGestureHandler=null;
+  };
+  state.cornerMusicGestureHandler=retry;
+  document.addEventListener('pointerdown',retry,{capture:true,once:true});
+  document.addEventListener('keydown',retry,{capture:true,once:true});
+}
+async function saveCornerMusicSettings(){
+  const input=$('#corner-music-url');
+  const enabled=Boolean($('#corner-music-enabled')?.checked);
+  const raw=String(input?.value||'').trim();
+  const parsed=raw?parseExternalMediaLink(raw):null;
+  if(raw&&!parsed)return toast('Use um link válido do YouTube ou Spotify.');
+  if(enabled&&!parsed)return toast('Escolha uma música antes de ligar a trilha automática.');
+  const corner_music_url=parsed?.canonical||null;
+  const {data,error}=await supabase.from('profiles')
+    .update({corner_music_url,corner_music_enabled:enabled,updated_at:new Date().toISOString()})
+    .eq('id',state.profile.id)
+    .select()
+    .single();
+  if(error)return toast('A trilha tropeçou nos próprios cabos.');
+  state.profile=data;
+  if(input)input.value=corner_music_url||'';
+  const status=$('#corner-music-status');
+  if(status)status.textContent=enabled&&corner_music_url?'ATIVA // visitantes recebem a trilha ao entrar':'DESLIGADA // o silêncio venceu esta rodada';
+  toast(enabled?'Trilha do Canto ativada. O player continuará invisível.':'Trilha automática desligada. O link foi preservado.');
+}
+async function clearCornerMusicSettings(){
+  const {data,error}=await supabase.from('profiles')
+    .update({corner_music_url:null,corner_music_enabled:false,updated_at:new Date().toISOString()})
+    .eq('id',state.profile.id)
+    .select()
+    .single();
+  if(error)return toast('A música se recusou a sair da fita.');
+  state.profile=data;
+  if($('#corner-music-url'))$('#corner-music-url').value='';
+  if($('#corner-music-enabled'))$('#corner-music-enabled').checked=false;
+  if($('#corner-music-status'))$('#corner-music-status').textContent='SEM FITA // escolha um link quando quiser';
+  toast('Trilha removida do seu Canto.');
+}
+
 function mediaKindFromFile(file){
   if(!file?.type)return null;
   if(file.type.startsWith('audio/'))return'audio';
@@ -1216,6 +1329,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   const previousTab=state.tab;
   const nextTab=b.dataset.appTab;
   if(previousTab==='plaza'&&nextTab!=='plaza')stopPlazaRealtime();
+  if(previousTab==='public_profile'&&nextTab!=='public_profile')stopCornerMusic();
   if(nextTab!=='messages')autoMinimizeChat();
   state.tab=nextTab;
   applyAppWallpaper();
@@ -2497,6 +2611,7 @@ async function renderProfile(){
       <section class="profile-settings-card security-card"><span class="section-code">CONTA // SEGURANÇA</span><p><b>E-mail</b><br>${escapeHtml(state.session?.user?.email||'')}</p><label>Nova senha<input id="profile-password" type="password" minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password"></label><button id="change-password">alterar senha</button><small>Seu @ continua estável para links. Seu nome exibido pode trocar de personalidade quantas vezes quiser.</small></section>
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
+    <section class="corner-music-control"><span class="section-code">TRILHA // ENTRADA DO CANTO</span><h2>Uma música entra antes da conversa</h2><p>O visitante não vê player nenhum. Cole YouTube ou Spotify e escolha se a trilha tenta tocar automaticamente quando alguém entra.</p><div class="corner-music-form"><label>LINK DA MÚSICA<input id="corner-music-url" type="url" inputmode="url" autocomplete="off" value="${escapeAttr(state.profile.corner_music_url||'')}" placeholder="YouTube ou Spotify"></label><label class="corner-music-switch"><input id="corner-music-enabled" type="checkbox" ${state.profile.corner_music_enabled?'checked':''}><span><b>tocar automaticamente</b><small>você pode desligar e ligar novamente sem perder o link</small></span></label><div class="corner-music-actions"><button id="save-corner-music">salvar trilha</button><button id="clear-corner-music" type="button">remover</button></div><small id="corner-music-status">${state.profile.corner_music_url?(state.profile.corner_music_enabled?'ATIVA // visitantes recebem a trilha ao entrar':'DESLIGADA // link guardado'):'SEM FITA // escolha um link quando quiser'}</small><em>Nota técnica: Firefox, Chrome e Brave podem bloquear áudio automático até a primeira interação do visitante. O AVESSO tenta de novo nesse primeiro clique, sem mostrar o player.</em></div></section>
     <section class="profile-album-control"><span class="section-code">ÁLBUM // FOTOS QUE VOCÊ DECIDIU NÃO APAGAR</span><h2>Seu álbum</h2><p>Poste imagens no seu Canto. Reações existem, mas continuam sem virar olimpíada social.</p><div class="album-upload-row"><input id="album-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><input id="album-caption" maxlength="180" placeholder="legenda opcional. autocontrole também."><button id="album-upload">adicionar foto</button></div><div id="profile-album" class="profile-album-grid"><p>carregando memórias...</p></div></section>
     <section class="profile-media-control"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Sua fita, seu clipe, seu problema</h2><p>Cole um link do YouTube ou Spotify. Sem upload de arquivo e sem autoplay, porque ainda resta alguma civilização.</p><div class="profile-media-upload link-only"><input id="profile-media-link" type="url" inputmode="url" placeholder="cole um link do YouTube ou Spotify"><input id="profile-media-caption" maxlength="420" placeholder="legenda opcional. contexto não machuca."><button id="profile-media-upload">publicar no Canto</button></div><div id="profile-media-list" class="profile-media-grid"><p>rebobinando...</p></div></section>
     <section class="guestbook-section guestbook-own"><span class="section-code">RECADOS // DEIXARAM ISSO AQUI</span><h2>Recados no seu Canto</h2><p>Amigos podem deixar texto, links, emojis e imagens. Você continua com a sofisticada tecnologia chamada “apagar”.</p><div id="profile-guestbook" class="guestbook-list"><p>procurando bilhetes na porta...</p></div></section>
@@ -2522,8 +2637,13 @@ async function renderProfile(){
   $('#profile-presence').onchange=e=>setPresenceMode(e.target.value);
   $('#album-upload').onclick=uploadAlbumPhoto;
   $('#profile-media-upload').onclick=uploadProfileMedia;
-  $('#profile-media-file').onchange=e=>{if(e.target.files?.[0])$('#profile-media-link').value='';};
-  $('#profile-media-link').oninput=e=>{if(parseExternalMediaLink(e.target.value))$('#profile-media-file').value='';};
+  $('#save-corner-music').onclick=saveCornerMusicSettings;
+  $('#clear-corner-music').onclick=clearCornerMusicSettings;
+  $('#corner-music-url').oninput=e=>{
+    const status=$('#corner-music-status');
+    if(!e.target.value.trim())status.textContent='SEM FITA // escolha um link quando quiser';
+    else status.textContent=parseExternalMediaLink(e.target.value)?'LINK RECONHECIDO // pronto para salvar':'LINK NÃO RECONHECIDO // use YouTube ou Spotify';
+  };
   $('#choose-profile-wallpaper').onclick=()=>openWallpaperDialog('profile');
   $('#choose-app-wallpaper').onclick=()=>openWallpaperDialog('app');
   document.querySelectorAll('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
@@ -2634,13 +2754,14 @@ async function deleteGuestbookEntry(id,imagePath,profileId,selector){
 }
 async function openPublicProfile(userId){
   if(!userId)return;
+  stopCornerMusic();
   if(userId===state.profile.id){document.querySelector('[data-app-tab="profile"]')?.click();return;}
   autoMinimizeChat();
   state.tab='public_profile';state.publicProfileId=userId;bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   applyAppTabLayout();$('#feed-status').classList.add('hidden');
   const [profileRes,friendship]=await Promise.all([
-    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen').eq('id',userId).maybeSingle(),
+    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen,corner_music_url,corner_music_enabled').eq('id',userId).maybeSingle(),
     getFriendshipWith(userId)
   ]);
   if(state.tab!=='public_profile'||state.publicProfileId!==userId)return;
@@ -2681,6 +2802,7 @@ async function openPublicProfile(userId){
   loadAlbum(userId,false);
   loadProfileMedia(userId,false,'#public-media-list');
   loadProfileStories(userId,'#public-story-list');
+  startCornerMusic(p);
 }
 function bindProfileLinks(){ /* links usam delegação global */ }
 document.addEventListener('click',e=>{
