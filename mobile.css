@@ -1928,3 +1928,109 @@
     font-size:.50rem!important;
   }
 }
+
+
+/* =========================================================
+   OPTIONS.EXE MOBILE HOTFIX 2026-10-01
+   ========================================================= */
+@media (max-width:820px){
+  .dm-floating-window.options-open{
+    overflow:visible!important;
+  }
+
+  .dm-floating-window .dm-options-menu-head{
+    position:absolute!important;
+    z-index:4200!important;
+    left:6px!important;
+    right:6px!important;
+    top:var(--dm-options-mobile-top,112px)!important;
+    bottom:8px!important;
+    width:auto!important;
+    max-width:none!important;
+    max-height:none!important;
+    height:auto!important;
+    margin:0!important;
+    padding:10px!important;
+    display:block!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain!important;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-y!important;
+    background:#e7eeee!important;
+    border:2px solid #59737a!important;
+    box-shadow:0 12px 34px #000c!important;
+  }
+
+  .dm-floating-window .dm-options-menu-head.hidden{
+    display:none!important;
+  }
+
+  .dm-floating-window .dm-options-menu-head:before{
+    position:sticky!important;
+    top:-10px!important;
+    z-index:5!important;
+  }
+
+  .dm-options-mobile-close{
+    position:sticky!important;
+    top:22px!important;
+    z-index:8!important;
+    float:right!important;
+    width:auto!important;
+    min-width:72px!important;
+    min-height:32px!important;
+    margin:-2px 0 7px 8px!important;
+    padding:6px 9px!important;
+    border:1px solid #8aa0a5!important;
+    border-radius:3px!important;
+    background:#f7fbfb!important;
+    color:#253c42!important;
+    font:800 .50rem/1 var(--mono)!important;
+  }
+
+  .dm-options-menu-head .dm-options-user{
+    clear:both!important;
+  }
+
+  .dm-options-menu-head>button:not(.dm-options-mobile-close){
+    min-height:42px!important;
+    font-size:.56rem!important;
+  }
+
+  .dm-options-menu-head .dm-away-setting,
+  .dm-options-menu-head .dm-chat-listening-setting,
+  .dm-options-menu-head .dm-status-setting,
+  .dm-options-menu-head .dm-theme-section,
+  .dm-options-menu-head .dm-wallpaper-section{
+    display:block!important;
+    width:100%!important;
+    margin:9px 0!important;
+  }
+
+  .dm-options-menu-head .dm-theme-grid,
+  .dm-options-menu-head .dm-chat-wallpaper-grid{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:7px!important;
+  }
+
+  .dm-options-menu-head .chat-theme-choice,
+  .dm-options-menu-head .dm-chat-wallpaper{
+    min-height:46px!important;
+    touch-action:manipulation!important;
+  }
+
+  .dm-options-menu-head select,
+  .dm-options-menu-head input,
+  .dm-options-menu-head button{
+    touch-action:manipulation!important;
+  }
+}
+
+@media (max-width:390px){
+  .dm-options-menu-head .dm-theme-grid,
+  .dm-options-menu-head .dm-chat-wallpaper-grid{
+    grid-template-columns:1fr!important;
+  }
+}
