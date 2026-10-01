@@ -3695,12 +3695,43 @@ async function notifyPhotoInteraction(row,kind){
   });
 }
 
+function renderTypingIndicator(active=false,peerId=null){
+  const el=$('#dm-typing');
+  if(!el)return;
+  const show=Boolean(active&&peerId&&peerId===state.directPeerId&&state.chatWindowOpen&&!state.chatWindowMinimized);
+  el.classList.toggle('hidden',!show);
+  if(show)el.textContent='digitando...';
+}
+function sendTypingState(typing){
+  if(!state.directChannel||state.directChannelStatus!=='SUBSCRIBED'||!state.profile?.id||!state.directPeerId)return;
+  state.directChannel.send({
+    type:'broadcast',
+    event:'typing',
+    payload:{sender_id:state.profile.id,recipient_id:state.directPeerId,typing:Boolean(typing)}
+  }).catch(()=>{});
+}
+function bindTypingIndicator(){
+  const input=$('#dm-input');if(!input)return;
+  input.addEventListener('input',()=>{
+    sendTypingState(Boolean(input.value.trim()));
+    clearTimeout(state.typingTimer);
+    state.typingTimer=setTimeout(()=>sendTypingState(false),1200);
+  });
+  input.addEventListener('blur',()=>sendTypingState(false));
+}
+
 function startDirectRealtime(){
   if(state.directChannel||!state.profile?.id)return;
   const me=state.profile.id;
   if(!state.directWatchStartedAt)state.directWatchStartedAt=new Date(Date.now()-1500).toISOString();
   startDirectFallbackPoll();
   const channel=supabase.channel(`avesso-social-${me}-${Date.now()}`)
+    .on('broadcast',{event:'typing'},message=>{
+      const p=message?.payload||{};
+      if(p.recipient_id!==me||p.sender_id!==state.directPeerId)return;
+      state.typingPeerId=p.typing?p.sender_id:null;
+      renderTypingIndicator(Boolean(p.typing),p.sender_id);
+    })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>receiveIncomingDirectMessage(payload.new||{}, {source:'realtime'}))
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`sender_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
