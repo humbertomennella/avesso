@@ -38,7 +38,7 @@ async function compressImageFile(file,{maxEdge=1600,quality=.82,minBytes=550*102
     const height=Math.max(1,Math.round(bitmap.height*scale));
     const canvas=document.createElement('canvas');
     canvas.width=width;canvas.height=height;
-    const ctx=canvas.getContext('2d',{alpha:false});
+    const ctx=canvas.getContext('2d');
     ctx.drawImage(bitmap,0,0,width,height);
     bitmap.close?.();
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',quality));
