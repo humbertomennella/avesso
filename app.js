@@ -2426,7 +2426,7 @@ async function loadDirectConversation(peerId,{markRead=true}={}){
     await supabase.from('direct_messages').update({read_at:new Date().toISOString()})
       .eq('sender_id',peerId).eq('recipient_id',me).is('read_at',null);
   }
-  const rows=data||[];
+  const rows=(data||[]).slice().reverse();
   rows.forEach(m=>{if(m.recipient_id===me)rememberDirectMessage(m.id);});
   const ids=rows.map(m=>m.id).filter(Boolean);
   const grouped={};
