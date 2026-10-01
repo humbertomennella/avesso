@@ -2536,6 +2536,8 @@ async function renderProfile(){
   $('#profile-presence').onchange=e=>setPresenceMode(e.target.value);
   $('#album-upload').onclick=uploadAlbumPhoto;
   $('#profile-media-upload').onclick=uploadProfileMedia;
+  $('#profile-media-file').onchange=e=>{if(e.target.files?.[0])$('#profile-media-link').value='';};
+  $('#profile-media-link').oninput=e=>{if(parseExternalMediaLink(e.target.value))$('#profile-media-file').value='';};
   $('#choose-profile-wallpaper').onclick=()=>openWallpaperDialog('profile');
   $('#choose-app-wallpaper').onclick=()=>openWallpaperDialog('app');
   document.querySelectorAll('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
