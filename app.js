@@ -531,7 +531,7 @@ async function publishStory(){
     if(mediaPath)await supabase.storage.from('avesso-stories').remove([mediaPath]);
     if(created?.id)await supabase.from('stories').delete().eq('id',created.id);
     console.error('story publish',err);
-    toast('O story caiu antes de completar 24 horas.');
+    toast(err?.code==='P0001'?'Stories demais em pouco tempo. Dê alguns minutos ao servidor.':'O story caiu antes de completar 24 horas.');
   }finally{
     state.storyBusy=false;
     if(btn){btn.disabled=false;btn.textContent='publicar por 24h';}
@@ -2318,7 +2318,7 @@ $('#publish-post').onclick=async()=>{
     visibility:directed?$('#post-visibility').value:'publico'
   }).select('id').single();
   $('#publish-post').disabled=false;
-  if(error){console.error('post insert failed',error);return toast(error.code==='23514'?'A publicação não passou pelas regras de tamanho/visibilidade.':'Não foi possível publicar. Tente novamente.');}
+  if(error){console.error('post insert failed',error);return toast(error.code==='P0001'?'Você está publicando rápido demais. Espere alguns minutos.':error.code==='23514'?'A publicação não passou pelas regras de tamanho/visibilidade.':'Não foi possível publicar. Tente novamente.');}
   $('#post-body').value='';$('#recipient-search').value='';$('#char-count').textContent='420';state.recipient=null;
   state.postImageFile=null;state.postGifUrl='';$('#post-image').value='';$('#image-preview').classList.add('hidden');
   if($('#post-gif-file'))$('#post-gif-file').value='';
@@ -5183,7 +5183,7 @@ async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDu
   if(error){
     await supabase.storage.from('avesso-chat').remove([path]);
     clearOptimistic();
-    return toast('O banco recusou o pacote. Elegante.');
+    return toast(error.code==='P0001'?'Você está enviando rápido demais. Espere um pouco.':'O banco recusou o pacote. Elegante.');
   }
   const hydrated=(await hydrateDirectMessages([data]))[0]||data;
   if(state.chatWindowOpen&&state.directPeerId===recipientId){
@@ -5754,6 +5754,7 @@ async function requestFriend(userId){
   const {data:friendship,error}=await supabase.from('friendships').insert({requester_id:state.profile.id,addressee_id:userId,status:'pending'}).select('id').single();
   if(error){
     if(String(error.code)==='23505')return toast('Essa relação já existe em algum estado burocrático.');
+    if(String(error.code)==='P0001')return toast('Pedidos demais em pouco tempo. A diplomacia digital entrou em intervalo.');
     return toast('Não foi possível enviar o pedido.');
   }
   dispatchPush('friend_request',friendship?.id);
