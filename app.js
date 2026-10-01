@@ -918,6 +918,10 @@ function parseExternalMediaLink(raw){
   }
   return null;
 }
+function externalMediaShareUrl(raw){
+  const parsed=parseExternalMediaLink(raw);
+  return parsed?.canonical||String(raw||'');
+}
 function mediaKindFromFile(file){
   if(!file?.type)return null;
   if(file.type.startsWith('audio/'))return'audio';
@@ -1111,7 +1115,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
     return `<article class="post-card" data-post-card="${p.id}">
       <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       <p class="post-body" data-post-body="${p.id}">${escapeHtml(p.body)}</p>
-      ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea>${['youtube','spotify'].includes(p.media_kind)?`<input type="url" data-post-media-link-edit="${p.id}" value="${escapeAttr(p.media_url||'')}" placeholder="link do YouTube ou Spotify">`:''}<div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
+      ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea>${['youtube','spotify'].includes(p.media_kind)?`<input type="url" data-post-media-link-edit="${p.id}" value="${escapeAttr(externalMediaShareUrl(p.media_url))}" placeholder="link do YouTube ou Spotify">`:''}<div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
       ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
       ${feedMediaHtml(p.media_url,p.media_kind)}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
@@ -1137,7 +1141,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
 async function savePostEdit(postId){
   const panel=document.querySelector(`[data-post-edit-panel="${CSS.escape(postId)}"]`);
   const body=String(panel?.querySelector('textarea')?.value||'').trim();
-  if(body.length<12)return toast('A edição precisa manter pelo menos 12 caracteres.');
+  if(body.length<1)return toast('A postagem precisa ter pelo menos 1 caractere.');
   if(body.length>420)return toast('Até 420 caracteres. A parede do AVESSO não virou tese.');
   const patch={body,edited_at:new Date().toISOString()};
   const linkInput=panel?.querySelector('[data-post-media-link-edit]');
@@ -2421,7 +2425,7 @@ function profileMediaCardHtml(row,editable=false){
     <div class="profile-media-head"><span>${label}</span><small>${ago(row.created_at)}</small></div>
     ${feedMediaHtml(row.media_url,row.media_kind,{compact:true})}
     <p data-profile-media-caption="${row.id}">${escapeHtml(row.caption||'sem legenda. silêncio também é curadoria.')}</p>
-    ${editable?`<div class="profile-media-owner-actions"><button data-profile-media-edit="${row.id}">editar</button><button class="profile-media-delete" data-profile-media-delete="${row.id}" data-profile-media-path="${escapeAttr(row.storage_path||'')}">apagar mídia</button></div><div class="profile-media-edit hidden" data-profile-media-edit-panel="${row.id}"><textarea maxlength="420">${escapeHtml(row.caption||'')}</textarea>${linked?`<input type="url" value="${escapeAttr(row.media_url||'')}" data-profile-media-link-input="${row.id}" placeholder="novo link do YouTube ou Spotify">`:''}<div><button data-profile-media-save="${row.id}">salvar</button><button data-profile-media-cancel="${row.id}">cancelar</button></div></div>`:''}
+    ${editable?`<div class="profile-media-owner-actions"><button data-profile-media-edit="${row.id}">editar</button><button class="profile-media-delete" data-profile-media-delete="${row.id}" data-profile-media-path="${escapeAttr(row.storage_path||'')}">apagar mídia</button></div><div class="profile-media-edit hidden" data-profile-media-edit-panel="${row.id}"><textarea maxlength="420">${escapeHtml(row.caption||'')}</textarea>${linked?`<input type="url" value="${escapeAttr(externalMediaShareUrl(row.media_url))}" data-profile-media-link-input="${row.id}" placeholder="novo link do YouTube ou Spotify">`:''}<div><button data-profile-media-save="${row.id}">salvar</button><button data-profile-media-cancel="${row.id}">cancelar</button></div></div>`:''}
   </article>`;
 }
 async function loadProfileMedia(userId,editable=false,selector=editable?'#profile-media-list':'#public-media-list'){
