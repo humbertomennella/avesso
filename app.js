@@ -2009,7 +2009,7 @@ function dmMessageHtml(m){
   const attachment=m.attachment_url?(m.message_kind==='image'
     ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}" loading="eager" decoding="async"></a>`
     :m.message_kind==='audio'
-      ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio controls preload="auto" src="${escapeAttr(m.attachment_url)}"></audio></div>`
+      ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio controls preload="metadata"><source src="${escapeAttr(m.attachment_url)}" type="${escapeAttr(m.attachment_type||'audio/wav')}">Seu navegador recusou este áudio.</audio><a class="dm-audio-open" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener">abrir áudio</a></div>`
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
   const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p>${escapeHtml(m.body)}</p>`:'');
   return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}${mine&&m.read_at?' · lida':''}</small></article>`;
@@ -2062,8 +2062,52 @@ document.addEventListener('pointerdown',e=>{
 
 function preferredVoiceMime(){
   if(!window.MediaRecorder)return'';
-  const candidates=['audio/ogg;codecs=opus','audio/webm;codecs=opus','audio/mp4','audio/ogg','audio/webm'];
+  const candidates=['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus','audio/webm','audio/ogg'];
   return candidates.find(type=>MediaRecorder.isTypeSupported?.(type))||'';
+}
+async function normalizeVoiceBlob(blob){
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  if(!AudioCtx||!blob?.size)return{blob,type:blob?.type||'audio/webm',duration:null};
+  let ctx;
+  try{
+    ctx=new AudioCtx();
+    const decoded=await ctx.decodeAudioData((await blob.arrayBuffer()).slice(0));
+    const targetRate=16000;
+    const frames=Math.max(1,Math.ceil(decoded.duration*targetRate));
+    const mono=new Float32Array(frames);
+    const channels=decoded.numberOfChannels;
+    const ratio=decoded.sampleRate/targetRate;
+    const channelData=Array.from({length:channels},(_,i)=>decoded.getChannelData(i));
+    for(let i=0;i<frames;i++){
+      const pos=i*ratio;
+      const i0=Math.min(decoded.length-1,Math.floor(pos));
+      const i1=Math.min(decoded.length-1,i0+1);
+      const frac=pos-i0;
+      let sum=0;
+      for(let ch=0;ch<channels;ch++){
+        const data=channelData[ch];
+        sum+=(data[i0]||0)+((data[i1]||0)-(data[i0]||0))*frac;
+      }
+      mono[i]=Math.max(-1,Math.min(1,sum/Math.max(1,channels)));
+    }
+    const out=new ArrayBuffer(44+frames*2);
+    const view=new DataView(out);
+    const write=(offset,str)=>{for(let i=0;i<str.length;i++)view.setUint8(offset+i,str.charCodeAt(i));};
+    write(0,'RIFF');view.setUint32(4,36+frames*2,true);write(8,'WAVE');write(12,'fmt ');
+    view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);
+    view.setUint32(24,targetRate,true);view.setUint32(28,targetRate*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);
+    write(36,'data');view.setUint32(40,frames*2,true);
+    let offset=44;
+    for(let i=0;i<frames;i++,offset+=2){
+      const sample=mono[i]<0?mono[i]*0x8000:mono[i]*0x7fff;
+      view.setInt16(offset,sample,true);
+    }
+    return{blob:new Blob([out],{type:'audio/wav'}),type:'audio/wav',duration:Math.max(1,Math.round(decoded.duration))};
+  }catch{
+    return{blob,type:blob.type||'audio/webm',duration:null};
+  }finally{
+    try{await ctx?.close?.();}catch{}
+  }
 }
 function voiceExtension(type=''){
   if(type.includes('ogg'))return'ogg';
@@ -2150,13 +2194,16 @@ async function startVoiceRecording({hold=false}={}){
       state.voiceRecorder=null;state.voiceStream=null;state.voiceChunks=[];state.voiceStartedAt=0;state.voicePeerId=null;state.voicePendingStart=false;
       syncVoiceRecordingUI();
       if(!chunks.length)return toast('O áudio terminou antes de começar.');
-      const duration=Math.max(1,Math.round((Date.now()-startedAt)/1000));
-      const blob=new Blob(chunks,{type});
-      if(blob.size>10*1024*1024)return toast('Áudio acima de 10 MB. Nem o AVESSO precisa de um podcast inteiro.');
-      const ext=voiceExtension(type);
-      const file=new File([blob],`voz-${Date.now()}.${ext}`,{type});
+      const rawBlob=new Blob(chunks,{type});
+      const normalized=await normalizeVoiceBlob(rawBlob);
+      const finalBlob=normalized.blob;
+      const finalType=normalized.type||type;
+      const duration=normalized.duration||Math.max(1,Math.round((Date.now()-startedAt)/1000));
+      if(finalBlob.size>10*1024*1024)return toast('Áudio acima de 10 MB. Nem o AVESSO precisa de um podcast inteiro.');
+      const ext=voiceExtension(finalType);
+      const file=new File([finalBlob],`voz-${Date.now()}.${ext}`,{type:finalType});
       const optimisticId=`voice-local-${crypto.randomUUID()}`;
-      const optimisticUrl=URL.createObjectURL(blob);
+      const optimisticUrl=URL.createObjectURL(finalBlob);
       if(state.chatWindowOpen&&state.directPeerId===peerId){
         appendDirectMessage({
           id:optimisticId,
@@ -2166,14 +2213,14 @@ async function startVoiceRecording({hold=false}={}){
           message_kind:'audio',
           attachment_url:optimisticUrl,
           attachment_name:file.name,
-          attachment_type:type,
+          attachment_type:finalType,
           attachment_size:file.size,
           created_at:new Date().toISOString()
         });
       }
       await sendDirectAttachment(file,{recipientId:peerId,voiceDuration:duration,optimisticId,optimisticUrl});
     };
-    recorder.start();
+    recorder.start(250);
     state.voiceTimer=setInterval(()=>{
       syncVoiceRecordingUI();
       if(Date.now()-state.voiceStartedAt>=180000&&state.voiceRecorder?.state==='recording')state.voiceRecorder.stop();
