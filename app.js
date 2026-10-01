@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, staffSection:'overview', staffInternalChannel:null, staffDirectory:{}, staffByHandle:{}, userBadges:{}, badgeCatalog:{}, customAssets:[], customAssetBySlug:{}, customEmoticons:[], suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -55,7 +55,17 @@ const STORY_REACTIONS=[
   ['quatro_zero_quatro','404','isso merece um 404']
 ];
 function avessoEmoticonButtons(attribute='data-emoticon-value'){
-  return AVESSO_EMOTICONS.map(value=>`<button type="button" ${attribute}="${escapeAttr(value)}" title="inserir ${escapeAttr(value)}">${escapeHtml(value)}</button>`).join('');
+  const native=AVESSO_EMOTICONS.map(value=>`<button type="button" ${attribute}="${escapeAttr(value)}" title="inserir ${escapeAttr(value)}">${escapeHtml(value)}</button>`).join('');
+  const custom=(state.customEmoticons||[]).map(item=>`<button type="button" class="custom-emoticon-choice" ${attribute}="${escapeAttr(item.token)}" title="${escapeAttr(item.name)}"><img src="${escapeAttr(item.url)}" alt="${escapeAttr(item.token)}"></button>`).join('');
+  return native+custom;
+}
+function renderEmoticonText(value=''){
+  let html=escapeHtml(value);
+  for(const item of state.customEmoticons||[]){
+    const token=escapeHtml(item.token);
+    html=html.split(token).join('<img class="inline-custom-emoticon" src="'+escapeAttr(item.url)+'" alt="'+escapeAttr(item.token)+'" title="'+escapeAttr(item.name)+'">');
+  }
+  return html;
 }
 function setupFeedEmoticons(){
   const palette=$('#post-emoticon-palette');
@@ -93,7 +103,7 @@ function chatThemeClass(theme=state.profile?.chat_theme||'bbs_cyan'){
 function chatWallpaperCss(slug=state.profile?.chat_wallpaper||'none'){
   return CHAT_WALLPAPERS.some(x=>x[0]===slug)&&slug!=='none'?`url("${wallpaperUrl(slug)}")`:'none';
 }
-function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.webp`;}
+function wallpaperUrl(slug){const custom=state.customAssetBySlug?.['wallpaper:'+slug];return custom?adminAssetPublicUrl(custom.storage_path):`assets/wallpapers/${slug||'cidade-56k'}.webp`;}
 function applyAppWallpaper(){
   const useProfileWallpaper=state.tab==='profile';
   const slug=(useProfileWallpaper?state.profile?.profile_wallpaper:state.profile?.app_wallpaper)||'cidade-56k';
@@ -104,6 +114,84 @@ function applyAppWallpaper(){
 
 function adminCrownHtml(extraClass=''){
   return '<span class="admin-crown-pixel '+escapeAttr(extraClass)+'" title="Administrador do AVESSO" aria-label="Administrador"><i></i></span>';
+}
+
+function staffRoleLabel(role=''){
+  return {moderator:'Moderador',senior_admin:'Administrador-Sênior',owner:'Administrador Geral'}[role]||'';
+}
+function adminAssetPublicUrl(path=''){
+  return path?supabase.storage.from('avesso-admin-assets').getPublicUrl(path).data.publicUrl:'';
+}
+function badgeHtmlForUser(userId){
+  const rows=state.userBadges?.[userId]||[];
+  return rows.map(row=>{
+    const badge=state.badgeCatalog?.[row.badge_id];if(!badge)return'';
+    const asset=state.customAssets.find(a=>a.id===badge.asset_id);
+    const url=asset?adminAssetPublicUrl(asset.storage_path):'';
+    return url?'<img class="identity-badge" src="'+escapeAttr(url)+'" alt="'+escapeAttr(badge.name||'emblema')+'" title="'+escapeAttr(badge.name||'Emblema AVESSO')+'">':'';
+  }).join('');
+}
+function identityNameHtml(userId,name,extraClass=''){
+  const role=state.staffDirectory?.[userId]?.role||'';
+  const crown=role==='owner'?adminCrownHtml('identity-owner-crown'):'';
+  const staff=role&&role!=='owner'?'<span class="identity-staff-role '+escapeAttr(role)+'" title="'+escapeAttr(staffRoleLabel(role))+'">'+escapeHtml(role==='moderator'?'MOD':'SR')+'</span>':'';
+  return '<span class="identity-name '+escapeAttr(extraClass)+'">'+escapeHtml(name||'alguém')+crown+staff+badgeHtmlForUser(userId)+'</span>';
+}
+function hydrateCustomAssets(){
+  state.customAssetBySlug={};
+  state.customEmoticons=[];
+  for(const asset of state.customAssets||[]){
+    const key=asset.asset_type+':'+asset.slug;
+    state.customAssetBySlug[key]=asset;
+    const url=adminAssetPublicUrl(asset.storage_path);
+    if(asset.asset_type==='wallpaper'&&!WALLPAPER_OPTIONS.some(x=>x[0]===asset.slug)){
+      WALLPAPER_OPTIONS.push([asset.slug,asset.name,'arquivo do administrador']);
+      CHAT_WALLPAPERS.push([asset.slug,asset.name,'arquivo do administrador']);
+    }
+    if(asset.asset_type==='avatar'&&!AVATAR_OPTIONS.some(x=>x[1]===url))AVATAR_OPTIONS.push([asset.name,url,'admin']);
+    if(asset.asset_type==='emoticon')state.customEmoticons.push({...asset,url,token:asset.shortcode?.trim()||(':'+asset.slug+':')});
+  }
+}
+async function loadIdentityRegistry(){
+  const [staffRes,badgeRes,userBadgeRes,assetRes]=await Promise.all([
+    supabase.rpc('staff_directory_public'),
+    supabase.from('badges').select('id,name,slug,asset_id,description'),
+    supabase.from('user_badges').select('user_id,badge_id,assigned_at'),
+    supabase.from('admin_assets').select('id,asset_type,name,slug,storage_path,mime_type,shortcode,meta,active').eq('active',true)
+  ]);
+  const staff=Array.isArray(staffRes.data)?staffRes.data:[];
+  state.staffDirectory=Object.fromEntries(staff.map(x=>[x.user_id,x]));
+  state.staffByHandle=Object.fromEntries(staff.map(x=>[x.handle,x]));
+  state.badgeCatalog=Object.fromEntries((badgeRes.data||[]).map(x=>[x.id,x]));
+  state.userBadges={};
+  for(const row of userBadgeRes.data||[])(state.userBadges[row.user_id]??=[]).push(row);
+  state.customAssets=assetRes.data||[];
+  hydrateCustomAssets();
+}
+async function loadSiteOverrides(){
+  const {data}=await supabase.from('site_overrides').select('*').eq('enabled',true).order('sort_order',{ascending:true});
+  for(const row of data||[]){
+    let nodes=[];
+    try{nodes=[...document.querySelectorAll(row.selector)];}catch{continue;}
+    for(const el of nodes){
+      if(row.action==='text')el.textContent=row.value;
+      else if(row.action==='src'&&'src' in el)el.src=row.value;
+      else if(row.action==='alt'&&'alt' in el)el.alt=row.value;
+      else if(row.action==='hide')el.classList.add('cms-hidden');
+      else if(row.action==='show')el.classList.remove('cms-hidden');
+      else if(row.action==='append_text')el.append(document.createTextNode(row.value));
+      else if(row.action==='prepend_text')el.prepend(document.createTextNode(row.value));
+      else if(row.action==='background_image')el.style.backgroundImage='url("'+String(row.value).replaceAll('"','%22')+'")';
+    }
+  }
+}
+async function loadStaffNotifications(){
+  if(!state.profile?.id)return;
+  const {data}=await supabase.from('user_staff_notifications').select('id,title,body,severity,created_at').eq('user_id',state.profile.id).is('read_at',null).order('created_at',{ascending:true}).limit(20);
+  for(const row of data||[]){
+    socialNotify({title:row.title,body:row.body,kind:'staff',sound:row.severity==='critico'});
+    await supabase.from('user_staff_notifications').update({read_at:new Date().toISOString()}).eq('id',row.id).eq('user_id',state.profile.id);
+  }
 }
 function applySiteSettings(settings=state.siteSettings||{}){
   if(!settings)return;
@@ -127,6 +215,7 @@ function applySiteSettings(settings=state.siteSettings||{}){
   const announcement=String(settings.announcement||'').trim();
   bar.textContent=announcement;
   bar.classList.toggle('hidden',!announcement);
+  document.documentElement.dataset.compactFeed=settings.layout_settings?.compact_feed?'1':'0';
 }
 async function loadSiteSettings(){
   const {data,error}=await supabase.from('site_settings').select('*').eq('id','global').maybeSingle();
@@ -181,13 +270,13 @@ function storyCardHtml(story,{compact=false}={}){
   return '<button class="story-card '+(compact?'compact ':'')+(isVideo?'has-video':'')+'" data-story-open="'+escapeAttr(story.id)+'" style="'+style+'">'+
     '<span class="story-ring"><i>'+avatarHtml(a.avatar_url,a.display_name||'?')+'</i></span>'+
     (isVideo?'<em class="story-card-media">▶ vídeo</em>':'')+
-    '<span class="story-card-copy"><b>'+escapeHtml(a.display_name||'humano')+'</b><small>'+(story.visibility==='amigos'?'amigos':'público')+' · '+storyTimeLeft(story.expires_at)+'</small></span>'+
+    '<span class="story-card-copy"><b>'+identityNameHtml(a.id,a.display_name||'humano')+'</b><small>'+(story.visibility==='amigos'?'amigos':'público')+' · '+storyTimeLeft(story.expires_at)+'</small></span>'+
   '</button>';
 }
 
 async function loadStoriesStrip(){
   const host=$('#stories-zone');
-  if(!host||!state.profile||state.tab!=='feed'){host?.classList.add('hidden');return;}
+  if(!host||!state.profile||state.tab!=='feed'||state.siteSettings?.story_settings?.enabled===false){host?.classList.add('hidden');return;}
   host.classList.remove('hidden');
   const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,media_type,visibility,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(60);
   if(error){host.innerHTML='<div class="stories-error">stories deram tela azul.</div>';return;}
@@ -239,6 +328,7 @@ function renderStoryMediaPreview(file){
   box.classList.remove('hidden');
 }
 async function openStoryCamera(){
+  if(state.siteSettings?.story_settings?.camera_enabled===false)return toast('A câmera dos Stories está desativada nas configurações globais.');
   if(!navigator.mediaDevices?.getUserMedia)return toast('Este navegador não liberou câmera para o AVESSO.');
   stopStoryCamera();
   const constraints={
@@ -449,10 +539,10 @@ async function openStory(storyId,options={}){
     return `<button class="story-reaction ${active?'active':''}" data-story-react="${id}"><span>${icon}</span>${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`;
   }).join('');
   const a=authorRes.data||{},canDelete=story.author_id===state.profile.id;
-  const commentsHtml=comments.map(row=>{const p=commentProfiles[row.user_id]||{};return `<article class="story-comment"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${escapeHtml(p.display_name||'alguém')}</b><small>@${escapeHtml(p.handle||'...')} · ${ago(row.created_at)}</small><p>${escapeHtml(row.body)}</p></div></article>`;}).join('')||'<p class="story-empty">Sem comentários. O silêncio também expira.</p>';
+  const commentsHtml=comments.map(row=>{const p=commentProfiles[row.user_id]||{};return `<article class="story-comment"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${identityNameHtml(row.user_id,p.display_name||'alguém')}</b><small>@${escapeHtml(p.handle||'...')} · ${ago(row.created_at)}</small><p>${escapeHtml(row.body)}</p></div></article>`;}).join('')||'<p class="story-empty">Sem comentários. O silêncio também expira.</p>';
   const host=$('#story-view-content');
   host.innerHTML=`<article class="story-view-card">
-    <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${escapeHtml(a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
+    <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${identityNameHtml(story.author_id,a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
     <div class="story-stage ${image_url?'has-image':''} ${storyIsVideo?'has-video':''}" style="${image_url&&!storyIsVideo?`--story-image:url('${escapeAttr(image_url)}')`:''}">${image_url?(storyIsVideo?`<video class="story-video" src="${escapeAttr(image_url)}" controls playsinline preload="metadata"></video>`:`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||'usuário')}" decoding="async" fetchpriority="high">`):''}${story.body?`<p>${escapeHtml(story.body)}</p>`:''}</div>
     <div class="story-reactions">${reactionHtml}</div>
     <section class="story-comments"><h3>respostas // sem plateia</h3><div class="story-comment-list">${commentsHtml}</div><div class="story-comment-compose"><textarea id="story-comment-body" maxlength="420" placeholder="responda antes que isso desapareça..."></textarea><div><button id="story-comment-emoticons" type="button">☻ avessícones</button><button id="story-comment-send" type="button">responder</button></div><div id="story-comment-palette" class="feed-emoticon-palette hidden">${avessoEmoticonButtons('data-story-comment-emoticon')}</div></div></section>
@@ -1090,6 +1180,37 @@ async function blockChatPeer(peerId){
   if(isFeedTab()){loadFeed();if(state.tab==='feed')loadStoriesStrip();}
   toast(`${peer?.display_name||'Usuário'} foi bloqueado. Ele também saiu do seu feed.`);
 }
+
+function ensureReportUserDialog(){
+  let dialog=$('#report-user-dialog');
+  if(dialog)return dialog;
+  dialog=document.createElement('dialog');
+  dialog.id='report-user-dialog';
+  dialog.className='report-user-dialog';
+  dialog.innerHTML='<form method="dialog" class="report-user-card"><header><span class="section-code">DENUNCIA // PERFIL</span><button value="cancel" aria-label="Fechar">×</button></header><h3 id="report-user-title">Denunciar usuario</h3><p>Informe o motivo e inclua contexto suficiente para revisao.</p><label>motivo<select id="report-user-reason"><option value="assedio">assedio</option><option value="odio">discriminacao</option><option value="spam">spam</option><option value="risco">risco</option><option value="outro">outro</option></select></label><label>detalhes<textarea id="report-user-details" maxlength="500" placeholder="descreva o ocorrido..."></textarea></label><footer><button value="cancel">cancelar</button><button id="report-user-submit" value="default">enviar denuncia</button></footer></form>';
+  document.body.appendChild(dialog);
+  return dialog;
+}
+async function reportUser(userId){
+  if(!userId||userId===state.profile?.id)return toast('Nao e possivel denunciar o proprio perfil.');
+  const peer=await profileById(userId);
+  const dialog=ensureReportUserDialog();
+  dialog.dataset.userId=userId;
+  $('#report-user-title').textContent='Denunciar '+(peer?.display_name||'usuario');
+  $('#report-user-details').value='';
+  $('#report-user-reason').value='outro';
+  $('#report-user-submit').onclick=async e=>{
+    e.preventDefault();
+    const reason=$('#report-user-reason').value;
+    const details=String($('#report-user-details').value||'').trim();
+    if(details.length<5)return toast('Inclua mais contexto.');
+    const {error}=await supabase.from('reports').insert({reporter_id:state.profile.id,reported_profile_id:userId,reason,details});
+    if(error){console.error('report user',error);return toast('A denuncia nao foi enviada.');}
+    dialog.close();
+    toast('Denuncia enviada para a equipe.');
+  };
+  dialog.showModal();
+}
 async function unblockPeer(peerId){
   if(!peerId||!state.profile?.id)return;
   const button=document.querySelector(`[data-unblock="${CSS.escape(peerId)}"]`);
@@ -1119,7 +1240,7 @@ async function loadBlockedPanel(){
   if(!ids.length){host.innerHTML='<p>Ninguém bloqueado. A paz pode ser temporária.</p>';return;}
   const {data:profiles}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',ids);
   const map=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
-  host.innerHTML=(rows||[]).map(row=>{const p=map[row.blocked_id]||{};return `<div class="blocked-row"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${escapeHtml(p.display_name||'usuário')}</b><small>@${escapeHtml(p.handle||'...')}</small></div><button data-unblock="${row.blocked_id}">desbloquear</button></div>`;}).join('');
+  host.innerHTML=(rows||[]).map(row=>{const p=map[row.blocked_id]||{};return `<div class="blocked-row"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${identityNameHtml(row.blocked_id,p.display_name||'usuário')}</b><small>@${escapeHtml(p.handle||'...')}</small></div><button data-unblock="${row.blocked_id}">desbloquear</button></div>`;}).join('');
   $$('[data-unblock]').forEach(b=>b.onclick=()=>unblockPeer(b.dataset.unblock));
 }
 
@@ -1429,7 +1550,7 @@ $('#story-image').onchange=e=>{
 $$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
 function setAuthMode(mode){ state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
 
-$('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);const email=f.get('email');const password=f.get('password');$('#auth-submit').disabled=true;$('#auth-message').textContent='conversando com os computadores...';let result;if(state.mode==='signup'){const handle=String(f.get('handle')||'').toLowerCase();const display_name=String(f.get('display_name')||'').trim().slice(0,80);if(!display_name){result={error:{message:'Escolha um nome exibido. Vale símbolo, emoji, drama e decisões questionáveis.'}}}else if(!/^[a-z0-9_]{3,24}$/.test(handle)){result={error:{message:'Seu @ precisa ter 3–24 letras minúsculas, números ou _.'}}}else{result=await supabase.auth.signUp({email,password,options:{data:{handle,display_name},emailRedirectTo:SITE_URL}});}}else result=await supabase.auth.signInWithPassword({email,password});$('#auth-submit').disabled=false;if(result.error){$('#auth-message').textContent=humanError(result.error.message);return}if(state.mode==='signup'&&!result.data.session){$('#auth-message').textContent='Confira seu e-mail e use o link mais recente. Se já confirmou a conta, abra a aba de entrar e use sua senha.';$('#resend-confirmation').classList.remove('hidden');return}$('#auth-dialog').close();toast('Você entrou. Tente não estragar tudo.');});
+$('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();if(state.mode==='signup'&&state.siteSettings?.login_settings?.registration_enabled===false){$('#auth-message').textContent='Novos cadastros estão temporariamente desativados pelo administrador.';return;}const f=new FormData(e.currentTarget);const email=f.get('email');const password=f.get('password');$('#auth-submit').disabled=true;$('#auth-message').textContent='conversando com os computadores...';let result;if(state.mode==='signup'){const handle=String(f.get('handle')||'').toLowerCase();const display_name=String(f.get('display_name')||'').trim().slice(0,80);if(!display_name){result={error:{message:'Escolha um nome exibido. Vale símbolo, emoji, drama e decisões questionáveis.'}}}else if(!/^[a-z0-9_]{3,24}$/.test(handle)){result={error:{message:'Seu @ precisa ter 3–24 letras minúsculas, números ou _.'}}}else{result=await supabase.auth.signUp({email,password,options:{data:{handle,display_name},emailRedirectTo:SITE_URL}});}}else result=await supabase.auth.signInWithPassword({email,password});$('#auth-submit').disabled=false;if(result.error){$('#auth-message').textContent=humanError(result.error.message);return}if(state.mode==='signup'&&!result.data.session){$('#auth-message').textContent='Confira seu e-mail e use o link mais recente. Se já confirmou a conta, abra a aba de entrar e use sua senha.';$('#resend-confirmation').classList.remove('hidden');return}$('#auth-dialog').close();toast('Você entrou. Tente não estragar tudo.');});
 
 $('#resend-confirmation').onclick=async()=>{const email=new FormData($('#auth-form')).get('email');if(!email)return toast('Digite seu e-mail primeiro. Adivinhação ainda está em beta.');const button=$('#resend-confirmation');button.disabled=true;button.textContent='reenviando...';const {error}=await supabase.auth.resend({type:'signup',email,options:{emailRedirectTo:SITE_URL}});button.disabled=false;button.textContent='reenviar confirmação de e-mail';if(error){$('#auth-message').textContent=humanError(error.message);return}$('#auth-message').textContent='Se a conta ainda estiver pendente, você receberá um novo link. Se já confirmou, entre com sua senha.';toast('Solicitação recebida. Confira seu e-mail ou tente entrar.');};
 
@@ -1479,7 +1600,7 @@ async function enterApp(){
   if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return;}
   await loadAdminAccess();
   await loadOwnModeration();
-  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):'');
+  $('#nav-name').innerHTML=identityNameHtml(data.id,data.display_name,'nav-identity-name');
   $('#nav-handle').textContent='@'+data.handle;
   renderNavAvatar();
   applyAppWallpaper();
@@ -1502,6 +1623,7 @@ async function enterApp(){
   scheduleTowerPulse();
   trackAction('login','app');
   setTimeout(notifyPendingFriendRequests,900);
+  setTimeout(loadStaffNotifications,1100);
   setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);
 }
 function leaveApp(){
@@ -1517,6 +1639,7 @@ function leaveApp(){
   state.pendingAttentionPeerId=null;
   stopPlazaRealtime();
   stopDirectRealtime();
+  stopStaffInternalRealtime();
   stopStoryRealtime();
   stopCornerMusic();
   closeStoryViewer();
@@ -1534,7 +1657,7 @@ function leaveApp(){
 }
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
-async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
+async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${identityNameHtml(p.id,p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
 
 function updateComposerTarget(){
   const directed=$('#post-target').value==='person';
@@ -2018,7 +2141,8 @@ async function loadFeed(){
   if(requestedTab==='quiet')query=query.eq('response_count',0);
   if(requestedTab==='sent')query=query.eq('author_id',state.profile.id);
 
-  const {data,error}=await query.order('created_at',{ascending:false}).limit(40);
+  const feedPageSize=Math.max(10,Math.min(100,Number(state.siteSettings?.feed_settings?.page_size)||40));
+  const {data,error}=await query.order('created_at',{ascending:false}).limit(feedPageSize);
 
   // O usuário pode ter mudado de página enquanto o banco respondia.
   if(viewVersion!==state.viewVersion||state.tab!==requestedTab||!isFeedTab())return;
@@ -2076,9 +2200,9 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       <div class="conversation-list">${conversation.map(item=>{
         if(item.type==='character'){
           const c=item.character||{};
-          return `<article class="conversation-item character-conversation">${characterVisual(c,'conversation-character')}<div><div class="conversation-author"><b>${escapeHtml(c.name||'Habitante')}</b><span>HABITANTE · ${ago(item.created_at)}</span></div><p>${escapeHtml(item.body)}</p></div></article>`;
+          return `<article class="conversation-item character-conversation">${characterVisual(c,'conversation-character')}<div><div class="conversation-author"><b>${escapeHtml(c.name||'Habitante')}</b><span>HABITANTE · ${ago(item.created_at)}</span></div><p>${renderEmoticonText(item.body)}</p></div></article>`;
         }
-        return `<article class="conversation-item"><button class="mini-avatar profile-avatar-button" data-profile-id="${item.author_id}">${avatarHtml(item.author?.avatar_url,item.author?.display_name||'?')}</button><div><div class="conversation-author"><button class="user-link" data-profile-id="${item.author_id}">${escapeHtml(item.author?.display_name||'alguém')}</button><span>@${escapeHtml(item.author?.handle||'...')} · ${ago(item.created_at)}</span></div><p>${escapeHtml(item.body)}</p></div></article>`;
+        return `<article class="conversation-item"><button class="mini-avatar profile-avatar-button" data-profile-id="${item.author_id}">${avatarHtml(item.author?.avatar_url,item.author?.display_name||'?')}</button><div><div class="conversation-author"><button class="user-link" data-profile-id="${item.author_id}">${identityNameHtml(item.author_id,item.author?.display_name||'alguém')}</button><span>@${escapeHtml(item.author?.handle||'...')} · ${ago(item.created_at)}</span></div><p>${escapeHtml(item.body)}</p></div></article>`;
       }).join('')}</div></section>`:'';
     const reactionHtml=ACID_REACTIONS.map(([id,icon,label])=>{
       const rows=reactionRows.filter(x=>x.reaction===id);
@@ -2093,16 +2217,16 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
     const effectiveImage=p.image_url?postImageSrc(p.image_url):(p.reshare_photo_storage_path?publicAlbumUrl(p.reshare_photo_storage_path):'');
     const effectiveGif=Boolean(p.image_url&&isGifPostImage(p.image_url));
     return `<article class="post-card" data-post-card="${p.id}">
-      <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
+      <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${identityNameHtml(p.author_id,p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       ${ownerActions}
       ${turnedBadge}
-      <p class="post-body" data-post-body="${p.id}">${escapeHtml(p.body)}</p>
+      <p class="post-body" data-post-body="${p.id}">${renderEmoticonText(p.body)}</p>
       ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea>${['youtube','spotify'].includes(p.media_kind)?`<input type="url" data-post-media-link-edit="${p.id}" value="${escapeAttr(externalMediaShareUrl(p.media_url))}" placeholder="link do YouTube ou Spotify">`:''}<div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
       ${effectiveImage?`<figure class="post-image ${effectiveGif?'post-gif':''}"><img class="post-image-open" ${p.reshare_photo_id?`data-photo-open="${p.reshare_photo_id}"`:`data-feed-image-open="${p.id}"`} src="${escapeAttr(effectiveImage)}" alt="${effectiveGif?'GIF':'Imagem'} publicado por ${escapeAttr(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
       ${feedMediaHtml(p.media_url,p.media_kind)}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
       ${conversationHtml}
-      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button><button class="turn-feed-button" data-turn-post="${p.id}">↻ virar no feed</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
+      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button><button class="turn-feed-button" data-turn-post="${p.id}">↻ virar no feed</button>${p.response_count===0&&state.siteSettings?.feed_settings?.show_attention_tag!==false?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
       <div class="inline-reply hidden" data-reply-box="${p.id}"><label>RESPOSTA // fale com a pessoa, não com a métrica</label><textarea maxlength="420" placeholder="Escreva algo que valha o espaço que ocupa."></textarea><div class="reply-emoticon-row"><button type="button" data-reply-emoticons="${p.id}">☻ avessícones</button><div class="feed-emoticon-palette hidden" data-reply-emoticon-palette="${p.id}">${avessoEmoticonButtons('data-reply-emoticon')}</div></div><div><button data-reply-send="${p.id}">publicar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
     </article>`;
   }).join('');
@@ -2314,142 +2438,436 @@ function adminAuditRow(row){
   return '<div class="admin-audit-row"><b>'+escapeHtml(labels[row.action]||row.action||'ação')+'</b><span>'+escapeHtml(row.target_type||'sistema')+(row.target_id?' · '+escapeHtml(String(row.target_id).slice(0,12)):'')+'</span><time>'+ago(row.created_at)+'</time></div>';
 }
 
+
+function staffSectionAllowed(section,role=state.adminRole){
+  const common=['overview','reports','monitoring','users','content','staff_chat'];
+  const senior=['team'];
+  const owner=['appearance','settings','cms','assets','badges','characters','database','audit'];
+  return common.includes(section)||(publicStaffRank(role)>=20&&senior.includes(section))||(role==='owner'&&owner.includes(section));
+}
+function publicStaffRank(role){return {moderator:10,senior_admin:20,owner:30}[role]||0;}
+function dashboardNavItems(role){
+  const items=[
+    ['overview','⌂','Visão geral'],['reports','⚑','Denúncias'],['monitoring','⌁','Monitoramento'],
+    ['users','◎','Usuários'],['content','▣','Conteúdo'],['staff_chat','↔','Chat interno']
+  ];
+  if(publicStaffRank(role)>=20)items.push(['team','♜','Equipe']);
+  if(role==='owner')items.push(
+    ['appearance','◈','Aparência'],['settings','⚙','Configurações'],['cms','▤','Páginas / CMS'],
+    ['assets','▧','Arquivos'],['badges','✦','Emblemas'],['characters','☻','Habitantes'],
+    ['database','▦','Banco de dados'],['audit','≣','Auditoria']
+  );
+  return items;
+}
+function staffRoleSelectHtml(user){
+  if(state.adminRole!=='owner')return '<span class="staff-role-chip '+escapeAttr(user.staff_role||'user')+'">'+escapeHtml(staffRoleLabel(user.staff_role)||'Usuário')+'</span>';
+  const self=user.id===state.profile.id;
+  return '<select data-staff-role="'+escapeAttr(user.id)+'" '+(self?'disabled':'')+'>'+
+    '<option value="none" '+(!user.staff_role?'selected':'')+'>Usuário</option>'+
+    '<option value="moderator" '+(user.staff_role==='moderator'?'selected':'')+'>Moderador</option>'+
+    '<option value="senior_admin" '+(user.staff_role==='senior_admin'?'selected':'')+'>Administrador-Sênior</option>'+
+    '<option value="owner" '+(user.staff_role==='owner'?'selected':'')+'>Administrador Geral</option>'+
+  '</select>';
+}
+function staffUserCard(user){
+  const presence=adminPresenceLabel(user);
+  const self=user.id===state.profile.id;
+  const banLabel=user.suspended?'reativar':'suspender';
+  return '<article class="staff-user-card '+(user.suspended?'is-suspended':'')+'">'+
+    '<button class="staff-user-main" data-profile-id="'+escapeAttr(user.id)+'"><span class="admin-user-avatar">'+avatarHtml(user.avatar_url,user.display_name||'?')+'</span>'+
+    '<span><b>'+identityNameHtml(user.id,user.display_name||'sem nome')+'</b><small>@'+escapeHtml(user.handle||'...')+' · '+presence+'</small>'+
+    (user.status_message?'<em>'+escapeHtml(user.status_message)+'</em>':'')+'</span></button>'+
+    '<div class="staff-user-meta">'+staffRoleSelectHtml(user)+(user.suspended?'<strong>SUSPENSO</strong>':'')+'</div>'+
+    (!self?'<div class="staff-user-actions"><button data-staff-notice="'+escapeAttr(user.id)+'">notificar</button><button data-staff-ban="'+escapeAttr(user.id)+'" data-ban-active="'+(user.suspended?'1':'0')+'" class="'+(user.suspended?'restore':'danger')+'">'+banLabel+'</button></div>':'<span class="admin-self-tag">VOCÊ</span>')+
+  '</article>';
+}
+function reportStatusOptions(current){
+  const rows=[['aberto','aberto'],['em_analise','em análise'],['encaminhado','encaminhado'],['resolvido','resolvido'],['descartado','descartado'],['arquivado','arquivado']];
+  return rows.map(([v,l])=>'<option value="'+v+'" '+(current===v?'selected':'')+'>'+l+'</option>').join('');
+}
+function staffReportCard(report,data){
+  const target=report.reported_profile?.handle?'@'+report.reported_profile.handle:(report.post_id?'post '+String(report.post_id).slice(0,8):'conteúdo');
+  const staff=Array.isArray(data.staff)?data.staff:[];
+  const canForward=staff.length>1;
+  return '<article class="staff-report-card priority-'+escapeAttr(report.priority||'normal')+'">'+
+    '<header><div><span>'+escapeHtml(String(report.reason||'denúncia'))+'</span><b>'+escapeHtml(target)+'</b>'+
+    '<small>por @'+escapeHtml(report.reporter?.handle||'...')+' · '+ago(report.created_at)+'</small></div>'+
+    '<select data-report-status="'+escapeAttr(report.id)+'">'+reportStatusOptions(report.status)+'</select></header>'+
+    '<p>'+escapeHtml(report.details||'sem detalhes')+'</p>'+
+    (report.staff_notes?'<blockquote>'+escapeHtml(report.staff_notes)+'</blockquote>':'')+
+    '<footer><button data-report-take="'+escapeAttr(report.id)+'">assumir</button>'+
+    (canForward?'<label>encaminhar <select data-report-forward="'+escapeAttr(report.id)+'"><option value="">escolha...</option>'+staff.filter(x=>x.id!==state.profile.id).map(x=>'<option value="'+escapeAttr(x.id)+'">'+escapeHtml(staffRoleLabel(x.role))+' · @'+escapeHtml(x.handle)+'</option>').join('')+'</select></label>':'')+
+    '</footer></article>';
+}
+function moderationAlertCard(row){
+  return '<article class="moderation-alert-card severity-'+escapeAttr(row.severity||'alta')+'"><header><span>'+escapeHtml(row.severity||'alta')+'</span><b>'+escapeHtml(row.matched_term||'termo')+'</b><small>'+escapeHtml(row.source_type||'conteúdo')+' · '+ago(row.created_at)+'</small></header>'+
+    '<p>'+escapeHtml(row.excerpt||'')+'</p><footer><span>@'+escapeHtml(row.user_handle||'...')+'</span><select data-alert-status="'+escapeAttr(row.id)+'">'+
+    ['novo','em_analise','encaminhado','resolvido','ignorado'].map(v=>'<option value="'+v+'" '+(row.status===v?'selected':'')+'>'+v.replace('_',' ')+'</option>').join('')+
+    '</select></footer></article>';
+}
+async function staffBanUser(userId,isBanned){
+  if(isBanned){
+    const reason=prompt('Motivo para reativar este usuário:','revisão concluída')||'';
+    if(!reason.trim())return;
+    const {error}=await supabase.rpc('staff_unban_user',{p_user_id:userId,p_reason:reason});
+    if(error)return toast('Não foi possível reativar o usuário.');
+    toast('Usuário reativado.');
+  }else{
+    const reason=prompt('Motivo da suspensão:','violação das regras do AVESSO')||'';
+    if(!reason.trim())return;
+    const period=prompt('Duração: permanente, 1h, 24h, 7d ou 30d','24h')||'';
+    const mins={permanente:null,'1h':60,'24h':1440,'7d':10080,'30d':43200}[period.trim().toLowerCase()];
+    if(mins===undefined)return toast('Use: permanente, 1h, 24h, 7d ou 30d.');
+    const until=mins===null?null:new Date(Date.now()+mins*60000).toISOString();
+    const {error}=await supabase.rpc('staff_ban_user',{p_user_id:userId,p_reason:reason,p_until:until});
+    if(error)return toast('Não foi possível suspender este usuário.');
+    toast(until?'Suspensão temporária aplicada.':'Suspensão por tempo indeterminado aplicada.');
+  }
+  renderAdminDashboard();
+}
+async function staffSendNotice(userId){
+  const title=prompt('Título da notificação:','Aviso da equipe AVESSO')||'';
+  if(!title.trim())return;
+  const body=prompt('Mensagem para o usuário:','')||'';
+  if(!body.trim())return;
+  const {error}=await supabase.rpc('staff_send_user_notice',{p_user_id:userId,p_title:title,p_body:body,p_severity:'moderacao'});
+  if(error)return toast('A notificação não foi enviada.');
+  toast('Notificação enviada diretamente ao usuário.');
+}
+async function staffTakeReport(id){
+  const {error}=await supabase.rpc('staff_assign_report',{p_report_id:id,p_assignee:state.profile.id});
+  if(error)return toast('Não foi possível assumir a denúncia.');
+  toast('Denúncia atribuída a você.');
+  renderAdminDashboard();
+}
+async function staffForwardReport(id,assignee){
+  if(!assignee)return;
+  const note=prompt('Nota de encaminhamento:','')||'';
+  const {error}=await supabase.rpc('staff_forward_report',{p_report_id:id,p_assignee:assignee,p_note:note});
+  if(error)return toast('Não foi possível encaminhar a denúncia.');
+  toast('Denúncia encaminhada.');
+  renderAdminDashboard();
+}
+async function staffSetReportStatus(id,status){
+  const {error}=await supabase.rpc('staff_set_report_status',{p_report_id:id,p_status:status});
+  if(error)return toast('O status da denúncia não foi salvo.');
+  renderAdminDashboard();
+}
+async function staffSetAlertStatus(id,status){
+  const resolution=['resolvido','ignorado'].includes(status)?(prompt('Resolução / contexto:','')||''):'';
+  const {error}=await supabase.rpc('staff_resolve_alert',{p_id:id,p_status:status,p_resolution:resolution});
+  if(error)return toast('O alerta não foi atualizado.');
+  renderAdminDashboard();
+}
+async function ownerSetStaffRole(userId,role){
+  const {error}=await supabase.rpc('owner_set_user_role',{p_user_id:userId,p_role:role});
+  if(error)return toast('O cargo não foi alterado.');
+  await loadIdentityRegistry();
+  toast('Cargo atualizado.');
+  renderAdminDashboard();
+}
+async function seniorWarnModerator(userId){
+  const reason=prompt('Motivo da advertência:','')||'';
+  if(!reason.trim())return;
+  const severity=prompt('Nível: observacao, advertencia ou grave','advertencia')||'advertencia';
+  const {error}=await supabase.rpc('senior_warn_moderator',{p_user_id:userId,p_reason:reason,p_severity:severity});
+  if(error)return toast('A advertência não foi registrada.');
+  toast('Advertência registrada.');
+  renderAdminDashboard();
+}
+async function seniorRevokeModerator(userId){
+  const reason=prompt('Motivo para remover os privilégios de moderação:','')||'';
+  if(!reason.trim())return;
+  if(!confirm('Remover os privilégios deste moderador?'))return;
+  const {error}=await supabase.rpc('senior_revoke_moderator',{p_user_id:userId,p_reason:reason});
+  if(error)return toast('Os privilégios não foram removidos.');
+  await loadIdentityRegistry();
+  toast('Privilégios de moderação removidos.');
+  renderAdminDashboard();
+}
+async function loadStaffChat(channel='all'){
+  const host=$('#staff-chat-log');if(!host)return;
+  const {data,error}=await supabase.from('staff_chat_messages').select('id,sender_id,channel,body,created_at').eq('channel',channel).order('created_at',{ascending:true}).limit(120);
+  if(error){host.innerHTML='<p class="admin-empty">Canal indisponível para seu cargo.</p>';return;}
+  const ids=[...new Set((data||[]).map(x=>x.sender_id))];
+  let profiles={};
+  if(ids.length){const {data:p}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',ids);profiles=Object.fromEntries((p||[]).map(x=>[x.id,x]));}
+  host.innerHTML=(data||[]).map(m=>{const p=profiles[m.sender_id]||{};return '<article class="staff-chat-message '+(m.sender_id===state.profile.id?'mine':'')+'"><span class="mini-avatar">'+avatarHtml(p.avatar_url,p.display_name||'?')+'</span><div><header>'+identityNameHtml(m.sender_id,p.display_name||'staff')+'<small>@'+escapeHtml(p.handle||'...')+' · '+ago(m.created_at)+'</small></header><p>'+escapeHtml(m.body)+'</p></div></article>';}).join('')||'<p class="admin-empty">Canal vazio. Até a equipe conseguiu silêncio.</p>';
+  host.scrollTop=host.scrollHeight;
+}
+function stopStaffInternalRealtime(){
+  if(state.staffInternalChannel){supabase.removeChannel(state.staffInternalChannel);state.staffInternalChannel=null;}
+}
+function startStaffInternalRealtime(){
+  stopStaffInternalRealtime();
+  if(!state.isAdmin)return;
+  state.staffInternalChannel=supabase.channel('avesso-staff-chat-'+state.profile.id+'-'+Date.now())
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_chat_messages'},payload=>{
+      if(state.tab!=='admin'||state.staffSection!=='staff_chat')return;
+      const selected=$('#staff-chat-channel')?.value||'all';
+      if(payload.new?.channel===selected)loadStaffChat(selected);
+    }).subscribe();
+}
+async function sendStaffChat(){
+  const channel=$('#staff-chat-channel')?.value||'all';
+  const input=$('#staff-chat-input');const body=String(input?.value||'').trim();
+  if(!body)return;
+  const {error}=await supabase.from('staff_chat_messages').insert({sender_id:state.profile.id,channel,body});
+  if(error)return toast('Mensagem interna não enviada.');
+  input.value='';
+  loadStaffChat(channel);
+}
+async function ownerSaveTerm(){
+  const term=String($('#mod-term')?.value||'').trim();if(term.length<2)return toast('Informe o termo.');
+  const {error}=await supabase.rpc('owner_upsert_moderation_term',{
+    p_id:null,p_term:term,p_category:$('#mod-term-category')?.value||'outro',p_severity:$('#mod-term-severity')?.value||'alta',
+    p_notes:String($('#mod-term-notes')?.value||''),p_active:true
+  });
+  if(error)return toast('O termo não foi salvo.');
+  toast('Termo adicionado ao monitoramento.');
+  renderAdminDashboard();
+}
+async function ownerDeleteTerm(id){
+  if(!confirm('Remover este termo do monitoramento?'))return;
+  const {error}=await supabase.rpc('owner_delete_moderation_term',{p_id:id});
+  if(error)return toast('O termo não foi removido.');
+  renderAdminDashboard();
+}
+async function ownerUploadAsset(){
+  const file=$('#owner-asset-file')?.files?.[0];if(!file)return toast('Escolha um arquivo.');
+  const type=$('#owner-asset-type')?.value||'page_image';
+  const name=String($('#owner-asset-name')?.value||file.name).trim().slice(0,100);
+  const rawSlug=String($('#owner-asset-slug')?.value||name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,80);
+  const slug=rawSlug||('asset-'+Date.now());
+  const shortcode=type==='emoticon'?String($('#owner-asset-shortcode')?.value||(':'+slug+':')).trim():'';
+  const path=state.profile.id+'/'+type+'/'+crypto.randomUUID()+'-'+safeFileName(file.name);
+  const {error:upErr}=await supabase.storage.from('avesso-admin-assets').upload(path,file,{contentType:file.type,cacheControl:'31536000',upsert:false});
+  if(upErr)return toast('Upload recusado.');
+  const {data,error}=await supabase.from('admin_assets').insert({asset_type:type,name,slug,storage_path:path,mime_type:file.type||'image/webp',shortcode,created_by:state.profile.id}).select().single();
+  if(error){await supabase.storage.from('avesso-admin-assets').remove([path]);return toast('O arquivo chegou, o catálogo não.');}
+  if(type==='badge'){
+    const {error:badgeError}=await supabase.rpc('owner_create_badge',{p_asset_id:data.id,p_name:name,p_slug:slug,p_description:''});
+    if(badgeError)return toast('Arquivo salvo, mas o emblema não foi criado.');
+  }
+  await loadIdentityRegistry();
+  toast('Arquivo adicionado ao AVESSO.');
+  renderAdminDashboard();
+}
+async function ownerAssignBadge(userId,badgeId){
+  if(!badgeId)return;
+  const {error}=await supabase.rpc('owner_assign_badge',{p_user_id:userId,p_badge_id:badgeId});
+  if(error)return toast('Emblema não atribuído.');
+  await loadIdentityRegistry();toast('Emblema atribuído.');renderAdminDashboard();
+}
+async function ownerSaveOverride(){
+  const selector=String($('#cms-selector')?.value||'').trim();if(!selector)return toast('Informe um seletor CSS.');
+  try{document.querySelector(selector);}catch{return toast('Seletor CSS inválido.');}
+  const {error}=await supabase.rpc('owner_save_site_override',{
+    p_id:null,p_page:String($('#cms-page')?.value||'global'),p_selector:selector,p_action:$('#cms-action')?.value||'text',
+    p_value:String($('#cms-value')?.value||''),p_enabled:true,p_sort_order:0
+  });
+  if(error)return toast('Alteração de página não salva.');
+  toast('Alteração global salva.');
+  renderAdminDashboard();
+}
+async function ownerDeleteOverride(id){
+  const {error}=await supabase.rpc('owner_delete_site_override',{p_id:id});
+  if(error)return toast('Alteração não removida.');
+  renderAdminDashboard();
+}
+async function ownerSaveSystemSettings(){
+  const feed={page_size:Math.max(10,Math.min(100,Number($('#cfg-feed-size')?.value)||40)),show_attention_tag:Boolean($('#cfg-attention-tag')?.checked)};
+  const story={enabled:Boolean($('#cfg-stories-enabled')?.checked),camera_enabled:Boolean($('#cfg-story-camera')?.checked)};
+  const login={registration_enabled:Boolean($('#cfg-registration')?.checked)};
+  const layout={compact_feed:Boolean($('#cfg-compact-feed')?.checked)};
+  const {data,error}=await supabase.rpc('owner_update_system_settings',{p_feed_settings:feed,p_story_settings:story,p_login_settings:login,p_layout_settings:layout});
+  if(error)return toast('Configurações gerais não foram salvas.');
+  state.siteSettings=data||state.siteSettings;toast('Configurações globais salvas.');
+  renderAdminDashboard();
+}
+async function ownerSaveCharacter(id){
+  const root=document.querySelector('[data-character-editor="'+CSS.escape(id)+'"]');if(!root)return;
+  const c=state.adminSnapshot.characters.find(x=>x.id===id);if(!c)return;
+  const args={
+    p_id:id,p_name:root.querySelector('[data-c-name]').value,p_role:root.querySelector('[data-c-role]').value,
+    p_bio:root.querySelector('[data-c-bio]').value,p_personality:root.querySelector('[data-c-personality]').value,
+    p_accent_color:root.querySelector('[data-c-color]').value,p_avatar_url:root.querySelector('[data-c-avatar]').value,
+    p_home_location:root.querySelector('[data-c-home]').value,p_presence_state:root.querySelector('[data-c-presence]').value,
+    p_rarity:Number(root.querySelector('[data-c-rarity]').value)||50,p_ai_enabled:root.querySelector('[data-c-ai]').checked,
+    p_is_active:root.querySelector('[data-c-active]').checked
+  };
+  const {error}=await supabase.rpc('owner_update_character',args);
+  if(error)return toast('Habitante não atualizado.');
+  const ai=c.ai_profile||{};
+  const {error:aiError}=await supabase.rpc('owner_update_character_ai',{
+    p_character_id:id,p_model:root.querySelector('[data-ai-model]').value||ai.model||'gpt-5.6-luna',
+    p_persona_summary:root.querySelector('[data-ai-summary]').value,p_system_prompt:root.querySelector('[data-ai-prompt]').value,
+    p_max_output_chars:Number(root.querySelector('[data-ai-max]').value)||420,p_ai_enabled:root.querySelector('[data-c-ai]').checked
+  });
+  if(aiError)return toast('Personagem salvo, mas o perfil de IA falhou.');
+  toast('Habitante e IA atualizados.');
+  await loadWorldState();renderAdminDashboard();
+}
+async function ownerSaveDialogue(characterId){
+  const body=prompt('Nova frase do habitante:','')||'';if(!body.trim())return;
+  const context=prompt('Contexto da frase:','feed_default')||'feed_default';
+  const {error}=await supabase.rpc('owner_save_dialogue',{p_id:null,p_character_id:characterId,p_context:context,p_body:body,p_weight:1,p_enabled:true});
+  if(error)return toast('Frase não salva.');
+  renderAdminDashboard();
+}
+async function ownerLoadDatabaseTable(table){
+  const host=$('#database-preview');if(!host)return;
+  host.textContent='consultando '+table+'...';
+  const {data,error}=await supabase.rpc('owner_database_preview',{p_table:table,p_limit:30});
+  host.textContent=error?'A consulta foi recusada.':JSON.stringify(data,null,2);
+}
+function dashboardSectionHtml(data,section){
+  const role=data.role||state.adminRole;
+  const counts=data.counts||{};
+  const users=Array.isArray(data.users)?data.users:[];
+  const staff=Array.isArray(data.staff)?data.staff:[];
+  const reports=Array.isArray(data.reports)?data.reports:[];
+  const alerts=Array.isArray(data.alerts)?data.alerts:[];
+  if(section==='overview'){
+    const cards=[['usuários',counts.users||0],['online',counts.online_now||0],['denúncias',counts.reports_open||0],['alertas',counts.alerts_open||0],['suspensos',counts.suspended_users||0],['staff',counts.staff||0]];
+    return '<section class="staff-section"><div class="staff-kpis">'+cards.map(([l,v])=>'<article><span>'+l+'</span><strong>'+v+'</strong></article>').join('')+'</div>'+
+      '<div class="staff-overview-grid"><article class="admin-panel"><span class="section-code">SEU CARGO</span><h3>'+escapeHtml(staffRoleLabel(role))+'</h3><p>'+({moderator:'Denúncias, moderação, usuários e monitoramento público.',senior_admin:'Gestão de moderadores e casos escalados.',owner:'Controle integral da rede, conteúdo, identidade, sistema e infraestrutura segura.'}[role]||'')+'</p></article>'+
+      '<article class="admin-panel"><span class="section-code">PRIVACIDADE</span><h3>Mensagens privadas não entram na moderação geral</h3><p>O monitoramento contínuo atua sobre conteúdo público, perfis e Praça. Conversas privadas permanecem privadas.</p></article></div></section>';
+  }
+  if(section==='reports')return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">DENÚNCIAS // FILA</span><h2>Triagem e encaminhamento</h2></div><b>'+reports.length+' registros</b></div><div class="staff-report-list">'+(reports.map(r=>staffReportCard(r,data)).join('')||'<p class="admin-empty">Nenhuma denúncia.</p>')+'</div></section>';
+  if(section==='monitoring'){
+    const terms=Array.isArray(data.terms)?data.terms:[];
+    return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">MONITORAMENTO // 24H</span><h2>Alertas de conteúdo público</h2></div><b>'+alerts.length+' alertas</b></div>'+
+      '<p class="staff-explain">Termos configurados geram alerta para revisão humana. O sistema não conclui crime, racismo ou homofobia sozinho; contexto importa, uma ideia revolucionária para computadores.</p>'+
+      (role==='owner'?'<div class="moderation-term-editor"><input id="mod-term" placeholder="termo ou frase"><select id="mod-term-category"><option>racismo</option><option>homofobia</option><option value="ameaca">ameaça</option><option>crime</option><option>assedio</option><option>spam</option><option>outro</option></select><select id="mod-term-severity"><option>baixa</option><option>normal</option><option selected>alta</option><option>critica</option></select><input id="mod-term-notes" placeholder="nota interna"><button id="mod-term-add">adicionar</button></div><div class="moderation-term-list">'+terms.map(t=>'<span>'+escapeHtml(t.term)+' <small>'+escapeHtml(t.category)+'</small><button data-delete-term="'+t.id+'">×</button></span>').join('')+'</div>':'')+
+      '<div class="moderation-alert-list">'+(alerts.map(moderationAlertCard).join('')||'<p class="admin-empty">Nenhum alerta pendente.</p>')+'</div></section>';
+  }
+  if(section==='users')return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">USUÁRIOS // CONTROLE</span><h2>Contas e sanções</h2></div><b>'+users.length+' carregados</b></div><div class="staff-user-list">'+users.map(staffUserCard).join('')+'</div></section>';
+  if(section==='content')return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">CONTEÚDO // MODERAÇÃO</span><h2>Feed, fotos, stories e Praça</h2></div><button id="staff-load-content">↻ atualizar</button></div><div id="staff-content-grid" class="staff-content-grid"><p class="admin-empty">carregando conteúdo público...</p></div></section>';
+  if(section==='staff_chat'){
+    const options=['<option value="all">todos os staffs</option>'];
+    if(role==='moderator'||role==='owner')options.push('<option value="moderators">somente moderadores + owner</option>');
+    if(role==='senior_admin'||role==='owner')options.push('<option value="senior">somente Administrador-Sênior + owner</option>');
+    return '<section class="staff-section staff-chat-section"><div class="staff-section-head"><div><span class="section-code">STAFF.MSG // INTERNO</span><h2>Chat da equipe</h2></div><select id="staff-chat-channel">'+options.join('')+'</select></div><div id="staff-chat-log" class="staff-chat-log"></div><form id="staff-chat-form"><input id="staff-chat-input" maxlength="2000" placeholder="mensagem interna..."><button>enviar</button></form></section>';
+  }
+  if(section==='team'){
+    const mods=staff.filter(x=>x.role==='moderator');
+    const warnings=Array.isArray(data.warnings)?data.warnings:[];
+    return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">EQUIPE // SUPERVISÃO</span><h2>Moderadores</h2></div><b>'+mods.length+' moderadores</b></div><div class="staff-team-list">'+mods.map(m=>'<article><span class="mini-avatar">'+avatarHtml(m.avatar_url,m.display_name||'?')+'</span><div><b>'+identityNameHtml(m.id,m.display_name)+'</b><small>@'+escapeHtml(m.handle)+' · '+m.warnings+' advertências</small></div><button data-warn-mod="'+m.id+'">advertir</button><button class="danger" data-revoke-mod="'+m.id+'">remover direitos</button></article>').join('')+'</div><div class="staff-warning-log">'+warnings.map(w=>'<article><b>'+escapeHtml(w.staff_name||w.staff_handle)+'</b><span>'+escapeHtml(w.severity)+'</span><p>'+escapeHtml(w.reason)+'</p><small>'+ago(w.created_at)+'</small></article>').join('')+'</div></section>';
+  }
+  if(section==='appearance'){
+    const site=data.site||state.siteSettings||{};
+    const fields=[['bg','fundo',site.color_bg||'#090b0c','--bg'],['panel','painel',site.color_panel||'#111517','--panel'],['panel2','painel 2',site.color_panel2||'#191f21','--panel2'],['ink','texto',site.color_ink||'#f5f3e8','--ink'],['muted','apagado',site.color_muted||'#8e9999','--muted'],['line','linhas',site.color_line||'#293235','--line'],['acid','ácido',site.color_acid||'#d8ff3e','--acid'],['cyan','ciano',site.color_cyan||'#22d9ee','--cyan'],['coral','coral',site.color_coral||'#ff5c4d','--coral'],['violet','violeta',site.color_violet||'#9b7cff','--violet']];
+    return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">APARÊNCIA // GLOBAL</span><h2>Tema e identidade visual</h2></div></div><div class="admin-site-copy"><label>nome<input id="admin-site-name" value="'+escapeAttr(site.site_name||'AVESSO')+'"></label><label>tagline<input id="admin-site-tagline" value="'+escapeAttr(site.tagline||'')+'"></label></div><label class="admin-announcement">aviso global<textarea id="admin-announcement">'+escapeHtml(site.announcement||'')+'</textarea></label><div class="admin-presets"><button data-admin-preset="avesso">AVESSO</button><button data-admin-preset="phosphor">Fósforo</button><button data-admin-preset="cyan">Ciano</button><button data-admin-preset="magenta">Magenta CRT</button></div><div class="admin-color-grid">'+fields.map(([k,l,v,css])=>'<label><span>'+l+'</span><input id="admin-color-'+k+'" data-admin-color-var="'+css+'" type="color" value="'+v+'"></label>').join('')+'</div><label class="admin-custom-css">CSS global<textarea id="admin-custom-css">'+escapeHtml(site.custom_css||'')+'</textarea></label><button id="admin-site-save" class="admin-primary">salvar globalmente</button></section>';
+  }
+  if(section==='settings'){
+    const site=data.site||{};const feed=site.feed_settings||{},story=site.story_settings||{},login=site.login_settings||{},layout=site.layout_settings||{};
+    return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">CONFIG // SISTEMA</span><h2>Feed, Stories e registro</h2></div></div><div class="staff-settings-grid"><label>posts por carregamento<input id="cfg-feed-size" type="number" min="10" max="100" value="'+(feed.page_size||40)+'"></label><label><input id="cfg-attention-tag" type="checkbox" '+(feed.show_attention_tag!==false?'checked':'')+'> mostrar “precisa de atenção”</label><label><input id="cfg-stories-enabled" type="checkbox" '+(story.enabled!==false?'checked':'')+'> Stories ativos</label><label><input id="cfg-story-camera" type="checkbox" '+(story.camera_enabled!==false?'checked':'')+'> câmera nos Stories</label><label><input id="cfg-registration" type="checkbox" '+(login.registration_enabled!==false?'checked':'')+'> novos cadastros</label><label><input id="cfg-compact-feed" type="checkbox" '+(layout.compact_feed?'checked':'')+'> feed compacto</label></div><button id="cfg-save" class="admin-primary">salvar configurações</button><div class="admin-panel admin-world-panel"><h3>Mundo do AVESSO</h3><label><input id="admin-world-events" type="checkbox" '+(state.world.settings?.world_events_enabled?'checked':'')+'> eventos do mundo</label><label><input id="admin-world-interventions" type="checkbox" '+(state.world.settings?.world_interventions_enabled?'checked':'')+'> intervenções visuais</label><textarea id="admin-world-message" maxlength="240">'+escapeHtml(state.world.settings?.message||'')+'</textarea><button id="admin-world-save">salvar mundo</button></div></section>';
+  }
+  if(section==='cms'){
+    const rows=Array.isArray(data.site_overrides)?data.site_overrides:[];
+    return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">CMS // PÁGINAS</span><h2>Texto, imagens e elementos</h2></div></div><p class="staff-explain">Use seletores CSS para alterar inclusive a página inicial, registro/login e áreas internas. Alterações ficam globais.</p><div class="cms-editor"><input id="cms-page" value="global" placeholder="página"><input id="cms-selector" placeholder="#inicio h1 ou .hero-art img"><select id="cms-action"><option>text</option><option>src</option><option>alt</option><option>hide</option><option>show</option><option>append_text</option><option>prepend_text</option><option>background_image</option></select><textarea id="cms-value" placeholder="novo conteúdo / URL"></textarea><button id="cms-save">salvar alteração</button></div><div class="cms-list">'+rows.map(o=>'<article><code>'+escapeHtml(o.selector)+'</code><b>'+escapeHtml(o.action)+'</b><p>'+escapeHtml(o.value)+'</p><button data-delete-override="'+o.id+'">remover</button></article>').join('')+'</div></section>';
+  }
+  if(section==='assets'){
+    const assets=Array.isArray(data.assets)?data.assets:[];
+    return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">ARQUIVOS // BIBLIOTECA</span><h2>Wallpapers, avatares, emoticons e imagens</h2></div></div><div class="asset-upload"><select id="owner-asset-type"><option value="wallpaper">wallpaper</option><option value="avatar">avatar</option><option value="emoticon">emoticon</option><option value="badge">emblema</option><option value="character">habitante</option><option value="page_image">imagem de página</option></select><input id="owner-asset-name" placeholder="nome"><input id="owner-asset-slug" placeholder="slug"><input id="owner-asset-shortcode" placeholder="atalho :exemplo:"><input id="owner-asset-file" type="file" accept="image/*,.svg"><button id="owner-asset-upload">enviar</button></div><div class="asset-grid">'+assets.map(a=>'<article><img src="'+escapeAttr(adminAssetPublicUrl(a.storage_path))+'" alt=""><b>'+escapeHtml(a.name)+'</b><small>'+escapeHtml(a.asset_type)+' · '+escapeHtml(a.slug)+'</small></article>').join('')+'</div></section>';
+  }
+  if(section==='badges'){
+    const badges=Array.isArray(data.badges)?data.badges:[];
+    return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">EMBLEMAS // USUÁRIOS</span><h2>Catálogo e atribuição</h2></div></div><p>Envie novos emblemas na página Arquivos escolhendo o tipo “emblema”. Depois atribua aqui.</p><div class="badge-assignment-list">'+users.map(u=>'<article><b>'+identityNameHtml(u.id,u.display_name)+'</b><small>@'+escapeHtml(u.handle)+'</small><select data-badge-user="'+u.id+'"><option value="">escolha um emblema...</option>'+badges.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></article>').join('')+'</div></section>';
+  }
+  if(section==='characters'){
+    const chars=Array.isArray(data.characters)?data.characters:[];
+    return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">HABITANTES // CÉREBRO</span><h2>Personagem, comportamento e IA</h2></div></div><div class="character-admin-list">'+chars.map(c=>{const ai=c.ai_profile||{};return '<article class="character-admin-card" data-character-editor="'+c.id+'"><header><img src="'+escapeAttr(c.avatar_url||c.image_path||'')+'" alt=""><div><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.slug)+'</small></div></header><div class="character-form-grid"><input data-c-name value="'+escapeAttr(c.name)+'" placeholder="nome"><input data-c-role value="'+escapeAttr(c.role)+'" placeholder="papel"><input data-c-color type="color" value="'+escapeAttr(c.accent_color||'#d8ff3e')+'"><input data-c-avatar value="'+escapeAttr(c.avatar_url||'')+'" placeholder="URL do avatar"><input data-c-home value="'+escapeAttr(c.home_location||'')+'" placeholder="local"><input data-c-presence value="'+escapeAttr(c.presence_state||'idle')+'" placeholder="estado"><input data-c-rarity type="number" min="1" max="100" value="'+(c.rarity||50)+'"><label><input data-c-ai type="checkbox" '+(c.ai_enabled?'checked':'')+'> IA ativa</label><label><input data-c-active type="checkbox" '+(c.is_active?'checked':'')+'> habitante ativo</label></div><textarea data-c-bio placeholder="bio">'+escapeHtml(c.bio||'')+'</textarea><textarea data-c-personality placeholder="personalidade">'+escapeHtml(c.personality||'')+'</textarea><div class="character-ai-box"><input data-ai-model value="'+escapeAttr(ai.model||'gpt-5.6-luna')+'" placeholder="modelo"><input data-ai-max type="number" value="'+(ai.max_output_chars||420)+'"><textarea data-ai-summary placeholder="resumo da persona">'+escapeHtml(ai.persona_summary||'')+'</textarea><textarea data-ai-prompt placeholder="system prompt">'+escapeHtml(ai.system_prompt||'')+'</textarea></div><footer><button data-save-character="'+c.id+'">salvar habitante</button><button data-add-dialogue="'+c.id+'">＋ nova frase</button></footer></article>';}).join('')+'</div></section>';
+  }
+  if(section==='database')return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">BANCO // INSPEÇÃO SEGURA</span><h2>Dados da aplicação</h2></div><button id="database-refresh">↻ inventário</button></div><p class="staff-explain">A dashboard não executa SQL arbitrário no navegador. Ela oferece inspeção controlada das tabelas permitidas. Dar um console SQL ao front seria menos “controle total” e mais “apaguei produção numa terça”.</p><div id="database-tables" class="database-tables"></div><pre id="database-preview">selecione uma tabela</pre></section>';
+  if(section==='audit'){
+    const rows=Array.isArray(data.audit)?data.audit:[];
+    return '<section class="staff-section"><div class="staff-section-head"><div><span class="section-code">AUDITORIA // OWNER</span><h2>Registro administrativo</h2></div><b>'+rows.length+' eventos</b></div><div class="admin-audit-list">'+rows.map(adminAuditRow).join('')+'</div></section>';
+  }
+  return '<p class="admin-empty">Seção não disponível para seu cargo.</p>';
+}
+async function renderStaffContent(){
+  const host=$('#staff-content-grid');if(!host)return;
+  const {data,error}=await supabase.rpc('staff_moderation_content_snapshot');
+  if(error){host.innerHTML='<p class="admin-empty">Conteúdo de moderação indisponível.</p>';return;}
+  const group=(title,kind,rows)=>'<section class="staff-content-column"><h3>'+title+'</h3>'+((rows||[]).map(row=>'<article class="staff-content-card"><div><b>@'+escapeHtml(row.author_handle||'...')+'</b><small>'+ago(row.created_at)+'</small><p>'+escapeHtml(row.body||row.caption||'')+'</p></div><button class="danger" data-staff-delete-kind="'+kind+'" data-staff-delete-id="'+row.id+'">apagar</button></article>').join('')||'<p class="admin-empty">vazio</p>')+'</section>';
+  host.innerHTML=group('FEED','post',data.posts)+group('RESPOSTAS','response',data.responses)+group('FOTOS','photo',data.photos)+group('STORIES','story',data.stories)+group('PRAÇA','plaza',data.plaza);
+  host.querySelectorAll('[data-staff-delete-kind]').forEach(b=>b.onclick=()=>staffDeleteContent(b.dataset.staffDeleteKind,b.dataset.staffDeleteId));
+}
+async function staffDeleteContent(kind,id){
+  if(!confirm('Apagar este conteúdo? A ação será registrada.'))return;
+  const rpc={post:'admin_delete_post',response:'admin_delete_response',photo:'admin_delete_photo',story:'admin_delete_story',plaza:'staff_delete_plaza_message'}[kind];
+  if(!rpc)return;
+  const {error}=await supabase.rpc(rpc,{p_id:id});
+  if(error)return toast('Conteúdo não removido.');
+  toast('Conteúdo removido.');
+  renderStaffContent();
+}
+async function renderDatabaseInventory(){
+  const host=$('#database-tables');if(!host)return;
+  const {data,error}=await supabase.rpc('owner_database_snapshot');
+  if(error){host.innerHTML='<p class="admin-empty">Inventário indisponível.</p>';return;}
+  host.innerHTML=(data.tables||[]).map(t=>'<button data-db-table="'+escapeAttr(t.name)+'"><b>'+escapeHtml(t.name)+'</b><span>'+t.rows+' linhas</span></button>').join('');
+  host.querySelectorAll('[data-db-table]').forEach(b=>b.onclick=()=>ownerLoadDatabaseTable(b.dataset.dbTable));
+}
+function bindDashboardSection(section,data){
+  const host=$('#feed-list');
+  host.querySelectorAll('[data-staff-role]').forEach(x=>x.onchange=()=>ownerSetStaffRole(x.dataset.staffRole,x.value));
+  host.querySelectorAll('[data-staff-ban]').forEach(b=>b.onclick=()=>staffBanUser(b.dataset.staffBan,b.dataset.banActive==='1'));
+  host.querySelectorAll('[data-staff-notice]').forEach(b=>b.onclick=()=>staffSendNotice(b.dataset.staffNotice));
+  host.querySelectorAll('[data-report-status]').forEach(x=>x.onchange=()=>staffSetReportStatus(x.dataset.reportStatus,x.value));
+  host.querySelectorAll('[data-report-take]').forEach(b=>b.onclick=()=>staffTakeReport(b.dataset.reportTake));
+  host.querySelectorAll('[data-report-forward]').forEach(x=>x.onchange=()=>staffForwardReport(x.dataset.reportForward,x.value));
+  host.querySelectorAll('[data-alert-status]').forEach(x=>x.onchange=()=>staffSetAlertStatus(x.dataset.alertStatus,x.value));
+  host.querySelectorAll('[data-warn-mod]').forEach(b=>b.onclick=()=>seniorWarnModerator(b.dataset.warnMod));
+  host.querySelectorAll('[data-revoke-mod]').forEach(b=>b.onclick=()=>seniorRevokeModerator(b.dataset.revokeMod));
+  host.querySelectorAll('[data-delete-term]').forEach(b=>b.onclick=()=>ownerDeleteTerm(b.dataset.deleteTerm));
+  host.querySelectorAll('[data-delete-override]').forEach(b=>b.onclick=()=>ownerDeleteOverride(b.dataset.deleteOverride));
+  host.querySelectorAll('[data-badge-user]').forEach(x=>x.onchange=()=>ownerAssignBadge(x.dataset.badgeUser,x.value));
+  host.querySelectorAll('[data-save-character]').forEach(b=>b.onclick=()=>ownerSaveCharacter(b.dataset.saveCharacter));
+  host.querySelectorAll('[data-add-dialogue]').forEach(b=>b.onclick=()=>ownerSaveDialogue(b.dataset.addDialogue));
+  $('#mod-term-add')?.addEventListener('click',ownerSaveTerm);
+  $('#staff-load-content')?.addEventListener('click',renderStaffContent);
+  $('#staff-chat-form')?.addEventListener('submit',e=>{e.preventDefault();sendStaffChat();});
+  $('#staff-chat-channel')?.addEventListener('change',e=>loadStaffChat(e.target.value));
+  $('#admin-site-save')?.addEventListener('click',saveAdminSiteSettings);
+  host.querySelectorAll('[data-admin-preset]').forEach(b=>b.onclick=()=>adminApplyPreset(b.dataset.adminPreset));
+  host.querySelectorAll('[data-admin-color-var]').forEach(input=>input.oninput=()=>document.documentElement.style.setProperty(input.dataset.adminColorVar,input.value));
+  $('#admin-world-save')?.addEventListener('click',saveAdminWorldControls);
+  $('#cfg-save')?.addEventListener('click',ownerSaveSystemSettings);
+  $('#cms-save')?.addEventListener('click',ownerSaveOverride);
+  $('#owner-asset-upload')?.addEventListener('click',ownerUploadAsset);
+  $('#database-refresh')?.addEventListener('click',renderDatabaseInventory);
+  if(section==='content')renderStaffContent();
+  if(section==='staff_chat'){loadStaffChat($('#staff-chat-channel')?.value||'all');startStaffInternalRealtime();}else stopStaffInternalRealtime();
+  if(section==='database')renderDatabaseInventory();
+  bindProfileLinks();
+}
 async function renderAdminDashboard(){
   if(state.tab!=='admin')return;
   if(!state.isAdmin){await goToFeedHome();return;}
   $('#feed-status').classList.add('hidden');
   const host=$('#feed-list');
-  host.innerHTML='<section class="admin-shell"><div class="admin-loading">ADMIN.SYS // carregando a chave mestra sem fingir que isso é um SaaS...</div></section>';
-  const {data,error}=await supabase.rpc('admin_dashboard_snapshot');
+  host.innerHTML='<section class="staff-dashboard"><div class="admin-loading">DASHBOARD.EXE // carregando permissões...</div></section>';
+  const {data,error}=await supabase.rpc('staff_dashboard_snapshot');
   if(state.tab!=='admin')return;
   if(error){
-    console.error('admin dashboard',error);
-    host.innerHTML='<section class="admin-shell"><div class="admin-error">A dashboard não conseguiu provar que você manda aqui.</div></section>';
+    console.error('staff dashboard',error);
+    host.innerHTML='<section class="staff-dashboard"><div class="admin-error">A dashboard recusou suas credenciais.</div></section>';
     return;
   }
   state.adminSnapshot=data||{};
-  const counts=data?.counts||{};
-  const users=Array.isArray(data?.recent_users)?data.recent_users:[];
-  const reports=Array.isArray(data?.reports)?data.reports:[];
-  const world=data?.world||{};
-  const site=data?.site||state.siteSettings||{};
-  const recentPosts=Array.isArray(data?.recent_posts)?data.recent_posts:[];
-  const recentResponses=Array.isArray(data?.recent_responses)?data.recent_responses:[];
-  const recentPhotos=Array.isArray(data?.recent_photos)?data.recent_photos:[];
-  const recentStories=Array.isArray(data?.recent_stories)?data.recent_stories:[];
-  const audit=Array.isArray(data?.audit)?data.audit:[];
-
-  const statCards=[
-    ['habitantes',counts.users??0,'contas registradas'],
-    ['novos // 7d',counts.users_7d??0,'entraram nesta semana'],
-    ['online',counts.online_now??0,'presenças agora'],
-    ['suspensos',counts.suspended_users??0,'bloqueados para novas ações'],
-    ['publicações',counts.posts??0,'posts no sistema'],
-    ['respostas',counts.responses??0,'respostas humanas'],
-    ['stories',counts.stories_active??0,'ativos agora'],
-    ['mensagens',counts.direct_messages??0,'somente contagem, não conteúdo'],
-    ['amizades',counts.friendships??0,'conexões aceitas'],
-    ['denúncias',counts.reports_open??0,'abertas']
-  ].map(([label,value,detail])=>'<article><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(String(value))+'</strong><small>'+escapeHtml(detail)+'</small></article>').join('');
-
-  const usersHtml=users.map(user=>{
-    const presence=adminPresenceLabel(user);
-    const isSelf=user.id===state.profile.id;
-    const status=user.suspended?'SUSPENSO':(user.admin_role?user.admin_role.toUpperCase():'USUÁRIO');
-    const roleControl=state.adminRole==='owner'
-      ?'<select class="admin-role-select" data-admin-role-user="'+escapeAttr(user.id)+'" '+(isSelf?'disabled':'')+'>'+
-        '<option value="none" '+(!user.admin_role?'selected':'')+'>usuário</option>'+
-        '<option value="admin" '+(user.admin_role==='admin'?'selected':'')+'>admin</option>'+
-        '<option value="owner" '+(user.admin_role==='owner'?'selected':'')+'>owner</option></select>'
-      :'<span class="admin-role-label">'+escapeHtml(user.admin_role||'usuário')+'</span>';
-    return '<article class="admin-user-row '+(user.suspended?'is-suspended':'')+'">'+
-      '<button class="admin-user-profile" data-profile-id="'+escapeAttr(user.id)+'"><span class="admin-user-avatar">'+avatarHtml(user.avatar_url,user.display_name||'?')+'</span>'+
-      '<span><b>'+escapeHtml(user.display_name||'sem nome')+'</b><small>@'+escapeHtml(user.handle||'...')+'</small></span></button>'+
-      '<em class="'+presence+'">'+presence+'</em>'+
-      '<strong class="admin-account-state" title="'+escapeAttr(user.suspension_reason||'')+'">'+status+'</strong>'+
-      '<time>'+ago(user.created_at)+'</time>'+
-      '<div class="admin-user-controls">'+roleControl+
-        (isSelf?'<span class="admin-self-tag">VOCÊ</span>':'<button class="'+(user.suspended?'restore':'danger')+'" data-admin-suspend-user="'+escapeAttr(user.id)+'" data-admin-suspend-value="'+(user.suspended?'0':'1')+'">'+(user.suspended?'reativar':'suspender')+'</button>')+
-      '</div></article>';
-  }).join('')||'<p class="admin-empty">Nenhum perfil. Administração perfeita por ausência de humanidade.</p>';
-
-  const reportsHtml=reports.map(report=>{
-    const target=report.reported_profile?.handle?'@'+report.reported_profile.handle:(report.post_id?'post '+String(report.post_id).slice(0,8):'conteúdo');
-    return '<article class="admin-report-card"><header><div><b>'+escapeHtml(String(report.reason||'denúncia'))+'</b>'+
-      '<small>'+escapeHtml(report.reporter?.handle?'@'+report.reporter.handle:'reportante')+' · '+ago(report.created_at)+'</small></div>'+
-      '<select data-admin-report-status="'+escapeAttr(report.id)+'">'+adminReportStatusOptions(report.status)+'</select></header>'+
-      '<p>'+escapeHtml(report.details||'sem detalhes')+'</p><footer><span>alvo: '+escapeHtml(target)+'</span>'+
-      (report.post_id?'<code>'+escapeHtml(String(report.post_id))+'</code>':'')+'</footer></article>';
-  }).join('')||'<p class="admin-empty">Nenhuma denúncia na fila. Estranhamente civilizado.</p>';
-
-  const colorFields=[
-    ['bg','fundo',site.color_bg||'#090b0c','--bg'],
-    ['panel','painel',site.color_panel||'#111517','--panel'],
-    ['panel2','painel 2',site.color_panel2||'#191f21','--panel2'],
-    ['ink','texto',site.color_ink||'#f5f3e8','--ink'],
-    ['muted','texto apagado',site.color_muted||'#8e9999','--muted'],
-    ['line','linhas',site.color_line||'#293235','--line'],
-    ['acid','ácido',site.color_acid||'#d8ff3e','--acid'],
-    ['cyan','ciano',site.color_cyan||'#22d9ee','--cyan'],
-    ['coral','coral',site.color_coral||'#ff5c4d','--coral'],
-    ['violet','violeta',site.color_violet||'#9b7cff','--violet']
-  ].map(([key,label,value,cssVar])=>'<label><span>'+label+'</span><input id="admin-color-'+key+'" data-admin-color-var="'+cssVar+'" type="color" value="'+escapeAttr(value)+'"></label>').join('');
-
-  const moderationContent=
-    '<div class="admin-content-column"><h4>PUBLICAÇÕES</h4>'+recentPosts.map(x=>adminContentCard('post',x)).join('')+'</div>'+
-    '<div class="admin-content-column"><h4>RESPOSTAS</h4>'+recentResponses.map(x=>adminContentCard('response',x)).join('')+'</div>'+
-    '<div class="admin-content-column"><h4>FOTOS</h4>'+recentPhotos.map(x=>adminContentCard('photo',x)).join('')+'</div>'+
-    '<div class="admin-content-column"><h4>STORIES</h4>'+recentStories.map(x=>adminContentCard('story',x)).join('')+'</div>';
-
-  host.innerHTML='<section class="admin-shell">'+
-    '<header class="admin-hero"><div><span class="section-code">ADMIN.SYS // ACESSO '+escapeHtml((state.adminRole||'admin').toUpperCase())+'</span>'+
-    '<h2>Painel do AVESSO '+adminCrownHtml('admin-hero-crown')+'</h2>'+
-    '<p>Controle operacional, visual e de moderação. Mensagens privadas continuam privadas. Poder total não precisa virar bisbilhotagem.</p></div>'+
-    '<button id="admin-refresh" type="button">↻ atualizar</button></header>'+
-
-    '<div class="admin-stats">'+statCards+'</div>'+
-
-    '<section class="admin-panel admin-appearance-panel"><div class="admin-panel-head"><div><span class="section-code">APARÊNCIA // CHAVE MESTRA</span>'+
-    '<h3>Personalização global</h3></div><small>cores + CSS global</small></div>'+
-    '<div class="admin-site-copy"><label>nome da rede<input id="admin-site-name" maxlength="40" value="'+escapeAttr(site.site_name||'AVESSO')+'"></label>'+
-    '<label>frase principal<input id="admin-site-tagline" maxlength="120" value="'+escapeAttr(site.tagline||'menos palco, mais presença')+'"></label></div>'+
-    '<label class="admin-announcement">aviso global<textarea id="admin-announcement" maxlength="240" placeholder="vazio = sem aviso">'+escapeHtml(site.announcement||'')+'</textarea></label>'+
-    '<div class="admin-presets"><span>PRESETS</span><button data-admin-preset="avesso">AVESSO</button><button data-admin-preset="phosphor">Fósforo</button>'+
-    '<button data-admin-preset="cyan">Ciano</button><button data-admin-preset="magenta">Magenta CRT</button></div>'+
-    '<div class="admin-color-grid">'+colorFields+'</div>'+
-    '<label class="admin-custom-css"><span>CSS GLOBAL // 20.000 caracteres</span><textarea id="admin-custom-css" spellcheck="false" placeholder="/* você realmente pediu a chave mestra */">'+escapeHtml(site.custom_css||'')+'</textarea>'+
-    '<small>Este campo altera qualquer parte visual do AVESSO. Sem JavaScript e sem HTML injetável.</small></label>'+
-    '<button id="admin-site-save" class="admin-primary" type="button">salvar aparência global</button></section>'+
-
-    '<div class="admin-grid"><section class="admin-panel"><div class="admin-panel-head"><div><span class="section-code">CONTAS // GERÊNCIA</span><h3>Habitantes</h3></div>'+
-    '<small>'+users.length+' carregados</small></div><div class="admin-user-list">'+usersHtml+'</div></section>'+
-    '<section class="admin-panel admin-world-panel"><div class="admin-panel-head"><div><span class="section-code">MUNDO // CONTROLES</span><h3>Estado global</h3></div>'+
-    '<strong>'+(world.world_events_enabled?'ONLINE':'PAUSADO')+'</strong></div>'+
-    '<label class="admin-switch"><input id="admin-world-events" type="checkbox" '+(world.world_events_enabled?'checked':'')+'><span><b>eventos do mundo</b><small>habilita acontecimentos gerais</small></span></label>'+
-    '<label class="admin-switch"><input id="admin-world-interventions" type="checkbox" '+(world.world_interventions_enabled?'checked':'')+'><span><b>interferências visuais</b><small>libera intervenções quando a regra permitir</small></span></label>'+
-    '<label class="admin-world-message">mensagem do sistema<textarea id="admin-world-message" maxlength="240">'+escapeHtml(world.message||'')+'</textarea></label>'+
-    '<button id="admin-world-save" type="button">salvar controles</button></section></div>'+
-
-    '<section class="admin-panel admin-content-moderation"><div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // CONTEÚDO PÚBLICO</span>'+
-    '<h3>Remoção direta</h3></div><small>ações registradas</small></div><div class="admin-content-grid">'+moderationContent+'</div></section>'+
-
-    '<section class="admin-panel admin-reports-panel"><div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // DENÚNCIAS</span><h3>Fila de revisão</h3></div>'+
-    '<small>'+reports.length+' carregadas</small></div><div class="admin-report-list">'+reportsHtml+'</div></section>'+
-
-    '<section class="admin-panel admin-audit-panel"><div class="admin-panel-head"><div><span class="section-code">AUDITORIA // QUEM FEZ O QUÊ</span><h3>Registro administrativo</h3></div>'+
-    '<small>'+audit.length+' eventos</small></div><div class="admin-audit-list">'+(audit.map(adminAuditRow).join('')||'<p class="admin-empty">Nenhuma ação administrativa registrada ainda.</p>')+'</div></section>'+
-  '</section>';
-
+  state.adminRole=data?.role||state.adminRole;
+  if(!staffSectionAllowed(state.staffSection,state.adminRole))state.staffSection='overview';
+  const nav=dashboardNavItems(state.adminRole);
+  host.innerHTML='<section class="staff-dashboard">'+
+    '<header class="staff-dashboard-hero"><div><span class="section-code">STAFF.SYS // '+escapeHtml(staffRoleLabel(state.adminRole).toUpperCase())+'</span><h2>Dashboard do AVESSO '+(state.adminRole==='owner'?adminCrownHtml('admin-hero-crown'):'')+'</h2><p>Ferramentas separadas por responsabilidade. Finalmente uma hierarquia que não cabe inteira num menu de três pontinhos.</p></div><button id="admin-refresh">↻ atualizar</button></header>'+
+    '<div class="staff-dashboard-layout"><nav class="staff-dashboard-nav">'+nav.map(([id,icon,label])=>'<button class="'+(state.staffSection===id?'active':'')+'" data-staff-section="'+id+'"><i>'+icon+'</i><span>'+label+'</span></button>').join('')+'</nav>'+
+    '<main class="staff-dashboard-content">'+dashboardSectionHtml(data,state.staffSection)+'</main></div></section>';
   $('#admin-refresh')?.addEventListener('click',renderAdminDashboard);
-  $('#admin-world-save')?.addEventListener('click',saveAdminWorldControls);
-  $('#admin-site-save')?.addEventListener('click',saveAdminSiteSettings);
-  host.querySelectorAll('[data-admin-preset]').forEach(b=>b.onclick=()=>adminApplyPreset(b.dataset.adminPreset));
-  host.querySelectorAll('[data-admin-color-var]').forEach(input=>input.oninput=()=>document.documentElement.style.setProperty(input.dataset.adminColorVar,input.value));
-  host.querySelectorAll('[data-admin-report-status]').forEach(select=>select.onchange=()=>setAdminReportStatus(select.dataset.adminReportStatus,select.value));
-  host.querySelectorAll('[data-admin-suspend-user]').forEach(b=>b.onclick=()=>adminToggleSuspension(b.dataset.adminSuspendUser,b.dataset.adminSuspendValue==='1'));
-  host.querySelectorAll('[data-admin-role-user]').forEach(select=>select.onchange=()=>adminSetRole(select.dataset.adminRoleUser,select.value));
-  host.querySelectorAll('[data-admin-delete-kind]').forEach(b=>b.onclick=()=>adminDeleteContent(b.dataset.adminDeleteKind,b.dataset.adminDeleteId));
-  bindProfileLinks();
+  host.querySelectorAll('[data-staff-section]').forEach(b=>b.onclick=()=>{state.staffSection=b.dataset.staffSection;renderAdminDashboard();});
+  bindDashboardSection(state.staffSection,data);
 }
 
 function applyAppTabLayout(){
@@ -2474,7 +2892,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   applyAppWallpaper();
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
-  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Amigos & cúmplices',admin:'Painel do administrador'};
+  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Amigos & cúmplices',admin:'Dashboard'};
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
   trackAction('tab_view',state.tab,{tab:state.tab});
@@ -2578,7 +2996,7 @@ async function loadPlazaMessages(){
       return `<article class="plaza-message npc-message">${characterVisual(c,'plaza-msg-avatar')}<div><header><strong>${escapeHtml(c?.name||'NPC')}</strong><span>HABITANTE · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
     }
     const p=profiles[m.user_id]||{};
-    return `<article class="plaza-message"><button class="plaza-avatar" data-profile-id="${m.user_id}">${avatarHtml(p.avatar_url,p.display_name||'?')}</button><div><header><button class="user-link" data-profile-id="${m.user_id}">${escapeHtml(p.display_name||'alguém')}</button><span>@${escapeHtml(p.handle||'...')} · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
+    return `<article class="plaza-message"><button class="plaza-avatar" data-profile-id="${m.user_id}">${avatarHtml(p.avatar_url,p.display_name||'?')}</button><div><header><button class="user-link" data-profile-id="${m.user_id}">${identityNameHtml(m.user_id,p.display_name||'alguém')}</button><span>@${escapeHtml(p.handle||'...')} · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
   }).join('')||'<div class="plaza-empty">A praça está vazia. O NPC está fingindo que isso era parte do planejamento urbano.</div>';
   bindProfileLinks();
   log.scrollTop=log.scrollHeight;
@@ -2747,7 +3165,7 @@ function renderOnlineFriendsDock(){
       const statusLabel=entry.mode==='online'?'online':entry.mode==='away'?'ausente':'offline';
       return `<button class="online-friend-item ${entry.mode}" data-online-friend="${friend.id}" type="button">
         <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
-        <span class="online-friend-copy"><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${statusLabel}</strong><span class="online-friend-status-message">${escapeHtml(friend.status_message||'sem status. provavelmente ocupado existindo.')}</span><em>${np?`♫ ${escapeHtml(np.title)}`:entry.mode==='offline'?'◌ fora da rede':'♫ silêncio detectado'}</em></span>
+        <span class="online-friend-copy"><b>${identityNameHtml(friend.id,friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${statusLabel}</strong><span class="online-friend-status-message">${escapeHtml(friend.status_message||'sem status. provavelmente ocupado existindo.')}</span><em>${np?`♫ ${escapeHtml(np.title)}`:entry.mode==='offline'?'◌ fora da rede':'♫ silêncio detectado'}</em></span>
       </button>`;
     }).join('')||'<div class="online-friends-empty">Nenhum cúmplice adicionado ainda. Estatisticamente tranquilo.</div>');
   }
@@ -3093,7 +3511,7 @@ function dmMessageHtml(m){
     :m.message_kind==='audio'
       ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio class="dm-voice-audio" data-voice-type="${escapeAttr(m.attachment_type||'')}" controls preload="metadata"><source src="${escapeAttr(m.attachment_url)}" type="${escapeAttr(m.attachment_type||'audio/wav')}">Seu navegador recusou este áudio.</audio><a class="dm-audio-open" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener">abrir áudio</a></div>`
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
-  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${escapeHtml(m.body)}</p>`:'');
+  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${renderEmoticonText(m.body)}</p>`:'');
   return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}</small></article>`;
 }
 async function handleDirectMessageMutation(row){
@@ -3129,10 +3547,10 @@ function updateChatPeerHeader(peer){
   const muted=isPeerMuted(peer.id);
   const title=$('#dm-restore-name');
   if(title){
-    title.innerHTML=`<i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}`;
+    title.innerHTML=`<i class="presence-dot ${p.mode}"></i>${identityNameHtml(peer.id,peer.display_name)}${muted?' · 🔇':''}`;
     title.title=`Abrir conversa com ${peer.display_name}`;
   }
-  const name=$('#dm-peer-profile-name');if(name)name.textContent=peer.display_name;
+  const name=$('#dm-peer-profile-name');if(name)name.innerHTML=identityNameHtml(peer.id,peer.display_name);
   const status=$('#dm-peer-status');
   if(status){
     status.textContent=peer.status_message||'';
@@ -3155,7 +3573,7 @@ async function renderMessagesPage(){
   $('#feed-list').innerHTML=`<section class="messages-hub">
     <header class="messages-hub-head"><div><span class="section-code">MSN.EXE // AMIZADES HUMANAS</span><h2>Amigos & cúmplices</h2><p>Sua lista de gente que você aceitou voluntariamente. Clique em alguém e a janela aparece, porque 2006 ainda tinha algumas ideias úteis.</p></div>
     <div class="messages-head-controls"><label class="presence-picker">aparecer como <select id="presence-mode-select"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><button id="notification-permission-button" class="notification-permission-button">${notificationPermissionLabel()}</button></div></header>
-    <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f),muted=isPeerMuted(f.id);return `<button class="compact-friend" data-open-chat="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${escapeHtml(f.display_name)}${muted?' <i class="muted-mark">🔇</i>':''}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}${muted?' · mutado':''}</em></button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
+    <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f),muted=isPeerMuted(f.id);return `<button class="compact-friend" data-open-chat="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${identityNameHtml(f.id,f.display_name)}${muted?' <i class="muted-mark">🔇</i>':''}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}${muted?' · mutado':''}</em></button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
   </section>`;
   $('#presence-mode-select').value=state.profile.presence_mode||'online';
   $('#presence-mode-select').onchange=e=>setPresenceMode(e.target.value);
@@ -3554,18 +3972,19 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   win.dataset.chatWallpaper=chatWallpaper;
   win.innerHTML=`<div class="dm-msn-titlebar" id="dm-floating-head">
       <span class="dm-msn-appmark">▓ AVESSO.MSG</span>
-      <button id="dm-restore-name" class="dm-title-peer" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}</button>
+      <button id="dm-restore-name" class="dm-title-peer" data-profile-id="${peer.id}" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${identityNameHtml(peer.id,peer.display_name)}${muted?' · 🔇':''}</button>
       <span class="dm-msn-era">56K // 2026</span>
       <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'↥':'_'}</button><button id="dm-maximize" title="${state.chatMaximized?'Restaurar tamanho':'Maximizar'}">${state.chatMaximized?'❐':'□'}</button><button id="dm-close" title="Fechar">×</button></div>
     </div>
     <header class="dm-floating-head">
       <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
-      <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><div class="dm-peer-identity-row"><button class="dm-peer-name" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><span id="dm-peer-status" class="dm-user-status ${peer.status_message?'':'hidden'}" title="${escapeAttr(peer.status_message||'')}">${escapeHtml(peer.status_message||'')}</span><div id="dm-peer-listening" class="dm-listening-inline">${chatNowPlayingHtml(peer,{compact:true})}</div></div><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
+      <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><div class="dm-peer-identity-row"><button class="dm-peer-name" id="dm-peer-profile-name" data-profile-id="${peer.id}">${identityNameHtml(peer.id,peer.display_name)}</button><span id="dm-peer-status" class="dm-user-status ${peer.status_message?'':'hidden'}" title="${escapeAttr(peer.status_message||'')}">${escapeHtml(peer.status_message||'')}</span><div id="dm-peer-listening" class="dm-listening-inline">${chatNowPlayingHtml(peer,{compact:true})}</div></div><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
       <div class="dm-head-actions"><span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span><button id="dm-options" class="dm-kebab" aria-label="Opções da conversa" title="Opções da conversa">•••</button></div>
       <div id="dm-options-menu" class="dm-options-menu dm-options-menu-head hidden">
-        <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${escapeHtml(peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
+        <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${identityNameHtml(peer.id,peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
         <button id="dm-visit-profile">↗ visitar o Canto</button>
         <button id="dm-mute-peer">${muted?'🔊 desmutar':'🔇 mutar'} notificações</button>
+        <button id="dm-report-peer">⚑ denunciar usuário</button>
         <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
         <label class="dm-away-setting"><span>MINHA AUSÊNCIA AUTOMÁTICA</span><select id="dm-away-after"><option value="5">5 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option><option value="20">20 minutos</option><option value="30">30 minutos</option><option value="0">nunca</option></select></label><label class="dm-chat-listening-setting"><input id="dm-show-listening" type="checkbox" ${state.profile.chat_listening_visible!==false?'checked':''}><span><b>mostrar minha música nas conversas</b><small>o Canto pode continuar mostrando mesmo se você esconder daqui</small></span></label><div class="dm-status-setting"><span>MEU STATUS</span><div><input id="dm-status-message" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"><button id="dm-save-status" type="button">salvar</button></div></div>
         <div class="dm-theme-section"><span>TEMA // PIXEL 199X → 2026</span><div class="dm-theme-grid">${CHAT_THEMES.map(([id,label,color])=>`<button type="button" class="chat-theme-choice ${theme===id?'active':''}" data-chat-theme="${id}" title="${escapeAttr(label)}"><i style="--theme-color:${color}"></i><b>${escapeHtml(label)}</b></button>`).join('')}</div></div>
@@ -3576,14 +3995,14 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
       <div class="dm-msn-conversation">
         <aside class="dm-msn-peer">
           <div class="dm-msn-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</div>
-          <b>${escapeHtml(peer.display_name)}</b>
+          <b>${identityNameHtml(peer.id,peer.display_name)}</b>
           <small>@${escapeHtml(peer.handle)}</small>
           <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span>
         </aside>
         <div class="dm-log" id="dm-log">${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
         <aside class="dm-msn-self" title="Seu perfil nesta conversa">
           <div class="dm-msn-self-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
-          <b>VOCÊ</b>
+          <b>${identityNameHtml(state.profile.id,state.profile.display_name)}</b>
           <small>@${escapeHtml(state.profile.handle)}</small>
           <span class="dm-msn-presence"><i class="presence-dot ${mePresence.mode}"></i> ${mePresence.label}</span>
         </aside>
@@ -3613,13 +4032,14 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('#dm-attention').onclick=sendAttention;
   $('#dm-emoticons').onclick=e=>{e.stopPropagation();$('#dm-emoticon-palette').classList.toggle('hidden');$('#dm-options-menu')?.classList.add('hidden');};
   $('#dm-emoticon-close').onclick=e=>{e.stopPropagation();$('#dm-emoticon-palette').classList.add('hidden');$('#dm-input')?.focus();};
-  $('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();syncDmComposerAction();});
+  $$('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();syncDmComposerAction();});
   $('#dm-attach').onclick=()=>$('#dm-file-input').click();
   $('#dm-file-input').onchange=e=>{const file=e.target.files?.[0];if(file)sendDirectAttachment(file);};
   bindHoldToTalk();
   $('#dm-options').onclick=e=>{e.stopPropagation();$('#dm-options-menu').classList.toggle('hidden');$('#dm-emoticon-palette')?.classList.add('hidden');};
   $('#dm-visit-profile').onclick=()=>{openPublicProfile(peerId);$('#dm-options-menu')?.classList.add('hidden');};
   $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
+  $('#dm-report-peer').onclick=()=>reportUser(peerId);
   $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
   const awaySelect=$('#dm-away-after');if(awaySelect){awaySelect.value=String(state.profile.away_after_minutes??10);awaySelect.onchange=e=>saveAwayAfterMinutes(e.target.value);}
   const showListening=$('#dm-show-listening');if(showListening)showListening.onchange=e=>saveChatListeningVisibility(e.target.checked);
@@ -3876,7 +4296,7 @@ async function loadFriendPanel(){
   const incoming=list.filter(r=>r.status==='pending'&&r.addressee_id===state.profile.id);
   const outgoing=list.filter(r=>r.status==='pending'&&r.requester_id===state.profile.id);
   const accepted=list.filter(r=>r.status==='accepted');
-  const card=(p,extra='')=>`<div class="friend-row"><button class="friend-avatar" data-profile-id="${p.id}">${avatarHtml(p.avatar_url,p.display_name)}</button><div><button class="user-link" data-profile-id="${p.id}">${escapeHtml(p.display_name)}</button><small>@${escapeHtml(p.handle)} ${p.status_message?'· '+escapeHtml(p.status_message):''}</small></div>${extra}</div>`;
+  const card=(p,extra='')=>`<div class="friend-row"><button class="friend-avatar" data-profile-id="${p.id}">${avatarHtml(p.avatar_url,p.display_name)}</button><div><button class="user-link" data-profile-id="${p.id}">${identityNameHtml(p.id,p.display_name)}</button><small>@${escapeHtml(p.handle)} ${p.status_message?'· '+escapeHtml(p.status_message):''}</small></div>${extra}</div>`;
   host.innerHTML=`
     <div class="friend-section"><h3>Pedidos recebidos <b>${incoming.length}</b></h3>${incoming.map(r=>{const p=profiles[r.requester_id];return p?card(p,`<div class="friend-actions"><button data-friend-accept="${r.id}">aceitar</button><button data-friend-decline="${r.id}">recusar</button></div>`):''}).join('')||'<p>Ninguém batendo na porta. Paz temporária.</p>'}</div>
     <div class="friend-section"><h3>Amigos <b>${accepted.length}</b></h3>${accepted.map(r=>{const id=r.requester_id===state.profile.id?r.addressee_id:r.requester_id;const p=profiles[id];return p?card(p,`<div class="friend-actions"><button data-friend-chat="${id}">mensagem</button><button data-friend-remove="${r.id}">remover</button></div>`):''}).join('')||'<p>Lista vazia. O MSN também começou assim.</p>'}</div>
@@ -3924,7 +4344,7 @@ async function saveProfileSettings(){
   if(error)return toast('O perfil resistiu à mudança. Tente novamente.');
   state.profile=data;
   await supabase.auth.updateUser({data:{display_name}}).catch(()=>{});
-  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):''); renderNavAvatar();
+  $('#nav-name').innerHTML=identityNameHtml(data.id,data.display_name,'nav-identity-name'); renderNavAvatar();
   toast('Seu Canto foi atualizado. Identidade salva sem pedir aprovação do algoritmo.');
   renderProfile();
 }
@@ -4043,7 +4463,7 @@ function imageViewerCommentHtml(row,ownerId=''){
   const canDelete=row.user_id===state.profile?.id||ownerId===state.profile?.id;
   return '<article class="image-viewer-comment">'+
     '<span class="mini-avatar">'+avatarHtml(row.author?.avatar_url,row.author?.display_name||'?')+'</span>'+
-    '<div><header><button class="user-link" data-profile-id="'+escapeAttr(row.user_id)+'">'+escapeHtml(row.author?.display_name||'alguém')+'</button>'+
+    '<div><header><button class="user-link" data-profile-id="'+escapeAttr(row.user_id)+'">'+identityNameHtml(row.user_id,row.author?.display_name||'alguém')+'</button>'+
     '<small>@'+escapeHtml(row.author?.handle||'...')+' · '+ago(row.created_at)+'</small></header>'+
     '<p>'+escapeHtml(row.body)+'</p>'+
     (canDelete?'<button class="image-comment-delete" data-photo-comment-delete="'+escapeAttr(row.id)+'" data-photo-comment-photo="'+escapeAttr(row.photo_id)+'">apagar</button>':'')+
@@ -4089,7 +4509,7 @@ async function openAlbumPhotoViewer(photoId){
     '<div class="image-viewer-stage"><img src="'+escapeAttr(photo._url)+'" alt="'+escapeAttr(photo.caption||'Foto do álbum')+'"></div>'+
     '<aside class="image-viewer-social">'+
       '<header class="image-viewer-owner"><span class="mini-avatar">'+avatarHtml(owner.avatar_url,owner.display_name||'?')+'</span><div>'+
-      '<button class="user-link" data-profile-id="'+escapeAttr(owner.id||photo.user_id)+'">'+escapeHtml(owner.display_name||'alguém')+'</button>'+
+      '<button class="user-link" data-profile-id="'+escapeAttr(owner.id||photo.user_id)+'">'+identityNameHtml(owner.id||photo.user_id,owner.display_name||'alguém')+'</button>'+
       '<small>@'+escapeHtml(owner.handle||'...')+' · '+ago(photo.created_at)+'</small></div></header>'+
       '<p class="image-viewer-caption">'+escapeHtml(photo.caption||'sem legenda. corajoso.')+'</p>'+
       '<div class="image-viewer-actions"><button class="turn-feed-button" data-viewer-turn-photo="'+photo.id+'">↻ virar no feed</button></div>'+
@@ -4163,7 +4583,7 @@ async function openFeedImageViewer(postId){
   }).join('');
   const turned=post.reshare_author_id?
     '<div class="post-turned-badge"><span>↻ VIRADO DO AVESSO</span><b>original: @'+escapeHtml(post.reshare_author_handle||'alguém')+'</b><small>virado por @'+escapeHtml(post.author_handle||'alguém')+'</small></div>':'';
-  const commentHtml=comments.map(c=>'<article class="image-viewer-comment"><span class="mini-avatar">'+avatarHtml(c.author?.avatar_url,c.author?.display_name||'?')+'</span><div><header><button class="user-link" data-profile-id="'+escapeAttr(c.author_id)+'">'+escapeHtml(c.author?.display_name||'alguém')+'</button><small>@'+escapeHtml(c.author?.handle||'...')+' · '+ago(c.created_at)+'</small></header><p>'+escapeHtml(c.body)+'</p></div></article>').join('');
+  const commentHtml=comments.map(c=>'<article class="image-viewer-comment"><span class="mini-avatar">'+avatarHtml(c.author?.avatar_url,c.author?.display_name||'?')+'</span><div><header><button class="user-link" data-profile-id="'+escapeAttr(c.author_id)+'">'+identityNameHtml(c.author_id,c.author?.display_name||'alguém')+'</button><small>@'+escapeHtml(c.author?.handle||'...')+' · '+ago(c.created_at)+'</small></header><p>'+escapeHtml(c.body)+'</p></div></article>').join('');
   host.innerHTML='<section class="image-viewer-grid">'+
     '<div class="image-viewer-stage"><img src="'+escapeAttr(imageUrl)+'" alt="Imagem da publicação"></div>'+
     '<aside class="image-viewer-social">'+
@@ -4270,7 +4690,7 @@ async function renderProfile(){
   $('#feed-list').innerHTML=`<section class="profile-control" style="--profile-wallpaper:url('${wallpaperUrl(state.profile.profile_wallpaper)}')">
     <header class="profile-control-hero">
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
-      <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${escapeHtml(state.profile.display_name)}${state.isAdmin?adminCrownHtml('profile-admin-crown'):''}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
+      <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${identityNameHtml(state.profile.id,state.profile.display_name,'profile-owner-name')}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
@@ -4398,7 +4818,7 @@ async function loadGuestbook(profileId,selector='#public-guestbook-list'){
     return `<article class="guestbook-card" data-recado-id="${entry.id}">
       <header>
         <button class="guestbook-avatar" data-profile-id="${entry.author_id}">${avatarHtml(author.avatar_url,author.display_name||'?')}</button>
-        <div><button class="user-link" data-profile-id="${entry.author_id}">${escapeHtml(author.display_name||'alguém')}</button><small>@${escapeHtml(author.handle||'...')} · ${ago(entry.created_at)}</small></div>
+        <div><button class="user-link" data-profile-id="${entry.author_id}">${identityNameHtml(entry.author_id,author.display_name||'alguém')}</button><small>@${escapeHtml(author.handle||'...')} · ${ago(entry.created_at)}</small></div>
         ${canDelete?`<button class="guestbook-delete" data-recado-delete="${entry.id}" data-recado-image="${escapeAttr(entry.image_path||'')}" title="Apagar recado">×</button>`:''}
       </header>
       ${entry.body?`<p>${richText(entry.body)}</p>`:''}
@@ -4464,27 +4884,28 @@ async function openPublicProfile(userId){
     : '<div class="guestbook-locked">Recados são para amigos. Civilização mínima, aparentemente.</div>';
   $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
-    <header class="public-profile-hero"><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div class="public-profile-identity"><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><div class="public-profile-name-row"><h1>${escapeHtml(p.display_name)}</h1><span class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</span></div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><div class="public-profile-sound-row"><div id="public-now-playing">${nowPlayingHtml(p)}</div><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div></div><p class="public-profile-bio">${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <header class="public-profile-hero"><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div class="public-profile-identity"><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><div class="public-profile-name-row"><h1>${identityNameHtml(p.id,p.display_name,'public-profile-name')}</h1><span class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</span></div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><div class="public-profile-sound-row"><div id="public-now-playing">${nowPlayingHtml(p)}</div><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div></div><p class="public-profile-bio">${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}<button class="report-profile-button" data-report-profile="${p.id}">⚑ denunciar</button></div></div></header>
     <section class="public-story-section">
       <span class="section-code">STORIES // AINDA NÃO EXPIRARAM</span>
-      <h2>Stories de ${escapeHtml(p.display_name)}</h2>
+      <h2>Stories de ${identityNameHtml(p.id,p.display_name)}</h2>
       <div id="public-story-list" class="profile-story-list"><p class="story-empty">checando o relógio...</p></div>
     </section>
     <section class="guestbook-section public-guestbook">
       <span class="section-code">RECADOS // ESCREVA NA PAREDE DE ALGUÉM</span>
-      <h2>Recados para ${escapeHtml(p.display_name)}</h2>
+      <h2>Recados para ${identityNameHtml(p.id,p.display_name)}</h2>
       <p>Uma relíquia social anterior ao “engajamento”. Texto, emoji, link e imagem. Só amigos podem escrever.</p>
       ${guestbookComposer}
       <div id="public-guestbook-list" class="guestbook-list"><p>carregando recados...</p></div>
     </section>
-    <section class="public-album"><h2>Álbum de ${escapeHtml(p.display_name)}</h2><div id="public-album" class="profile-album-grid"><p>abrindo gavetas...</p></div></section>
-    <section class="public-media"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Mídia publicada por ${escapeHtml(p.display_name)}</h2><div id="public-media-list" class="profile-media-grid"><p>procurando fitas...</p></div></section>
+    <section class="public-album"><h2>Álbum de ${identityNameHtml(p.id,p.display_name)}</h2><div id="public-album" class="profile-album-grid"><p>abrindo gavetas...</p></div></section>
+    <section class="public-media"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Mídia publicada por ${identityNameHtml(p.id,p.display_name)}</h2><div id="public-media-list" class="profile-media-grid"><p>procurando fitas...</p></div></section>
   </section>`;
   $('#back-from-profile').onclick=()=>document.querySelector('[data-app-tab="feed"]')?.click();
   $('[data-add-friend]')?.addEventListener('click',e=>requestFriend(e.currentTarget.dataset.addFriend));
   $('[data-accept-public]')?.addEventListener('click',async e=>{await answerFriendRequest(e.currentTarget.dataset.acceptPublic,true);openPublicProfile(userId);});
   $('[data-message-friend]')?.addEventListener('click',e=>openFriendChat(e.currentTarget.dataset.messageFriend));
   $('[data-unfriend-public]')?.addEventListener('click',async e=>{if(confirm('Desfazer amizade? Sem textão de despedida.')){await supabase.from('friendships').delete().eq('id',e.currentTarget.dataset.unfriendPublic);openPublicProfile(userId);}});
+  $('[data-report-profile]')?.addEventListener('click',e=>reportUser(e.currentTarget.dataset.reportProfile));
   $('#guestbook-submit')?.addEventListener('click',()=>sendGuestbookEntry(userId));
   loadGuestbook(userId,'#public-guestbook-list');
   loadAlbum(userId,false);
@@ -4584,5 +5005,6 @@ function showAuthLinkError(){
   if(!$('#auth-dialog').open)$('#auth-dialog').showModal();
 }
 
-await loadSiteSettings();
+await Promise.all([loadSiteSettings(),loadIdentityRegistry()]);
+await loadSiteOverrides();
 const {data:{session}}=await supabase.auth.getSession();state.session=session;if(session)enterApp();else showAuthLinkError();
