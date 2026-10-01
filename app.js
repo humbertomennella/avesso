@@ -1467,7 +1467,9 @@ async function pollDirectInbox(){
     .order('created_at',{ascending:true})
     .limit(30);
   if(error)return;
-  for(const m of data||[])await receiveIncomingDirectMessage(m,{source:'poll'});
+  const rows=data||[];
+  for(const m of rows)await receiveIncomingDirectMessage(m,{source:'poll'});
+  if(rows.length)state.directWatchStartedAt=rows[rows.length-1].created_at;
 }
 function startDirectFallbackPoll(){
   clearInterval(state.directPollTimer);
@@ -2028,7 +2030,7 @@ function autoMinimizeChat(){
   applyChatGeometry();
 }
 function closeChatWindow(silent=false){
-  if(state.voiceRecorder)cancelVoiceRecording(true);
+  if(state.voiceRecorder||state.voicePendingStart)cancelVoiceRecording(true);
   state.chatWindowOpen=false;state.chatWindowMinimized=false;state.directPeerId=null;
   const win=$('#dm-floating-window');if(win)win.classList.add('hidden');
   if(!silent)toast('Conversa fechada. Nenhum “tchau” automático foi enviado.');
