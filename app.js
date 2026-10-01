@@ -1939,7 +1939,8 @@ $('#publish-post').onclick=async()=>{
   if($('#post-media-link')?.value.trim()&&!external)return toast('Esse link não é um YouTube ou Spotify reconhecível.');
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
   if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||state.postGifUrl||external))return toast('Imagem e mídia incorporada privadas ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
-  if(body.length<3&&!state.postImageFile&&!state.postGifUrl&&!external)return toast('Dê ao menos uma frase, imagem ou link de YouTube/Spotify. Telepatia ainda não foi integrada.');
+  const minText=directed?2:12;
+  if(body.length<minText&&!state.postImageFile&&!state.postGifUrl&&!external)return toast(directed?'Para alguém, 2 caracteres bastam. Milagre burocrático.':'No feed aberto, use pelo menos 12 caracteres ou anexe mídia.');
   $('#publish-post').disabled=true;
   let image_url=state.postGifUrl||null,media_url=external?.url||null,media_kind=external?.kind||null;
   try{
@@ -1960,7 +1961,7 @@ $('#publish-post').onclick=async()=>{
     visibility:directed?$('#post-visibility').value:'publico'
   }).select('id').single();
   $('#publish-post').disabled=false;
-  if(error)return toast('Não foi possível publicar. Tente novamente.');
+  if(error){console.error('post insert failed',error);return toast(error.code==='23514'?'A publicação não passou pelas regras de tamanho/visibilidade.':'Não foi possível publicar. Tente novamente.');}
   $('#post-body').value='';$('#recipient-search').value='';$('#char-count').textContent='420';state.recipient=null;
   state.postImageFile=null;state.postGifUrl='';$('#post-image').value='';$('#image-preview').classList.add('hidden');
   if($('#post-gif-file'))$('#post-gif-file').value='';
