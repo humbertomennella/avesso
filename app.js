@@ -2282,55 +2282,70 @@ async function loadThreadData(posts){
   for(const x of reactions)(reactionsByPost[x.post_id]??=[]).push(x);
   return{responses:byPost,characters:charactersByPost,reactions:reactionsByPost};
 }
-async function loadFeed(){
+async function loadFeed({append=false}={}){
   if(!isFeedTab())return;
+  if(append&&(!state.feedHasMore||state.feedLoadingMore))return;
   const viewVersion=state.viewVersion;
   const requestedTab=state.tab;
   const status=$('#feed-status');
-  status.classList.remove('hidden');
-  status.textContent='carregando o que acabou de acontecer...';
-  algoSay('feed_loading');
+  if(!append){
+    state.feedLoadedPosts=[];state.feedCursor=null;state.feedHasMore=true;
+    status.classList.remove('hidden');
+    status.textContent='carregando o que acabou de acontecer...';
+    algoSay('feed_loading');
+  }else{
+    state.feedLoadingMore=true;
+    const more=$('#feed-load-more');if(more){more.disabled=true;more.textContent='buscando o passado...';}
+  }
 
   let query=supabase.from('feed_attention').select('*');
   if(requestedTab==='quiet')query=query.eq('response_count',0);
   if(requestedTab==='sent')query=query.eq('author_id',state.profile.id);
+  if(append&&state.feedCursor)query=query.lt('created_at',state.feedCursor);
 
-  const feedPageSize=Math.max(10,Math.min(100,Number(state.siteSettings?.feed_settings?.page_size)||40));
-  const {data,error}=await query.order('created_at',{ascending:false}).limit(feedPageSize);
+  const configured=Math.max(10,Math.min(40,Number(state.siteSettings?.feed_settings?.page_size)||20));
+  const fetchSize=configured+1;
+  const {data,error}=await query.order('created_at',{ascending:false}).limit(fetchSize);
 
-  // O usuário pode ter mudado de página enquanto o banco respondia.
-  if(viewVersion!==state.viewVersion||state.tab!==requestedTab||!isFeedTab())return;
-
+  if(viewVersion!==state.viewVersion||state.tab!==requestedTab||!isFeedTab()){state.feedLoadingMore=false;return;}
   if(error){
+    state.feedLoadingMore=false;
+    if(append){const more=$('#feed-load-more');if(more){more.disabled=false;more.textContent='carregar mais';}return toast('O passado se recusou a carregar. Tente de novo.');}
     status.textContent='O feed falhou. Até o anti-algoritmo tem segunda-feira.';
     algoSay('feed_error');
     return;
   }
 
-  const posts=(data||[]).filter(p=>!isPeerBlocked(p.author_id)&&!isPeerBlocked(p.recipient_id));
-  const profileIds=[...new Set(posts.flatMap(p=>[p.author_id,p.recipient_id]).filter(Boolean))];
+  const raw=(data||[]);
+  state.feedHasMore=raw.length>configured;
+  const page=raw.slice(0,configured).filter(p=>!isPeerBlocked(p.author_id)&&!isPeerBlocked(p.recipient_id));
+  if(page.length)state.feedCursor=page[page.length-1].created_at;
+  const known=new Set(state.feedLoadedPosts.map(p=>p.id));
+  const merged=append?[...state.feedLoadedPosts,...page.filter(p=>!known.has(p.id))]:page;
+  state.feedLoadedPosts=merged;
+
+  const profileIds=[...new Set(merged.flatMap(p=>[p.author_id,p.recipient_id]).filter(Boolean))];
   let feedProfiles={};
   if(profileIds.length){
     const {data:profiles}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',profileIds);
     feedProfiles=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
   }
-  posts.forEach(p=>{p.author_avatar_url=feedProfiles[p.author_id]?.avatar_url||null;p.recipient_avatar_url=feedProfiles[p.recipient_id]?.avatar_url||null;});
-  const threadData=await loadThreadData(posts);
+  merged.forEach(p=>{p.author_avatar_url=feedProfiles[p.author_id]?.avatar_url||null;p.recipient_avatar_url=feedProfiles[p.recipient_id]?.avatar_url||null;});
+  const threadData=await loadThreadData(merged);
 
-  // Segunda barreira: loadThreadData também é assíncrono.
-  if(viewVersion!==state.viewVersion||state.tab!==requestedTab||!isFeedTab())return;
-
+  if(viewVersion!==state.viewVersion||state.tab!==requestedTab||!isFeedTab()){state.feedLoadingMore=false;return;}
+  state.feedLoadingMore=false;
   status.classList.add('hidden');
-  renderFeed(posts,threadData);
+  renderFeed(merged,threadData);
   renderTowerCard();
 
-  if(posts.some(p=>p.response_count===0)){
+  if(!append&&merged.some(p=>p.response_count===0)){
     algoSay('feed_attention');
     if(state.tab==='feed')setTimeout(()=>{
       if(state.tab==='feed'&&viewVersion===state.viewVersion)
         maybeWorldCharacter('feed_attention',{character:'algo',surface:'feed',action_type:'feed_attention'},.035,12*60*1000);
     },2600);
-  }else if(posts.length)algoSay('feed_default');
+  }else if(!append&&merged.length)algoSay('feed_default');
 }
 function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
   if(!isFeedTab())return;
@@ -2435,7 +2450,21 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
   $$('[data-post-delete]').forEach(b=>b.onclick=()=>deleteOwnPost(b.dataset.postDelete));
   $$('[data-turn-post]').forEach(b=>b.onclick=()=>turnPostToFeed(b.dataset.turnPost));
   $$('[data-photo-open]').forEach(img=>img.onclick=()=>openAlbumPhotoViewer(img.dataset.photoOpen));
-  $$('[data-feed-image-open]').forEach(img=>img.onclick=()=>openFeedImageViewer(img.dataset.feedImageOpen));
+  $('[data-feed-image-open]').forEach(img=>img.onclick=()=>openFeedImageViewer(img.dataset.feedImageOpen));
+  if(state.feedHasMore){
+    const more=document.createElement('button');
+    more.id='feed-load-more';
+    more.type='button';
+    more.className='feed-load-more';
+    more.textContent='carregar mais';
+    more.onclick=()=>loadFeed({append:true});
+    list.appendChild(more);
+  }else if(posts.length){
+    const end=document.createElement('div');
+    end.className='feed-end-marker';
+    end.textContent='fim do feed // milagrosamente existe um fundo';
+    list.appendChild(end);
+  }
 }
 async function savePostEdit(postId){
   const panel=document.querySelector(`[data-post-edit-panel="${CSS.escape(postId)}"]`);
