@@ -3719,7 +3719,7 @@ async function saveProfileSettings(){
   if(error)return toast('O perfil resistiu à mudança. Tente novamente.');
   state.profile=data;
   await supabase.auth.updateUser({data:{display_name}}).catch(()=>{});
-  $('#nav-name').textContent=data.display_name; renderNavAvatar();
+  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?'<span class="nav-admin-crown" title="Administrador">♛</span>':''); renderNavAvatar();
   toast('Seu Canto foi atualizado. Identidade salva sem pedir aprovação do algoritmo.');
   renderProfile();
 }
