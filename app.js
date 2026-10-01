@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -100,6 +100,53 @@ function applyAppWallpaper(){
   document.documentElement.style.setProperty('--avesso-app-wallpaper',`url("${wallpaperUrl(slug)}")`);
   document.documentElement.dataset.wallpaperSurface=useProfileWallpaper?'profile':'app';
   document.body.classList.add('avesso-app-active');
+}
+
+function adminCrownHtml(extraClass=''){
+  return '<span class="admin-crown-pixel '+escapeAttr(extraClass)+'" title="Administrador do AVESSO" aria-label="Administrador"><i></i></span>';
+}
+function applySiteSettings(settings=state.siteSettings||{}){
+  if(!settings)return;
+  const root=document.documentElement;
+  const vars={
+    '--bg':settings.color_bg,'--panel':settings.color_panel,'--panel2':settings.color_panel2,
+    '--ink':settings.color_ink,'--muted':settings.color_muted,'--line':settings.color_line,
+    '--acid':settings.color_acid,'--cyan':settings.color_cyan,'--coral':settings.color_coral,'--violet':settings.color_violet
+  };
+  Object.entries(vars).forEach(([name,value])=>{if(/^#[0-9a-f]{6}$/i.test(String(value||'')))root.style.setProperty(name,value);});
+  const cssId='avesso-admin-custom-css';
+  let style=document.getElementById(cssId);
+  if(!style){style=document.createElement('style');style.id=cssId;document.head.appendChild(style);}
+  style.textContent=String(settings.custom_css||'').slice(0,20000);
+  const siteName=String(settings.site_name||'AVESSO').trim()||'AVESSO';
+  const tagline=String(settings.tagline||'menos palco, mais presença').trim();
+  document.title=tagline?siteName+' — '+tagline:siteName;
+  document.querySelectorAll('.brand > span:not(.brand-mark)').forEach(el=>{el.textContent=siteName;});
+  let bar=document.getElementById('site-admin-announcement');
+  if(!bar){bar=document.createElement('div');bar.id='site-admin-announcement';bar.className='site-admin-announcement hidden';document.body.appendChild(bar);}
+  const announcement=String(settings.announcement||'').trim();
+  bar.textContent=announcement;
+  bar.classList.toggle('hidden',!announcement);
+}
+async function loadSiteSettings(){
+  const {data,error}=await supabase.from('site_settings').select('*').eq('id','global').maybeSingle();
+  if(error||!data)return;
+  state.siteSettings=data;
+  applySiteSettings(data);
+}
+async function loadOwnModeration(){
+  state.suspended=false;state.suspension=null;
+  if(!state.profile?.id)return;
+  const {data}=await supabase.from('user_moderation').select('suspended,reason,suspended_until,updated_at').eq('user_id',state.profile.id).maybeSingle();
+  if(!data)return;
+  const active=Boolean(data.suspended)&&(!data.suspended_until||new Date(data.suspended_until)>new Date());
+  state.suspended=active;
+  state.suspension=data;
+  document.body.classList.toggle('account-suspended',active);
+  if(active){
+    const until=data.suspended_until?' até '+new Date(data.suspended_until).toLocaleString('pt-BR'):'';
+    toast('Conta suspensa'+until+'. Você ainda pode consultar seu histórico, mas novas ações sociais estão bloqueadas.');
+  }
 }
 
 function hydrateStories(rows=[]){
@@ -1431,7 +1478,8 @@ async function enterApp(){
   state.profile=data;
   if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return;}
   await loadAdminAccess();
-  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?'<span class="nav-admin-crown" title="Administrador">♛</span>':'');
+  await loadOwnModeration();
+  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):'');
   $('#nav-handle').textContent='@'+data.handle;
   renderNavAvatar();
   applyAppWallpaper();
@@ -1476,7 +1524,8 @@ function leaveApp(){
   document.body.classList.remove('avesso-app-active');
   $('#online-friends-dock')?.classList.add('hidden');
   state.profile=null;
-  state.isAdmin=false;state.adminRole=null;state.adminSnapshot=null;
+  state.isAdmin=false;state.adminRole=null;state.adminSnapshot=null;state.suspended=false;state.suspension=null;
+  document.body.classList.remove('account-suspended');
   $('#admin-nav-button')?.classList.add('hidden');
   $('#app-view').classList.add('hidden');
   $('#marketing-view').classList.remove('hidden');
@@ -3719,7 +3768,7 @@ async function saveProfileSettings(){
   if(error)return toast('O perfil resistiu à mudança. Tente novamente.');
   state.profile=data;
   await supabase.auth.updateUser({data:{display_name}}).catch(()=>{});
-  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?'<span class="nav-admin-crown" title="Administrador">♛</span>':''); renderNavAvatar();
+  $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):''); renderNavAvatar();
   toast('Seu Canto foi atualizado. Identidade salva sem pedir aprovação do algoritmo.');
   renderProfile();
 }
@@ -3891,7 +3940,7 @@ async function renderProfile(){
   $('#feed-list').innerHTML=`<section class="profile-control" style="--profile-wallpaper:url('${wallpaperUrl(state.profile.profile_wallpaper)}')">
     <header class="profile-control-hero">
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
-      <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${escapeHtml(state.profile.display_name)}${state.isAdmin?'<span class="admin-crown" title="Administrador do AVESSO" aria-label="Administrador">♛</span>':''}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
+      <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${escapeHtml(state.profile.display_name)}${state.isAdmin?adminCrownHtml('profile-admin-crown'):''}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
@@ -4205,4 +4254,5 @@ function showAuthLinkError(){
   if(!$('#auth-dialog').open)$('#auth-dialog').showModal();
 }
 
+await loadSiteSettings();
 const {data:{session}}=await supabase.auth.getSession();state.session=session;if(session)enterApp();else showAuthLinkError();
