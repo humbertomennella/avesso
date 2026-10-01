@@ -149,11 +149,28 @@
       return;
     }
     const icons={message:'↔',attention:'⚡',friend:'+',guestbook:'▤',story:'◫',photo:'▧',interaction:'♥'};
-    list.innerHTML=filtered.map(row=>`
-      <button type="button" class="mobile-ux-notification-item ${row.read?'':'unread'}" data-mobile-notification-id="${row.id}">
+    const groups=[];
+    const index=new Map();
+    filtered.forEach(row=>{
+      const canGroup=['interaction','story','photo'].includes(row.kind)&&row.target?.type&&row.target?.id;
+      const key=canGroup?`${row.kind}:${row.target.type}:${row.target.id}`:`row:${row.id}`;
+      if(canGroup&&index.has(key)){
+        const group=groups[index.get(key)];
+        group.count++;
+        group.read=group.read&&row.read;
+        if(row.createdAt>group.createdAt){group.createdAt=row.createdAt;group.body=row.body;group.id=row.id;}
+      }else{
+        index.set(key,groups.length);
+        groups.push({...row,count:1});
+      }
+    });
+    list.innerHTML=groups.map(row=>{
+      const groupedTitle=row.count>1?`${row.count} interações recentes`:row.title;
+      return `<button type="button" class="mobile-ux-notification-item ${row.read?'':'unread'}" data-mobile-notification-id="${row.id}">
         <i>${icons[row.kind]||'•'}</i>
-        <span><b>${escapeHtml(row.title)}</b><em>${escapeHtml(row.body)}</em><small>${timeAgo(row.createdAt)}</small></span>
-      </button>`).join('');
+        <span><b>${escapeHtml(groupedTitle)}</b><em>${escapeHtml(row.body)}</em><small>${timeAgo(row.createdAt)}</small></span>
+      </button>`;
+    }).join('');
   }
 
   function renderNotificationBadge(){
@@ -426,23 +443,41 @@
 
   function applyHashRoute(){
     if(!isMobile())return;
+    const hash=String(location.hash||'');
+    const raw=hash.replace(/^#/,'');
+    const exact=raw.match(/^(post|story|photo|chat|profile)\/([^/?#]+)/i);
+    if(exact){
+      const type=exact[1].toLowerCase();
+      const id=decodeURIComponent(exact[2]);
+      let attempts=0;
+      const timer=setInterval(()=>{
+        attempts++;
+        const app=q('#app-view');
+        const ready=app&&!app.classList.contains('hidden')&&q('#nav-handle')?.textContent&&!q('#nav-handle').textContent.includes('...');
+        if(ready){
+          clearInterval(timer);
+          const normalized=type==='profile'?'profile':type;
+          window.dispatchEvent(new CustomEvent('avesso:open-target',{detail:{target:{type:normalized,id}}}));
+        }else if(attempts>35)clearInterval(timer);
+      },120);
+      return;
+    }
     const map={
       '#para-cuidar':'feed','#feed':'feed',
       '#praca':'plaza','#praca-central':'plaza',
       '#amigos':'messages','#mensagens':'messages',
       '#seu-canto':'profile','#canto':'profile'
     };
-    const tab=map[String(location.hash||'').toLowerCase()];
-    if(!tab)return;
-    let attempts=0;
+    const tab=map[hash.toLowerCase()];if(!tab)return;
+    let tries=0;
     const timer=setInterval(()=>{
-      attempts++;
+      tries++;
       const app=q('#app-view');
       const button=q('[data-app-tab="'+tab+'"]');
       if(button&&app&&!app.classList.contains('hidden')){
         clearInterval(timer);
         if(!button.classList.contains('active'))button.click();
-      }else if(attempts>25)clearInterval(timer);
+      }else if(tries>30)clearInterval(timer);
     },120);
   }
 
