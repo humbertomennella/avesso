@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "AVESSO Presence",
-  "version": "0.1.0",
-  "description": "Ponte opcional para mostrar no AVESSO o que está tocando em serviços de música no navegador.",
+  "version": "0.2.0",
+  "description": "Ponte opcional para presença musical em tempo real e contexto de abas autorizado pelo usuário.",
   "permissions": ["tabs"],
   "host_permissions": [
     "https://humbertomennella.github.io/avesso/*",
