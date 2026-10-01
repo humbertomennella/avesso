@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, staffSection:'overview', staffDirectory:{}, staffByHandle:{}, userBadges:{}, badgeCatalog:{}, customAssets:[], customAssetBySlug:{}, customEmoticons:[], suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, staffSection:'overview', staffInternalChannel:null, staffDirectory:{}, staffByHandle:{}, userBadges:{}, badgeCatalog:{}, customAssets:[], customAssetBySlug:{}, customEmoticons:[], suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -1639,6 +1639,7 @@ function leaveApp(){
   state.pendingAttentionPeerId=null;
   stopPlazaRealtime();
   stopDirectRealtime();
+  stopStaffInternalRealtime();
   stopStoryRealtime();
   stopCornerMusic();
   closeStoryViewer();
@@ -2594,6 +2595,19 @@ async function loadStaffChat(channel='all'){
   host.innerHTML=(data||[]).map(m=>{const p=profiles[m.sender_id]||{};return '<article class="staff-chat-message '+(m.sender_id===state.profile.id?'mine':'')+'"><span class="mini-avatar">'+avatarHtml(p.avatar_url,p.display_name||'?')+'</span><div><header>'+identityNameHtml(m.sender_id,p.display_name||'staff')+'<small>@'+escapeHtml(p.handle||'...')+' · '+ago(m.created_at)+'</small></header><p>'+escapeHtml(m.body)+'</p></div></article>';}).join('')||'<p class="admin-empty">Canal vazio. Até a equipe conseguiu silêncio.</p>';
   host.scrollTop=host.scrollHeight;
 }
+function stopStaffInternalRealtime(){
+  if(state.staffInternalChannel){supabase.removeChannel(state.staffInternalChannel);state.staffInternalChannel=null;}
+}
+function startStaffInternalRealtime(){
+  stopStaffInternalRealtime();
+  if(!state.isAdmin)return;
+  state.staffInternalChannel=supabase.channel('avesso-staff-chat-'+state.profile.id+'-'+Date.now())
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_chat_messages'},payload=>{
+      if(state.tab!=='admin'||state.staffSection!=='staff_chat')return;
+      const selected=$('#staff-chat-channel')?.value||'all';
+      if(payload.new?.channel===selected)loadStaffChat(selected);
+    }).subscribe();
+}
 async function sendStaffChat(){
   const channel=$('#staff-chat-channel')?.value||'all';
   const input=$('#staff-chat-input');const body=String(input?.value||'').trim();
@@ -2826,7 +2840,7 @@ function bindDashboardSection(section,data){
   $('#owner-asset-upload')?.addEventListener('click',ownerUploadAsset);
   $('#database-refresh')?.addEventListener('click',renderDatabaseInventory);
   if(section==='content')renderStaffContent();
-  if(section==='staff_chat')loadStaffChat($('#staff-chat-channel')?.value||'all');
+  if(section==='staff_chat'){loadStaffChat($('#staff-chat-channel')?.value||'all');startStaffInternalRealtime();}else stopStaffInternalRealtime();
   if(section==='database')renderDatabaseInventory();
   bindProfileLinks();
 }
