@@ -404,6 +404,9 @@
   }
   function syncComposerVisibility(){
     if(!composerLauncher||!composer)return;
+    const launcherAvatar=composerLauncher.querySelector('.mobile-composer-avatar');
+    const navAvatar=qs('#nav-avatar');
+    if(launcherAvatar&&navAvatar&&launcherAvatar.innerHTML!==navAvatar.innerHTML)launcherAvatar.innerHTML=navAvatar.innerHTML;
     const onFeed=document.body.classList.contains('avesso-feed-home')&&!qs('#app-view')?.classList.contains('hidden');
     composerLauncher.classList.toggle('hidden',!onFeed);
     if(!onFeed)closeComposer();
