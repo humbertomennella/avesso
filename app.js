@@ -970,7 +970,22 @@ $('#resend-confirmation').onclick=async()=>{const email=new FormData($('#auth-fo
 
 function humanError(m){const value=String(m||'');const lower=value.toLowerCase();if(lower.includes('email not confirmed'))return'Confirme seu e-mail antes de entrar. Use o link mais recente ou solicite outro na aba de cadastro.';if(lower.includes('invalid login'))return'E-mail ou senha não conferem. Se você já confirmou, use a senha do cadastro.';if(lower.includes('already registered'))return'Este e-mail já tem cadastro. Use a aba de entrar.';if(lower.includes('expired')||lower.includes('otp_expired'))return'Este link expirou ou já foi utilizado. Se já confirmou, entre com sua senha.';if(lower.includes('password'))return'A senha precisa atender aos requisitos de segurança.';return value;}
 $('#logout').onclick=()=>supabase.auth.signOut();
-$('#nav-home-link').onclick=e=>{e.preventDefault();document.querySelector('[data-app-tab="feed"]')?.click();};
+async function goToFeedHome(){
+  if(!state.profile)return;
+  const previousTab=state.tab;
+  if(previousTab==='plaza')stopPlazaRealtime();
+  if(previousTab==='public_profile')stopCornerMusic();
+  autoMinimizeChat();
+  state.tab='feed';
+  bumpView();
+  document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x.dataset.appTab==='feed'));
+  $('#feed-heading').textContent='Quem precisa ser visto?';
+  applyAppTabLayout();
+  try{history.replaceState(null,'',location.pathname+location.search+'#para-cuidar');}catch{}
+  await loadStoriesStrip();
+  await loadFeed();
+}
+$('#nav-home-link').onclick=e=>{e.preventDefault();e.stopPropagation();goToFeedHome();};
 $('#nav-profile-link').onclick=()=>document.querySelector('[data-app-tab="profile"]')?.click();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
@@ -1752,7 +1767,7 @@ function renderOnlineFriendsDock(){
     <span><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small>${nowPlayingView(friend)?`<em>♫ ${escapeHtml(nowPlayingView(friend).title)}</em>`:''}</span>
     <i class="presence-dot online"></i>
   </button>`).join('')||'<div class="online-friends-empty">0 humanos online. o modem respira em paz.</div>';
-  list.querySelectorAll('[data-online-friend]').forEach(b=>b.onclick=()=>openFriendChat(b.dataset.onlineFriend));
+  list.querySelectorAll('[data-online-friend]').forEach(b=>b.onclick=()=>openQuickFriendChat(b.dataset.onlineFriend));
   dock.classList.remove('hidden');
   dock.classList.toggle('collapsed',state.onlineDockCollapsed);
   $('#online-friends-toggle')?.setAttribute('aria-expanded',String(!state.onlineDockCollapsed));
@@ -1860,6 +1875,25 @@ async function markDirectRead(id){
   if(!id||!state.profile?.id)return;
   await supabase.from('direct_messages').update({read_at:new Date().toISOString()}).eq('id',id).eq('recipient_id',state.profile.id).is('read_at',null);
 }
+function pulseIncomingChat(){
+  const win=$('#dm-floating-window');if(!win)return;
+  clearTimeout(state.incomingMessagePulseTimer);
+  win.classList.remove('incoming-pulse');
+  void win.offsetWidth;
+  win.classList.add('incoming-pulse');
+  state.incomingMessagePulseTimer=setTimeout(()=>win.classList.remove('incoming-pulse'),6200);
+}
+async function showIncomingChatMinimized(peerId){
+  if(!peerId)return;
+  state.chatWindowMinimized=true;
+  await openChatWindow(peerId,{keepMinimized:true,markRead:false});
+  state.chatWindowMinimized=true;
+  const win=ensureChatWindow();
+  win.classList.add('minimized');
+  win.classList.remove('hidden');
+  applyChatGeometry();
+  pulseIncomingChat();
+}
 async function receiveIncomingDirectMessage(m,{source='realtime'}={}){
   if(!m?.id||m.recipient_id!==state.profile?.id||m.sender_id===state.profile.id)return;
   if(!rememberDirectMessage(m.id))return;
@@ -1883,7 +1917,13 @@ async function receiveIncomingDirectMessage(m,{source='realtime'}={}){
   }else if(sameChat){
     const hydrated=await hydrateDirectMessage(m);
     appendDirectMessage(hydrated);
-    if(!document.hidden&&document.hasFocus())markDirectRead(m.id);
+    if(state.chatWindowMinimized){
+      pulseIncomingChat();
+    }else if(!document.hidden&&document.hasFocus()){
+      markDirectRead(m.id);
+    }
+  }else if(!muted){
+    await showIncomingChatMinimized(m.sender_id);
   }
 
   if(state.tab==='messages'&&!sameChat)renderMessagesPage();
@@ -1988,15 +2028,17 @@ function startDirectRealtime(){
   });
 }
 
-async function loadDirectConversation(peerId){
+async function loadDirectConversation(peerId,{markRead=true}={}){
   if(!peerId)return[];
   const me=state.profile.id;
   const {data,error}=await supabase.from('direct_messages').select('*')
     .or(`and(sender_id.eq.${me},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${me})`)
     .order('created_at',{ascending:true}).limit(250);
   if(error)return[];
-  await supabase.from('direct_messages').update({read_at:new Date().toISOString()})
-    .eq('sender_id',peerId).eq('recipient_id',me).is('read_at',null);
+  if(markRead){
+    await supabase.from('direct_messages').update({read_at:new Date().toISOString()})
+      .eq('sender_id',peerId).eq('recipient_id',me).is('read_at',null);
+  }
   const rows=data||[];
   rows.forEach(m=>{if(m.recipient_id===me)rememberDirectMessage(m.id);});
   return Promise.all(rows.map(hydrateDirectMessage));
@@ -2421,10 +2463,10 @@ function ensureChatWindow(){
   if(!win){win=document.createElement('section');win.id='dm-floating-window';win.className='dm-floating-window hidden';document.body.appendChild(win);}
   return win;
 }
-async function openChatWindow(peerId,{keepMinimized=false}={}){
+async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   if(!peerId)return;
   if(state.voiceRecorder&&state.voicePeerId&&state.voicePeerId!==peerId)cancelVoiceRecording(true);
-  const [peer,messages]=await Promise.all([profileById(peerId),loadDirectConversation(peerId)]);
+  const [peer,messages]=await Promise.all([profileById(peerId),loadDirectConversation(peerId,{markRead})]);
   if(!peer)return toast('Essa pessoa sumiu da lista. Dramático.');
   state.directPeerId=peerId;state.chatWindowOpen=true;
   if(!keepMinimized)state.chatWindowMinimized=false;
@@ -2621,6 +2663,10 @@ async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDu
     else appendDirectMessage(hydrated);
   }
   if(optimisticUrl)setTimeout(()=>URL.revokeObjectURL(optimisticUrl),500);
+}
+function openQuickFriendChat(peerId){
+  if(!peerId)return;
+  openChatWindow(peerId,{keepMinimized:false,markRead:true});
 }
 function openFriendChat(peerId){
   state.tab='messages';bumpView();applyAppTabLayout();
