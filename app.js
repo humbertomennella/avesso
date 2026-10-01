@@ -1597,7 +1597,7 @@ document.addEventListener('pointerdown',e=>{
 
 function preferredVoiceMime(){
   if(!window.MediaRecorder)return'';
-  const candidates=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4','audio/webm','audio/ogg'];
+  const candidates=['audio/ogg;codecs=opus','audio/webm;codecs=opus','audio/mp4','audio/ogg','audio/webm'];
   return candidates.find(type=>MediaRecorder.isTypeSupported?.(type))||'';
 }
 function voiceExtension(type=''){
@@ -1611,21 +1611,31 @@ function voiceElapsed(){
   const sec=Math.max(0,Math.floor((Date.now()-state.voiceStartedAt)/1000));
   return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
 }
-function syncVoiceRecordingUI(){
-  const btn=$('#dm-voice');
-  const cancel=$('#dm-voice-cancel');
-  const recording=state.voiceRecorder?.state==='recording';
-  if(btn){
-    btn.classList.toggle('recording',recording);
-    btn.textContent=recording?`■ enviar ${voiceElapsed()}`:'🎙 voz';
-    btn.title=recording?'Parar e enviar áudio':'Gravar mensagem de voz';
+function syncDmComposerAction(){
+  const input=$('#dm-input');
+  const btn=$('#dm-send-action');
+  if(!btn)return;
+  const hasText=Boolean(input?.value.trim());
+  const recording=state.voiceRecorder?.state==='recording'||state.voicePendingStart;
+  btn.classList.toggle('recording',recording);
+  btn.classList.toggle('text-ready',hasText&&!recording);
+  btn.type=hasText&&!recording?'submit':'button';
+  btn.setAttribute('aria-label',recording?'Solte para enviar áudio':hasText?'Enviar mensagem':'Segure para gravar áudio');
+  btn.title=recording?'Solte para enviar':hasText?'Enviar mensagem':'Segure para gravar voz';
+  if(recording){
+    btn.innerHTML=`<span class="dm-rec-dot"></span><b>REC ${voiceElapsed()}</b><small>solte</small>`;
+  }else if(hasText){
+    btn.innerHTML='<b>ENVIAR →</b>';
+  }else{
+    btn.innerHTML='<span class="avesso-mic-icon" aria-hidden="true"><i></i></span><small>SEGURE</small>';
   }
-  if(cancel)cancel.classList.toggle('hidden',!recording);
 }
+function syncVoiceRecordingUI(){syncDmComposerAction();}
 function clearVoiceRecordingState(){
   clearInterval(state.voiceTimer);
   state.voiceTimer=null;
   state.voiceRecorder=null;
+  state.voicePendingStart=false;
   state.voiceStream?.getTracks?.().forEach(track=>track.stop());
   state.voiceStream=null;
   state.voiceChunks=[];
@@ -1634,28 +1644,33 @@ function clearVoiceRecordingState(){
   syncVoiceRecordingUI();
 }
 function cancelVoiceRecording(quiet=false){
-  if(!state.voiceRecorder)return;
-  try{
-    state.voiceRecorder.onstop=null;
-    if(state.voiceRecorder.state!=='inactive')state.voiceRecorder.stop();
-  }catch{}
-  clearVoiceRecordingState();
-  if(!quiet)toast('Gravação cancelada. O microfone voltou a fingir que não ouviu nada.');
-}
-async function toggleVoiceRecording(){
-  if(state.voiceRecorder?.state==='recording'){
-    try{state.voiceRecorder.stop();}catch{}
-    return;
+  state.voiceHoldActive=false;
+  if(state.voiceRecorder){
+    try{
+      state.voiceRecorder.onstop=null;
+      if(state.voiceRecorder.state!=='inactive')state.voiceRecorder.stop();
+    }catch{}
   }
-  if(!state.directPeerId)return;
-  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return toast('Este navegador não oferece gravação de voz por aqui.');
+  clearVoiceRecordingState();
+  if(!quiet)toast('Gravação cancelada. O microfone voltou ao silêncio.');
+}
+async function startVoiceRecording({hold=false}={}){
+  if(state.voiceRecorder||state.voicePendingStart||!state.directPeerId)return false;
+  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toast('Este navegador não oferece gravação de voz por aqui.');return false;}
+  state.voicePendingStart=true;
+  syncVoiceRecordingUI();
   try{
     const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+    if(hold&&!state.voiceHoldActive){
+      stream.getTracks().forEach(track=>track.stop());
+      state.voicePendingStart=false;syncVoiceRecordingUI();return false;
+    }
     const mime=preferredVoiceMime();
     const recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
     const peerId=state.directPeerId;
     state.voiceStream=stream;
     state.voiceRecorder=recorder;
+    state.voicePendingStart=false;
     state.voiceChunks=[];
     state.voiceStartedAt=Date.now();
     state.voicePeerId=peerId;
@@ -1663,32 +1678,91 @@ async function toggleVoiceRecording(){
     recorder.onerror=()=>{clearVoiceRecordingState();toast('A gravação tropeçou no próprio cabo.');};
     recorder.onstop=async()=>{
       const chunks=[...state.voiceChunks];
-      const type=(recorder.mimeType||mime||'audio/webm').split(';')[0];
-      clearInterval(state.voiceTimer);
-      state.voiceTimer=null;
+      const type=(recorder.mimeType||mime||'audio/ogg').split(';')[0];
+      const startedAt=state.voiceStartedAt;
+      clearInterval(state.voiceTimer);state.voiceTimer=null;
       stream.getTracks().forEach(track=>track.stop());
-      const duration=Math.max(1,Math.round((Date.now()-state.voiceStartedAt)/1000));
-      state.voiceRecorder=null;state.voiceStream=null;state.voiceChunks=[];state.voiceStartedAt=0;state.voicePeerId=null;
+      state.voiceRecorder=null;state.voiceStream=null;state.voiceChunks=[];state.voiceStartedAt=0;state.voicePeerId=null;state.voicePendingStart=false;
       syncVoiceRecordingUI();
-      if(!chunks.length)return toast('O áudio terminou antes de começar. Um clássico.');
+      if(!chunks.length)return toast('O áudio terminou antes de começar.');
+      const duration=Math.max(1,Math.round((Date.now()-startedAt)/1000));
       const blob=new Blob(chunks,{type});
-      if(blob.size>10*1024*1024)return toast('Áudio acima de 10 MB. Nem a nostalgia justifica um podcast inteiro.');
+      if(blob.size>10*1024*1024)return toast('Áudio acima de 10 MB. Nem o AVESSO precisa de um podcast inteiro.');
       const ext=voiceExtension(type);
       const file=new File([blob],`voz-${Date.now()}.${ext}`,{type});
-      await sendDirectAttachment(file,{recipientId:peerId,voiceDuration:duration});
+      const optimisticId=`voice-local-${crypto.randomUUID()}`;
+      const optimisticUrl=URL.createObjectURL(blob);
+      if(state.chatWindowOpen&&state.directPeerId===peerId){
+        appendDirectMessage({
+          id:optimisticId,
+          sender_id:state.profile.id,
+          recipient_id:peerId,
+          body:`Mensagem de voz · ${duration}s`,
+          message_kind:'audio',
+          attachment_url:optimisticUrl,
+          attachment_name:file.name,
+          attachment_type:type,
+          attachment_size:file.size,
+          created_at:new Date().toISOString()
+        });
+      }
+      await sendDirectAttachment(file,{recipientId:peerId,voiceDuration:duration,optimisticId,optimisticUrl});
     };
-    recorder.start(250);
+    recorder.start();
     state.voiceTimer=setInterval(()=>{
       syncVoiceRecordingUI();
       if(Date.now()-state.voiceStartedAt>=180000&&state.voiceRecorder?.state==='recording')state.voiceRecorder.stop();
-    },500);
+    },250);
     syncVoiceRecordingUI();
+    return true;
   }catch(err){
     clearVoiceRecordingState();
     if(String(err?.name)==='NotAllowedError')return toast('O microfone foi bloqueado. Libere a permissão do site para enviar voz.');
     toast('Não consegui abrir o microfone. A tecnologia continua com senso de humor.');
+    return false;
   }
 }
+function stopVoiceRecording({send=true}={}){
+  state.voiceHoldActive=false;
+  if(!state.voiceRecorder){
+    if(!send){state.voicePendingStart=false;syncVoiceRecordingUI();}
+    return;
+  }
+  if(!send){
+    cancelVoiceRecording(true);
+    return;
+  }
+  try{
+    if(state.voiceRecorder.state==='recording')state.voiceRecorder.stop();
+  }catch{clearVoiceRecordingState();}
+}
+function bindHoldToTalk(){
+  const btn=$('#dm-send-action');
+  const input=$('#dm-input');
+  if(!btn||!input)return;
+  input.addEventListener('input',syncDmComposerAction);
+  btn.onpointerdown=e=>{
+    if(input.value.trim()||e.button!==0)return;
+    e.preventDefault();
+    try{btn.setPointerCapture(e.pointerId);}catch{}
+    state.voiceHoldActive=true;
+    startVoiceRecording({hold:true});
+  };
+  btn.onpointerup=e=>{
+    if(input.value.trim())return;
+    e.preventDefault();
+    state.voiceHoldActive=false;
+    stopVoiceRecording({send:true});
+  };
+  btn.onpointercancel=e=>{
+    if(input.value.trim())return;
+    e.preventDefault();
+    stopVoiceRecording({send:false});
+  };
+  btn.oncontextmenu=e=>{if(!input.value.trim())e.preventDefault();};
+  syncDmComposerAction();
+}
+
 const CHAT_GEOMETRY_KEY='avesso.chat.geometry.v2';
 function chatDesktopEnabled(){
   return window.matchMedia('(min-width: 761px) and (pointer:fine)').matches;
