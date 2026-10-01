@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -40,15 +40,23 @@ const ACID_REACTIONS=[
   ['humano_detectado','♡','humano detectado']
 ];
 const CHAT_THEMES=[
-  ['aqua','Aqua 2006','#3a8ea0'],
-  ['acid','Ácido','#b7e62d'],
-  ['violet','Violeta noturno','#7554c9'],
-  ['coral','Pânico coral','#db6557'],
-  ['midnight','Meia-noite azul','#315c91'],
-  ['graphite','Grafite morto','#555f67']
+  ['bbs_cyan','BBS Ciano','#22d9ee'],
+  ['phosphor_green','Fósforo Verde','#74ff4b'],
+  ['dos_amber','DOS Âmbar','#ffbf3f'],
+  ['arcade_violet','Arcade Violeta','#9b7cff'],
+  ['error_coral','Erro Coral','#ff6257'],
+  ['acid_terminal','Terminal Ácido','#d8ff3e'],
+  ['janela_95','Janela 95','#8aa8b0'],
+  ['midnight_modem','Modem Noturno','#4268a8'],
+  ['magenta_crt','CRT Magenta','#ff59d6'],
+  ['graphite_dos','Grafite DOS','#7b8588']
 ];
-function chatThemeClass(theme=state.profile?.chat_theme||'aqua'){
-  return CHAT_THEMES.some(x=>x[0]===theme)?`theme-${theme}`:'theme-aqua';
+const CHAT_WALLPAPERS=[['none','Sem fundo','o vazio também é um layout'],...WALLPAPER_OPTIONS];
+function chatThemeClass(theme=state.profile?.chat_theme||'bbs_cyan'){
+  return CHAT_THEMES.some(x=>x[0]===theme)?`theme-${theme}`:'theme-bbs_cyan';
+}
+function chatWallpaperCss(slug=state.profile?.chat_wallpaper||'none'){
+  return CHAT_WALLPAPERS.some(x=>x[0]===slug)&&slug!=='none'?`url("${wallpaperUrl(slug)}")`:'none';
 }
 function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.webp`;}
 function applyAppWallpaper(){
@@ -220,13 +228,14 @@ async function setChatTheme(theme){
   const {data,error}=await supabase.from('profiles').update({chat_theme:theme,updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
   if(error)return toast('A tinta digital derramou antes de chegar na janela.');
   state.profile=data;
-  const win=$('#dm-floating-window');
-  if(win){
-    CHAT_THEMES.forEach(([id])=>win.classList.remove(`theme-${id}`));
-    win.classList.add(chatThemeClass(theme));
-  }
-  $('.chat-theme-choice').forEach(b=>b.classList.toggle('active',b.dataset.chatTheme===theme));
-  toast('Cor da conversa alterada. Personalização venceu a padronização por alguns minutos.');
+  if(state.chatWindowOpen&&state.directPeerId)openChatWindow(state.directPeerId,{keepMinimized:true});
+}
+async function setChatWallpaper(slug){
+  if(!CHAT_WALLPAPERS.some(x=>x[0]===slug)||!state.profile?.id)return;
+  const {data,error}=await supabase.from('profiles').update({chat_wallpaper:slug,updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
+  if(error)return toast('O papel de parede caiu atrás do modem.');
+  state.profile=data;
+  if(state.chatWindowOpen&&state.directPeerId)openChatWindow(state.directPeerId,{keepMinimized:true});
 }
 async function blockChatPeer(peerId){
   if(!peerId||peerId===state.profile?.id)return;
@@ -988,7 +997,7 @@ function startDirectRealtime(){
       if(!muted){
         socialNotify({
           title:attention?`${sender?.display_name||'Alguém'} chamou sua atenção`:`Mensagem de ${sender?.display_name||'alguém'}`,
-          body:attention?'CHAMAR ATENÇÃO. O protocolo de 2006 foi executado.':(m.message_kind==='image'?'enviou uma imagem':m.message_kind==='file'?'enviou um arquivo':String(m.body||'').slice(0,90)),
+          body:attention?'CHAMAR ATENÇÃO. O protocolo de 2006 foi executado.':(m.message_kind==='image'?'enviou uma imagem':m.message_kind==='audio'?'enviou uma mensagem de voz':m.message_kind==='file'?'enviou um arquivo':String(m.body||'').slice(0,90)),
           avatar:sender?.avatar_url||'',kind:attention?'attention':'message',
           sound:!attention,
           action:()=>openFriendChat(m.sender_id)
@@ -1056,7 +1065,9 @@ function dmMessageHtml(m){
   if(m.message_kind==='attention')return `<article class="dm-attention-event">⚡ ${escapeHtml(m.body||'CHAMAR ATENÇÃO')} <small>${ago(m.created_at)}</small></article>`;
   const attachment=m.attachment_url?(m.message_kind==='image'
     ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}"></a>`
-    :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
+    :m.message_kind==='audio'
+      ?`<div class="dm-audio-card"><span>VOICE.MSG</span><audio controls preload="metadata" src="${escapeAttr(m.attachment_url)}"></audio></div>`
+      :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
   return `<article class="dm-bubble ${mine?'mine':'theirs'}">${m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p>${escapeHtml(m.body)}</p>`:''}${attachment}<small>${ago(m.created_at)}${mine&&m.read_at?' · lida':''}</small></article>`;
 }
 async function renderMessagesPage(){
@@ -1075,6 +1086,101 @@ async function renderMessagesPage(){
   $$('[data-open-chat]').forEach(b=>b.onclick=()=>openChatWindow(b.dataset.openChat));
   startDirectRealtime();
 }
+
+function preferredVoiceMime(){
+  if(!window.MediaRecorder)return'';
+  const candidates=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4','audio/webm','audio/ogg'];
+  return candidates.find(type=>MediaRecorder.isTypeSupported?.(type))||'';
+}
+function voiceExtension(type=''){
+  if(type.includes('ogg'))return'ogg';
+  if(type.includes('mp4'))return'm4a';
+  if(type.includes('mpeg'))return'mp3';
+  return'webm';
+}
+function voiceElapsed(){
+  if(!state.voiceStartedAt)return'0:00';
+  const sec=Math.max(0,Math.floor((Date.now()-state.voiceStartedAt)/1000));
+  return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
+}
+function syncVoiceRecordingUI(){
+  const btn=$('#dm-voice');
+  const cancel=$('#dm-voice-cancel');
+  const recording=state.voiceRecorder?.state==='recording';
+  if(btn){
+    btn.classList.toggle('recording',recording);
+    btn.textContent=recording?`■ enviar ${voiceElapsed()}`:'🎙 voz';
+    btn.title=recording?'Parar e enviar áudio':'Gravar mensagem de voz';
+  }
+  if(cancel)cancel.classList.toggle('hidden',!recording);
+}
+function clearVoiceRecordingState(){
+  clearInterval(state.voiceTimer);
+  state.voiceTimer=null;
+  state.voiceRecorder=null;
+  state.voiceStream?.getTracks?.().forEach(track=>track.stop());
+  state.voiceStream=null;
+  state.voiceChunks=[];
+  state.voiceStartedAt=0;
+  state.voicePeerId=null;
+  syncVoiceRecordingUI();
+}
+function cancelVoiceRecording(quiet=false){
+  if(!state.voiceRecorder)return;
+  try{
+    state.voiceRecorder.onstop=null;
+    if(state.voiceRecorder.state!=='inactive')state.voiceRecorder.stop();
+  }catch{}
+  clearVoiceRecordingState();
+  if(!quiet)toast('Gravação cancelada. O microfone voltou a fingir que não ouviu nada.');
+}
+async function toggleVoiceRecording(){
+  if(state.voiceRecorder?.state==='recording'){
+    try{state.voiceRecorder.stop();}catch{}
+    return;
+  }
+  if(!state.directPeerId)return;
+  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return toast('Este navegador não oferece gravação de voz por aqui.');
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+    const mime=preferredVoiceMime();
+    const recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
+    const peerId=state.directPeerId;
+    state.voiceStream=stream;
+    state.voiceRecorder=recorder;
+    state.voiceChunks=[];
+    state.voiceStartedAt=Date.now();
+    state.voicePeerId=peerId;
+    recorder.ondataavailable=e=>{if(e.data?.size)state.voiceChunks.push(e.data);};
+    recorder.onerror=()=>{clearVoiceRecordingState();toast('A gravação tropeçou no próprio cabo.');};
+    recorder.onstop=async()=>{
+      const chunks=[...state.voiceChunks];
+      const type=(recorder.mimeType||mime||'audio/webm').split(';')[0];
+      clearInterval(state.voiceTimer);
+      state.voiceTimer=null;
+      stream.getTracks().forEach(track=>track.stop());
+      const duration=Math.max(1,Math.round((Date.now()-state.voiceStartedAt)/1000));
+      state.voiceRecorder=null;state.voiceStream=null;state.voiceChunks=[];state.voiceStartedAt=0;state.voicePeerId=null;
+      syncVoiceRecordingUI();
+      if(!chunks.length)return toast('O áudio terminou antes de começar. Um clássico.');
+      const blob=new Blob(chunks,{type});
+      if(blob.size>10*1024*1024)return toast('Áudio acima de 10 MB. Nem a nostalgia justifica um podcast inteiro.');
+      const ext=voiceExtension(type);
+      const file=new File([blob],`voz-${Date.now()}.${ext}`,{type});
+      await sendDirectAttachment(file,{recipientId:peerId,voiceDuration:duration});
+    };
+    recorder.start(250);
+    state.voiceTimer=setInterval(()=>{
+      syncVoiceRecordingUI();
+      if(Date.now()-state.voiceStartedAt>=180000&&state.voiceRecorder?.state==='recording')state.voiceRecorder.stop();
+    },500);
+    syncVoiceRecordingUI();
+  }catch(err){
+    clearVoiceRecordingState();
+    if(String(err?.name)==='NotAllowedError')return toast('O microfone foi bloqueado. Libere a permissão do site para enviar voz.');
+    toast('Não consegui abrir o microfone. A tecnologia continua com senso de humor.');
+  }
+}
 function ensureChatWindow(){
   let win=$('#dm-floating-window');
   if(!win){win=document.createElement('section');win.id='dm-floating-window';win.className='dm-floating-window hidden';document.body.appendChild(win);}
@@ -1082,25 +1188,37 @@ function ensureChatWindow(){
 }
 async function openChatWindow(peerId,{keepMinimized=false}={}){
   if(!peerId)return;
+  if(state.voiceRecorder&&state.voicePeerId&&state.voicePeerId!==peerId)cancelVoiceRecording(true);
   const [peer,messages]=await Promise.all([profileById(peerId),loadDirectConversation(peerId)]);
   if(!peer)return toast('Essa pessoa sumiu da lista. Dramático.');
   state.directPeerId=peerId;state.chatWindowOpen=true;
   if(!keepMinimized)state.chatWindowMinimized=false;
   const p=presenceView(peer);
+  const mePresence=presenceView(state.profile);
   const muted=isPeerMuted(peerId);
-  const theme=state.profile?.chat_theme||'aqua';
+  const theme=state.profile?.chat_theme||'bbs_cyan';
+  const chatWallpaper=state.profile?.chat_wallpaper||'none';
   const win=ensureChatWindow();
   win.className=`dm-floating-window ${chatThemeClass(theme)} ${state.chatWindowMinimized?'minimized':''}`;
+  win.style.setProperty('--dm-chat-wallpaper',chatWallpaperCss(chatWallpaper));
   win.innerHTML=`<div class="dm-msn-titlebar" id="dm-floating-head">
-      <span class="dm-msn-appmark">▾ AVESSO Messenger</span>
+      <span class="dm-msn-appmark">▓ AVESSO.MSG</span>
       <button id="dm-restore-name" class="dm-title-peer" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}</button>
-      <span class="dm-msn-era">build 2006.2026</span>
+      <span class="dm-msn-era">56K // 2026</span>
       <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'□':'_'}</button><button id="dm-close" title="Fechar">×</button></div>
     </div>
     <header class="dm-floating-head">
       <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
-      <div><span class="dm-conversation-label">conversando com</span><button class="user-link" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
-      <span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span>
+      <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><button class="dm-peer-name" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
+      <div class="dm-head-actions"><span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span><button id="dm-options" class="dm-kebab" aria-label="Opções da conversa" title="Opções da conversa">•••</button></div>
+      <div id="dm-options-menu" class="dm-options-menu dm-options-menu-head hidden">
+        <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${escapeHtml(peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
+        <button id="dm-visit-profile">↗ visitar o Canto</button>
+        <button id="dm-mute-peer">${muted?'🔊 desmutar':'🔇 mutar'} notificações</button>
+        <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
+        <div class="dm-theme-section"><span>TEMA // PIXEL 199X → 2026</span><div class="dm-theme-grid">${CHAT_THEMES.map(([id,label,color])=>`<button type="button" class="chat-theme-choice ${theme===id?'active':''}" data-chat-theme="${id}" title="${escapeAttr(label)}"><i style="--theme-color:${color}"></i><b>${escapeHtml(label)}</b></button>`).join('')}</div></div>
+        <div class="dm-wallpaper-section"><span>FUNDO // CONVERSA</span><div class="dm-chat-wallpaper-grid">${CHAT_WALLPAPERS.map(([slug,name])=>`<button type="button" class="dm-chat-wallpaper ${chatWallpaper===slug?'active':''}" data-chat-wallpaper="${escapeAttr(slug)}" title="${escapeAttr(name)}" style="${slug==='none'?'':'--chat-thumb:url(\''+wallpaperUrl(slug)+'\')'}"><i></i><b>${escapeHtml(name)}</b></button>`).join('')}</div></div>
+      </div>
     </header>
     <div class="dm-window-body">
       <div class="dm-msn-conversation">
@@ -1111,25 +1229,23 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
           <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span>
         </aside>
         <div class="dm-log" id="dm-log">${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
+        <aside class="dm-msn-self" title="Seu perfil nesta conversa">
+          <div class="dm-msn-self-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
+          <b>VOCÊ</b>
+          <small>${escapeHtml(state.profile.display_name)}</small>
+          <span class="dm-msn-presence"><i class="presence-dot ${mePresence.mode}"></i> ${mePresence.label}</span>
+        </aside>
       </div>
       <div class="dm-tools">
         <button id="dm-attention" title="Chamar atenção">⚡ chamar atenção</button>
         <button id="dm-emoticons" title="Emoticons">☺ emoticons</button>
         <button id="dm-attach" title="Enviar arquivo ou imagem">📎 arquivo</button>
-        <div class="dm-options-wrap">
-          <button id="dm-options" title="Opções da conversa">⚙ opções</button>
-          <div id="dm-options-menu" class="dm-options-menu hidden">
-            <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${escapeHtml(peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
-            <button id="dm-visit-profile">↗ visitar o Canto</button>
-            <button id="dm-mute-peer">${muted?'🔊 desmutar':'🔇 mutar'} notificações</button>
-            <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
-            <div class="dm-theme-section"><span>cor da janela</span><div class="dm-theme-grid">${CHAT_THEMES.map(([id,label,color])=>`<button type="button" class="chat-theme-choice ${theme===id?'active':''}" data-chat-theme="${id}" title="${escapeAttr(label)}"><i style="--theme-color:${color}"></i><b>${escapeHtml(label)}</b></button>`).join('')}</div></div>
-          </div>
-        </div>
-        <input id="dm-file-input" type="file" hidden accept="image/*,.pdf,.txt,.zip,.docx">
+        <button id="dm-voice" class="dm-voice-button" title="Gravar mensagem de voz">🎙 voz</button>
+        <button id="dm-voice-cancel" class="dm-voice-cancel hidden" title="Cancelar gravação">× cancelar</button>
+        <input id="dm-file-input" type="file" hidden accept="image/*,audio/*,.pdf,.txt,.zip,.docx">
         <div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${['😀','😂','😅','🙃','👀','🤨','❤️','💀','🔥','☕','⚠️','🖥️','🐈','⌛','🫠','¯\\_(ツ)_/¯'].map(e=>`<button type="button" data-emoticon="${escapeAttr(e)}">${e}</button>`).join('')}</div>
       </div>
-      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem... e finja que não sente falta do MSN."><button>Enviar</button></form>
+      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem... ou grave voz no celular sem fingir que 2006 tinha tudo."><button>Enviar</button></form>
     </div>`;
   $('#dm-minimize').onclick=toggleChatMinimize;
   $('#dm-close').onclick=()=>closeChatWindow();
@@ -1142,12 +1258,16 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
   $$('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();});
   $('#dm-attach').onclick=()=>$('#dm-file-input').click();
   $('#dm-file-input').onchange=e=>{const f=e.target.files?.[0];if(f)sendDirectAttachment(f);};
+  $('#dm-voice').onclick=toggleVoiceRecording;
+  $('#dm-voice-cancel').onclick=()=>cancelVoiceRecording();
   $('#dm-options').onclick=e=>{e.stopPropagation();$('#dm-options-menu').classList.toggle('hidden');$('#dm-emoticon-palette')?.classList.add('hidden');};
   $('#dm-visit-profile').onclick=()=>{openPublicProfile(peerId);$('#dm-options-menu')?.classList.add('hidden');};
   $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
   $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
   $$('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
-  $('#dm-floating-head').ondblclick=e=>{if(e.target.closest('.dm-window-controls'))return;toggleChatMinimize();};
+  $$('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
+  $('#dm-floating-head').ondblclick=e=>{if(e.target.closest('.dm-window-controls,.dm-kebab,.dm-options-menu'))return;toggleChatMinimize();};
+  syncVoiceRecordingUI();
   const log=$('#dm-log');if(log)log.scrollTop=log.scrollHeight;
 }
 async function refreshChatWindow(){
@@ -1167,6 +1287,7 @@ function toggleChatMinimize(){
   if(!state.chatWindowMinimized)setTimeout(()=>$('#dm-input')?.focus(),80);
 }
 function closeChatWindow(silent=false){
+  if(state.voiceRecorder)cancelVoiceRecording(true);
   state.chatWindowOpen=false;state.chatWindowMinimized=false;state.directPeerId=null;
   const win=$('#dm-floating-window');if(win)win.classList.add('hidden');
   if(!silent)toast('Conversa fechada. Nenhum “tchau” automático foi enviado.');
@@ -1208,18 +1329,20 @@ async function sendAttention(){
   if(error)return toast('Nem chamar atenção chamou atenção.');
   playUiSound('attention');triggerChatNudge(state.directPeerId);triggerScreenNudge();await refreshChatWindow();
 }
-async function sendDirectAttachment(file){
-  if(!state.directPeerId||!file)return;
+async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDuration=0}={}){
+  if(!recipientId||!file)return;
   if(file.size>10*1024*1024)return toast('Até 10 MB por arquivo. A nostalgia não inclui conexão discada real.');
-  const allowed=/^(image\/(jpeg|png|webp|gif)|application\/pdf|text\/plain|application\/(zip|x-zip-compressed)|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/i.test(file.type||'');
+  const allowed=/^(image\/(jpeg|png|webp|gif)|audio\/(webm|ogg|mp4|mpeg|wav|x-wav|aac|x-m4a)|application\/pdf|text\/plain|application\/(zip|x-zip-compressed)|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/i.test(file.type||'');
   if(!allowed)return toast('Formato não aceito nessa conversa.');
-  const path=`${state.profile.id}/${state.directPeerId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
+  const path=`${state.profile.id}/${recipientId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
   const {error:upErr}=await supabase.storage.from('avesso-chat').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type});
   if(upErr)return toast('O arquivo caiu no chão antes de chegar.');
-  const kind=file.type.startsWith('image/')?'image':'file';
-  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:state.directPeerId,body:file.name,message_kind:kind,attachment_path:path,attachment_name:file.name,attachment_type:file.type,attachment_size:file.size});
+  const kind=file.type.startsWith('image/')?'image':file.type.startsWith('audio/')?'audio':'file';
+  const body=kind==='audio'?`Mensagem de voz${voiceDuration?' · '+voiceDuration+'s':''}`:file.name;
+  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:recipientId,body,message_kind:kind,attachment_path:path,attachment_name:file.name,attachment_type:file.type,attachment_size:file.size});
   if(error){await supabase.storage.from('avesso-chat').remove([path]);return toast('O banco recusou o pacote. Elegante.');}
-  await refreshChatWindow();
+  if(kind==='audio')toast('Mensagem de voz enviada. O modem imaginário sobreviveu.');
+  if(state.chatWindowOpen&&state.directPeerId===recipientId)await refreshChatWindow();
 }
 function openFriendChat(peerId){
   state.tab='messages';bumpView();applyAppTabLayout();
