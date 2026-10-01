@@ -476,6 +476,7 @@ async function saveListeningPrivacy(){
   if(error)return toast('A privacidade do som tropeçou no banco.');
   state.profile=data;
   refreshOwnNowPlayingPreview();
+  if(visible)window.postMessage({type:'AVESSO_PRESENCE_REQUEST'},location.origin);
   toast(visible?'“Ouvindo agora” visível. A trilha saiu do modo fantasma.':'“Ouvindo agora” oculto. Ninguém precisa saber de tudo.');
 }
 async function pushNowPlaying(payload){
