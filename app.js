@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -463,6 +463,17 @@ function nowPlayingHtml(profile,{compact=false}={}){
     ?`<a class="now-playing-status ${compact?'compact':''}" href="${escapeAttr(np.url)}" target="_blank" rel="noopener noreferrer">${content}</a>`
     :`<div class="now-playing-status ${compact?'compact':''}">${content}</div>`;
 }
+function chatNowPlayingHtml(profile,{compact=false}={}){
+  if(profile?.chat_listening_visible===false)return'';
+  return nowPlayingHtml(profile,{compact});
+}
+function syncPresenceCompanionConfig(){
+  if(!state.profile)return;
+  window.postMessage({
+    type:'AVESSO_PRESENCE_CONFIG',
+    shareContext:Boolean(state.profile.ai_browser_context_visible)
+  },location.origin);
+}
 function refreshOwnNowPlayingPreview(){
   const host=$('#profile-now-playing-preview');
   if(!host)return;
@@ -475,7 +486,12 @@ function refreshOwnNowPlayingPreview(){
 async function saveListeningPrivacy(){
   if(!state.profile?.id)return;
   const visible=Boolean($('#listening-visible')?.checked);
-  const patch={listening_visible:visible,updated_at:new Date().toISOString()};
+  const chatVisible=Boolean($('#chat-listening-visible')?.checked);
+  const patch={
+    listening_visible:visible,
+    chat_listening_visible:chatVisible,
+    updated_at:new Date().toISOString()
+  };
   if(!visible){
     Object.assign(patch,{now_playing_title:null,now_playing_artist:null,now_playing_source:null,now_playing_url:null,now_playing_updated_at:null,now_playing_manual:false});
   }
@@ -484,7 +500,7 @@ async function saveListeningPrivacy(){
   state.profile=data;
   refreshOwnNowPlayingPreview();
   if(visible)window.postMessage({type:'AVESSO_PRESENCE_REQUEST'},location.origin);
-  toast(visible?'“Ouvindo agora” visível. A trilha saiu do modo fantasma.':'“Ouvindo agora” oculto. Ninguém precisa saber de tudo.');
+  toast(visible?(chatVisible?'“Ouvindo agora” visível também nas conversas.':'Música visível no Canto e escondida nas conversas.'):'“Ouvindo agora” oculto. Ninguém precisa saber de tudo.');
 }
 async function pushNowPlaying(payload){
   if(!state.profile?.id||!state.profile.listening_visible)return;
@@ -495,7 +511,8 @@ async function pushNowPlaying(payload){
     url:String(payload.url||'').trim().slice(0,1000)
   }:null;
   const signature=clean?JSON.stringify(clean):'';
-  if(signature===state.lastNowPlayingSignature&&state.profile.now_playing_updated_at&&Date.now()-new Date(state.profile.now_playing_updated_at).getTime()<45000)return;
+  const changed=signature!==state.lastNowPlayingSignature;
+  if(!changed&&state.profile.now_playing_updated_at&&Date.now()-new Date(state.profile.now_playing_updated_at).getTime()<22000)return;
   state.lastNowPlayingSignature=signature;
   clearTimeout(state.nowPlayingPushTimer);
   state.nowPlayingPushTimer=setTimeout(async()=>{
@@ -514,8 +531,14 @@ async function pushNowPlaying(payload){
     if(error)return;
     state.profile=data;
     refreshOwnNowPlayingPreview();
-    if(state.chatWindowOpen&&state.directPeerId)updateOwnListeningInChat();
-  },450);
+    if(changed&&clean){
+      maybeAqueleReaction('music_changed',{
+        music_title:clean.title,
+        artist:clean.artist,
+        source:clean.source
+      },{chance:.52,cooldown:6*60*1000});
+    }
+  },260);
 }
 async function saveManualNowPlaying(){
   const input=$('#manual-now-playing-url');
@@ -561,18 +584,50 @@ async function stopNowPlayingStatus(){
   toast('Status musical encerrado.');
 }
 function updateOwnListeningInChat(){
-  const host=$('#dm-self-listening');
-  if(host)host.innerHTML=nowPlayingHtml(state.profile,{compact:true});
+  const option=$('#dm-show-listening');
+  if(option)option.checked=state.profile?.chat_listening_visible!==false;
 }
 window.addEventListener('message',event=>{
   if(event.source!==window||event.origin!==location.origin)return;
-  if(event.data?.type!=='AVESSO_NOW_PLAYING')return;
-  state.presenceBridgeSeen=true;
-  refreshOwnNowPlayingPreview();
-  pushNowPlaying(event.data.payload||null);
+  if(event.data?.type==='AVESSO_NOW_PLAYING'){
+    state.presenceBridgeSeen=true;
+    refreshOwnNowPlayingPreview();
+    pushNowPlaying(event.data.payload||null);
+    return;
+  }
+  if(event.data?.type==='AVESSO_CONTEXT_EVENT'){
+    state.browserContextBridgeSeen=true;
+    const context=event.data.context||{};
+    if(!state.profile?.ai_browser_context_visible)return;
+    const host=String(context.host||'').slice(0,120);
+    const tabTitle=String(context.title||'').slice(0,180);
+    if(!host&&!tabTitle)return;
+    maybeAqueleReaction('browser_tab_changed',{
+      host,
+      tab_title:tabTitle,
+      audible:Boolean(context.audible)
+    },{chance:.30,cooldown:6*60*1000});
+  }
 });
 
-function awayThresholdMs(profile){
+async function saveAIBrowserContextVisibility(){
+  if(!state.profile?.id)return;
+  const enabled=Boolean($('#ai-browser-context-visible')?.checked);
+  const {data,error}=await supabase.from('profiles').update({
+    ai_browser_context_visible:enabled,
+    updated_at:new Date().toISOString()
+  }).eq('id',state.profile.id).select().single();
+  if(error)return toast('A configuração do observador caiu atrás da cortina.');
+  state.profile=data;
+  syncPresenceCompanionConfig();
+  const status=$('#ai-browser-context-status');
+  if(status)status.textContent=enabled
+    ?'ATIVO // domínio, título visível da aba e áudio. Só isso.'
+    :'DESLIGADO // Aquele fica restrito ao que acontece dentro do AVESSO.';
+  toast(enabled?'Aquele pode notar trocas de aba. Não ganhou raio-X, felizmente.':'Contexto de outras abas desligado.');
+}
+
+function awayThresholdMs(profile){function awayThresholdMs(profile){
   const minutes=Number(profile?.away_after_minutes);
   if(minutes===0)return Infinity;
   return (Number.isFinite(minutes)&&[5,10,15,20,30].includes(minutes)?minutes:10)*60*1000;
@@ -618,6 +673,11 @@ document.addEventListener('visibilitychange',()=>{
     return;
   }
   startPresenceHeartbeat();
+  if(state.world.pendingAquele){
+    const payload=state.world.pendingAquele;
+    state.world.pendingAquele=null;
+    setTimeout(()=>deliverAqueleReaction(payload),700);
+  }
   if(state.pendingAttentionPeerId){
     const peerId=state.pendingAttentionPeerId;
     state.pendingAttentionPeerId=null;
@@ -685,6 +745,30 @@ async function toggleMutePeer(peerId){
   toast(muted?'Contato desmutado. Os bipes voltaram ao mercado.':'Contato mutado. Mensagens chegam, sua paz fica menos negociável.');
   if(state.chatWindowOpen&&state.directPeerId===peerId)openChatWindow(peerId,{keepMinimized:true});
   return !muted;
+}
+async function saveChatListeningVisibility(visible){
+  if(!state.profile?.id)return;
+  const {data,error}=await supabase.from('profiles').update({
+    chat_listening_visible:Boolean(visible),
+    updated_at:new Date().toISOString()
+  }).eq('id',state.profile.id).select().single();
+  if(error)return toast('A música se recusou a respeitar a cortina.');
+  state.profile=data;
+  const profileToggle=$('#chat-listening-visible');
+  if(profileToggle)profileToggle.checked=Boolean(visible);
+  toast(visible?'Música visível nas conversas.':'Música escondida nas conversas.');
+}
+async function saveQuickChatStatus(){
+  if(!state.profile?.id)return;
+  const input=$('#dm-status-message');
+  const status_message=String(input?.value||'').replace(/[\u0000-\u001F\u007F]/g,'').trim().slice(0,140);
+  const {data,error}=await supabase.from('profiles').update({
+    status_message,
+    updated_at:new Date().toISOString()
+  }).eq('id',state.profile.id).select().single();
+  if(error)return toast('O status entrou em crise de identidade.');
+  state.profile=data;
+  toast(status_message?'Status salvo. Agora ele pode ser julgado em silêncio.':'Status removido.');
 }
 async function setChatTheme(theme){
   if(!CHAT_THEMES.some(x=>x[0]===theme)||!state.profile?.id)return;
@@ -870,6 +954,49 @@ async function askWorldCharacter(trigger,options={}){
     return null;
   }
 }
+function deliverAqueleReaction(payload){
+  if(!payload?.character||!payload?.interaction?.body)return;
+  if(payload.delivery==='message'){
+    socialNotify({
+      title:'Aquele que Lê Tudo',
+      body:payload.interaction.body,
+      kind:'world',
+      sound:false
+    });
+  }else{
+    showEncounter(payload);
+  }
+}
+async function maybeAqueleReaction(trigger,metadata={},options={}){
+  if(!state.session||!state.profile)return null;
+  if(state.world.preferences?.participation_mode==='observer')return null;
+  const chance=Number.isFinite(options.chance)?options.chance:.16;
+  const cooldown=Number.isFinite(options.cooldown)?options.cooldown:5*60*1000;
+  const stableMeta=Object.entries(metadata||{}).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>`${k}=${String(v).slice(0,100)}`).join('|');
+  const key=`${trigger}|${stableMeta}`;
+  const storedAt=Number(localStorage.getItem('avesso.aquele.lastAt')||0);
+  const storedKey=localStorage.getItem('avesso.aquele.lastKey')||'';
+  const lastAt=Math.max(state.world.lastAqueleAt||0,storedAt);
+  if(Date.now()-lastAt<cooldown||key===state.world.lastAqueleKey||key===storedKey)return null;
+  if(Math.random()>chance)return null;
+  state.world.lastAqueleAt=Date.now();
+  state.world.lastAqueleKey=key;
+  try{
+    localStorage.setItem('avesso.aquele.lastAt',String(state.world.lastAqueleAt));
+    localStorage.setItem('avesso.aquele.lastKey',key);
+  }catch{}
+  const payload=await askWorldCharacter(trigger,{
+    character:'aquele_le_tudo',
+    action_type:trigger,
+    surface:state.tab||'app',
+    metadata,
+    silent:true
+  });
+  if(!payload)return null;
+  if(document.hidden)state.world.pendingAquele=payload;
+  else deliverAqueleReaction(payload);
+  return payload;
+}
 function scheduleIdleWorld(){
   clearTimeout(state.world.idleTimer);
   if(!state.session)return;
@@ -1008,7 +1135,7 @@ $('#nav-home-link').onclick=e=>{e.preventDefault();e.stopPropagation();goToFeedH
 $('#nav-profile-link').onclick=()=>document.querySelector('[data-app-tab="profile"]')?.click();
 
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
-async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();await loadWorldState();await loadBlockedPeers();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();setupOnlineFriendsDock();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
+async function enterApp(){ $('#marketing-view').classList.add('hidden');$('.site-header').classList.add('hidden');$('.site-footer').classList.add('hidden');$('#app-view').classList.remove('hidden');const {data}=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();state.profile=data;if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return}$('#nav-name').textContent=data.display_name;$('#nav-handle').textContent='@'+data.handle;renderNavAvatar();applyAppWallpaper();syncPresenceCompanionConfig();await loadWorldState();await loadBlockedPeers();await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip()]);subscribeRealtime();await primeFriendPresenceCache();await loadMutedPeers();setupOnlineFriendsDock();startFriendPresenceWatch();registerNotificationWorker();armBrowserNotifications();startDirectRealtime();startStoryRealtime();loadStoryNotifications();startPresenceHeartbeat();scheduleIdleWorld();scheduleTowerPulse();trackAction('login','app');setTimeout(notifyPendingFriendRequests,900);setTimeout(()=>askWorldCharacter('login',{action_type:'login',surface:'app'}),1400);}
 function leaveApp(){clearTimeout(state.world.idleTimer);clearTimeout(state.world.towerTimer);clearTimeout(state.nowPlayingPushTimer);clearInterval(state.presenceTimer);clearInterval(state.presenceWatchTimer);state.friendPresence={};state.mutedPeers={};state.blockedPeers={};state.pendingAttentionPeerId=null;stopPlazaRealtime();stopDirectRealtime();stopStoryRealtime();stopCornerMusic();closeStoryViewer();closeChatWindow(true);document.body.classList.remove('avesso-app-active');$('#online-friends-dock')?.classList.add('hidden');state.profile=null;$('#app-view').classList.add('hidden');$('#marketing-view').classList.remove('hidden');$('.site-header').classList.remove('hidden');$('.site-footer').classList.remove('hidden');}
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
@@ -1043,7 +1170,71 @@ $('#post-image').addEventListener('change',e=>{
   $('#image-preview').classList.remove('hidden');
   trackAction('image_selected','composer',{type:file.type,size:file.size});
 });
-$('#remove-image').onclick=()=>{state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');};
+$('#remove-image').onclick=()=>{
+  state.postImageFile=null;
+  state.postGifUrl='';
+  $('#post-image').value='';
+  if($('#post-gif-file'))$('#post-gif-file').value='';
+  if($('#post-gif-url'))$('#post-gif-url').value='';
+  $('#image-preview').classList.add('hidden');
+};
+function directGifUrl(raw){
+  const value=String(raw||'').trim();
+  if(!value)return'';
+  try{
+    const url=new URL(value);
+    if(!['http:','https:'].includes(url.protocol))return'';
+    const host=url.hostname.toLowerCase();
+    const gifPath=/\.gif(?:$|[?#])/i.test(url.href);
+    const knownHost=['media.giphy.com','i.giphy.com','media.tenor.com','c.tenor.com'].some(x=>host===x||host.endsWith('.'+x));
+    return gifPath||knownHost?url.href:'';
+  }catch{return'';}
+}
+$('#post-gif-toggle').onclick=()=>{
+  const row=$('#post-gif-row');
+  const open=row.classList.toggle('hidden')===false;
+  $('#post-gif-toggle').classList.toggle('active',open);
+  if(open)setTimeout(()=>$('#post-gif-url')?.focus(),40);
+};
+$('#post-gif-file').onchange=e=>{
+  const file=e.target.files?.[0]||null;
+  if(!file)return;
+  if(file.type!=='image/gif'){e.target.value='';return toast('Esse arquivo não é GIF. O nome do botão tentou avisar.');}
+  if(file.size>8*1024*1024){e.target.value='';return toast('GIF acima de 8 MB. Até nostalgia precisa de limite.');}
+  state.postImageFile=file;
+  state.postGifUrl='';
+  $('#post-image').value='';
+  $('#post-gif-url').value='';
+  const url=URL.createObjectURL(file);
+  $('#image-preview-img').src=url;
+  $('#image-preview-name').textContent=file.name;
+  $('#image-preview').classList.remove('hidden');
+  $('#post-gif-status').textContent='GIF local pronto para o feed.';
+};
+$('#post-gif-url').oninput=e=>{
+  const url=directGifUrl(e.target.value);
+  state.postGifUrl=url;
+  const status=$('#post-gif-status');
+  if(!e.target.value.trim()){status.textContent='arquivo ou link direto. GIF não precisa virar startup.';return;}
+  if(!url){status.textContent='link não parece apontar para um GIF direto.';return;}
+  state.postImageFile=null;
+  $('#post-gif-file').value='';
+  $('#post-image').value='';
+  $('#image-preview-img').src=url;
+  $('#image-preview-name').textContent='GIF por link';
+  $('#image-preview').classList.remove('hidden');
+  status.textContent='GIF reconhecido · pronto para se mexer inutilmente.';
+};
+$('#post-gif-clear').onclick=()=>{
+  state.postGifUrl='';
+  state.postImageFile=null;
+  $('#post-gif-file').value='';
+  $('#post-gif-url').value='';
+  $('#post-gif-row').classList.add('hidden');
+  $('#post-gif-toggle').classList.remove('active');
+  $('#image-preview').classList.add('hidden');
+  $('#post-gif-status').textContent='arquivo ou link direto. GIF não precisa virar startup.';
+};
 $('#post-media-link-toggle').onclick=()=>{
   const row=$('#post-media-link-row');
   const open=row.classList.toggle('hidden')===false;
@@ -1316,21 +1507,22 @@ $('#publish-post').onclick=async()=>{
   const external=parseExternalMediaLink($('#post-media-link')?.value||'');
   if($('#post-media-link')?.value.trim()&&!external)return toast('Esse link não é um YouTube ou Spotify reconhecível.');
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
-  if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||external))return toast('Imagem e mídia incorporada privadas ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
-  if(body.length<3&&!state.postImageFile&&!external)return toast('Dê ao menos uma frase, imagem ou link de YouTube/Spotify. Telepatia ainda não foi integrada.');
+  if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||state.postGifUrl||external))return toast('Imagem e mídia incorporada privadas ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
+  if(body.length<3&&!state.postImageFile&&!state.postGifUrl&&!external)return toast('Dê ao menos uma frase, imagem ou link de YouTube/Spotify. Telepatia ainda não foi integrada.');
   $('#publish-post').disabled=true;
-  let image_url=null,media_url=external?.url||null,media_kind=external?.kind||null;
+  let image_url=state.postGifUrl||null,media_url=external?.url||null,media_kind=external?.kind||null;
   try{
-    image_url=await uploadPostImage();
+    if(!image_url)image_url=await uploadPostImage();
   }catch(e){
     $('#publish-post').disabled=false;
     console.error('media upload failed',e);
     return toast('A mídia tropeçou no upload. A internet fingiu que era 1998 de novo.');
   }
+  const gifSelected=Boolean(state.postGifUrl||state.postImageFile?.type==='image/gif');
   const {data:createdPost,error}=await supabase.from('posts').insert({
     author_id:state.profile.id,
     recipient_id:directed?state.recipient.id:null,
-    body:body||(media_kind==='youtube'?'Vídeo do YouTube publicado no AVESSO.':media_kind==='spotify'?'Spotify publicado no AVESSO.':media_kind==='video'?'Vídeo publicado no AVESSO.':media_kind==='audio'?'Áudio publicado no AVESSO.':'Imagem publicada no AVESSO.'),
+    body:body||(media_kind==='youtube'?'Vídeo do YouTube publicado no AVESSO.':media_kind==='spotify'?'Spotify publicado no AVESSO.':media_kind==='video'?'Vídeo publicado no AVESSO.':media_kind==='audio'?'Áudio publicado no AVESSO.':gifSelected?'GIF publicado no AVESSO.':'Imagem publicada no AVESSO.'),
     image_url,
     media_url,
     media_kind,
@@ -1339,15 +1531,20 @@ $('#publish-post').onclick=async()=>{
   $('#publish-post').disabled=false;
   if(error)return toast('Não foi possível publicar. Tente novamente.');
   $('#post-body').value='';$('#recipient-search').value='';$('#char-count').textContent='420';state.recipient=null;
-  state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');
+  state.postImageFile=null;state.postGifUrl='';$('#post-image').value='';$('#image-preview').classList.add('hidden');
+  if($('#post-gif-file'))$('#post-gif-file').value='';
+  if($('#post-gif-url'))$('#post-gif-url').value='';
+  if($('#post-gif-row'))$('#post-gif-row').classList.add('hidden');
+  if($('#post-gif-toggle'))$('#post-gif-toggle').classList.remove('active');
+  if($('#post-gif-status'))$('#post-gif-status').textContent='arquivo ou link direto. GIF não precisa virar startup.';
   state.postMediaFile=null;
   if($('#post-media-link'))$('#post-media-link').value='';
   if($('#post-media-link-row'))$('#post-media-link-row').classList.add('hidden');
   if($('#post-media-link-toggle'))$('#post-media-link-toggle').classList.remove('active');
   if($('#post-media-link-status'))$('#post-media-link-status').textContent='link reconhecido vira player, não caça-clique';
-  const mediaLabel=media_kind==='youtube'?'Vídeo do YouTube incorporado ao feed.':media_kind==='spotify'?'Spotify incorporado ao feed.':media_kind==='video'?'Vídeo entregue ao feed.':media_kind==='audio'?'Áudio entregue ao feed.':image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
+  const mediaLabel=media_kind==='youtube'?'Vídeo do YouTube incorporado ao feed.':media_kind==='spotify'?'Spotify incorporado ao feed.':media_kind==='video'?'Vídeo entregue ao feed.':media_kind==='audio'?'Áudio entregue ao feed.':gifSelected?'GIF entregue ao feed. A internet de 2004 exigiu royalties emocionais.':image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
   toast(mediaLabel);
-  trackAction(media_kind?`${media_kind}_posted`:image_url?'image_posted':'post_created','composer',{directed,media_kind});
+  trackAction(media_kind?`${media_kind}_posted`:gifSelected?'gif_posted':image_url?'image_posted':'post_created','composer',{directed,media_kind});
   if(isFeedTab())loadFeed();
   loadImpact();
   if(createdPost?.id)setTimeout(()=>askWorldCharacter(image_url?'image_posted':'post_created',{post_id:createdPost.id,action_type:image_url?'image_posted':'post_created',surface:'feed'}),500);
@@ -1788,11 +1985,11 @@ async function acceptedFriendProfiles(){
     .or(`requester_id.eq.${state.profile.id},addressee_id.eq.${state.profile.id}`);
   const ids=[...new Set((rels||[]).map(r=>r.requester_id===state.profile.id?r.addressee_id:r.requester_id))];
   if(!ids.length)return[];
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').in('id',ids);
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,chat_listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').in('id',ids);
   return data||[];
 }
 async function profileById(id){
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').eq('id',id).maybeSingle();
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,chat_listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').eq('id',id).maybeSingle();
   return data||null;
 }
 function cachedPresenceEntry(profile){
@@ -2291,17 +2488,21 @@ function updateChatPeerHeader(peer){
     title.title=`Abrir conversa com ${peer.display_name}`;
   }
   const name=$('#dm-peer-profile-name');if(name)name.textContent=peer.display_name;
-  const small=$('.dm-peer-heading small');
+  const status=$('#dm-peer-status');
+  if(status){
+    status.textContent=peer.status_message||'';
+    status.title=peer.status_message||'';
+    status.classList.toggle('hidden',!peer.status_message);
+  }
+  const small=$('.dm-peer-heading>small');
   if(small)small.innerHTML=`<i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}`;
   const listening=$('#dm-peer-listening');
-  if(listening)listening.innerHTML=nowPlayingHtml(peer,{compact:true});
-  const sideListening=$('#dm-peer-side-listening');
-  if(sideListening)sideListening.innerHTML=nowPlayingHtml(peer,{compact:true});
+  if(listening)listening.innerHTML=chatNowPlayingHtml(peer,{compact:true});
   const orb=$('.dm-msn-status-orb');
   if(orb){orb.className=`dm-msn-status-orb ${p.mode}`;orb.title=p.label;}
 }
 
-async function renderMessagesPage(){
+async function renderMessagesPage(){async function renderMessagesPage(){
   if(state.tab!=='messages')return;
   const friends=await acceptedFriendProfiles();
   if(state.tab!=='messages')return;
@@ -2713,14 +2914,14 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
     </div>
     <header class="dm-floating-head">
       <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
-      <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><button class="dm-peer-name" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small><div id="dm-peer-listening" class="dm-listening-line">${nowPlayingHtml(peer,{compact:true})}</div></div>
+      <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><div class="dm-peer-identity-row"><button class="dm-peer-name" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><span id="dm-peer-status" class="dm-user-status ${peer.status_message?'':'hidden'}" title="${escapeAttr(peer.status_message||'')}">${escapeHtml(peer.status_message||'')}</span><div id="dm-peer-listening" class="dm-listening-inline">${chatNowPlayingHtml(peer,{compact:true})}</div></div><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
       <div class="dm-head-actions"><span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span><button id="dm-options" class="dm-kebab" aria-label="Opções da conversa" title="Opções da conversa">•••</button></div>
       <div id="dm-options-menu" class="dm-options-menu dm-options-menu-head hidden">
         <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${escapeHtml(peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
         <button id="dm-visit-profile">↗ visitar o Canto</button>
         <button id="dm-mute-peer">${muted?'🔊 desmutar':'🔇 mutar'} notificações</button>
         <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
-        <label class="dm-away-setting"><span>MINHA AUSÊNCIA AUTOMÁTICA</span><select id="dm-away-after"><option value="5">5 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option><option value="20">20 minutos</option><option value="30">30 minutos</option><option value="0">nunca</option></select></label>
+        <label class="dm-away-setting"><span>MINHA AUSÊNCIA AUTOMÁTICA</span><select id="dm-away-after"><option value="5">5 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option><option value="20">20 minutos</option><option value="30">30 minutos</option><option value="0">nunca</option></select></label><label class="dm-chat-listening-setting"><input id="dm-show-listening" type="checkbox" ${state.profile.chat_listening_visible!==false?'checked':''}><span><b>mostrar minha música nas conversas</b><small>o Canto pode continuar mostrando mesmo se você esconder daqui</small></span></label><div class="dm-status-setting"><span>MEU STATUS</span><div><input id="dm-status-message" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"><button id="dm-save-status" type="button">salvar</button></div></div>
         <div class="dm-theme-section"><span>TEMA // PIXEL 199X → 2026</span><div class="dm-theme-grid">${CHAT_THEMES.map(([id,label,color])=>`<button type="button" class="chat-theme-choice ${theme===id?'active':''}" data-chat-theme="${id}" title="${escapeAttr(label)}"><i style="--theme-color:${color}"></i><b>${escapeHtml(label)}</b></button>`).join('')}</div></div>
         <div class="dm-wallpaper-section"><span>FUNDO // CONVERSA</span><div class="dm-chat-wallpaper-grid">${CHAT_WALLPAPERS.map(([slug,name])=>`<button type="button" class="dm-chat-wallpaper ${chatWallpaper===slug?'active':''}" data-chat-wallpaper="${escapeAttr(slug)}" title="${escapeAttr(name)}" style="${slug==='none'?'':'--chat-thumb:url(\''+wallpaperUrl(slug)+'\')'}"><i></i><b>${escapeHtml(name)}</b></button>`).join('')}</div></div>
       </div>
@@ -2730,15 +2931,15 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
         <aside class="dm-msn-peer">
           <div class="dm-msn-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</div>
           <b>${escapeHtml(peer.display_name)}</b>
-          <small>${escapeHtml(peer.status_message||'online o suficiente')}</small>
-          <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span><div id="dm-peer-side-listening" class="dm-side-listening">${nowPlayingHtml(peer,{compact:true})}</div>
+          <small>@${escapeHtml(peer.handle)}</small>
+          <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span>
         </aside>
         <div class="dm-log" id="dm-log">${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
         <aside class="dm-msn-self" title="Seu perfil nesta conversa">
           <div class="dm-msn-self-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
           <b>VOCÊ</b>
-          <small>${escapeHtml(state.profile.display_name)}</small>
-          <span class="dm-msn-presence"><i class="presence-dot ${mePresence.mode}"></i> ${mePresence.label}</span><div id="dm-self-listening" class="dm-side-listening">${nowPlayingHtml(state.profile,{compact:true})}</div>
+          <small>@${escapeHtml(state.profile.handle)}</small>
+          <span class="dm-msn-presence"><i class="presence-dot ${mePresence.mode}"></i> ${mePresence.label}</span>
         </aside>
       </div>
       <div class="dm-tools">
@@ -2768,6 +2969,8 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
   $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
   const awaySelect=$('#dm-away-after');if(awaySelect){awaySelect.value=String(state.profile.away_after_minutes??10);awaySelect.onchange=e=>saveAwayAfterMinutes(e.target.value);}
+  const showListening=$('#dm-show-listening');if(showListening)showListening.onchange=e=>saveChatListeningVisibility(e.target.checked);
+  const saveStatus=$('#dm-save-status');if(saveStatus)saveStatus.onclick=saveQuickChatStatus;
   $('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
   $$('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
   installChatDesktopWindowing();
@@ -3180,8 +3383,8 @@ async function renderProfile(){
       <div id="profile-story-list" class="profile-story-list"><p class="story-empty">procurando coisas que ainda não expiraram...</p></div>
     </section>
     <div class="profile-settings-grid">
-      <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Mensagem de status<input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Aparecer como<select id="profile-presence"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
-      <section class="profile-settings-card listening-privacy-card"><span class="section-code">PRIVACIDADE // OUVINDO AGORA</span><h3>Seu player não precisa virar testemunha</h3><label class="listening-privacy-switch"><input id="listening-visible" type="checkbox" ${state.profile.listening_visible?'checked':''}><span><b>mostrar o que estou ouvindo</b><small>aparece no Meu Canto e nas conversas enquanto estiver recente</small></span></label><div id="profile-now-playing-preview" class="profile-now-playing-preview">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty">nada detectado agora. o silêncio também tem presença.</div>'}</div><div class="manual-now-playing"><span>SEM PONTE? // COLE O QUE ESTÁ TOCANDO</span><input id="manual-now-playing-url" type="url" inputmode="url" autocomplete="off" placeholder="YouTube ou Spotify"><div><button id="save-manual-now-playing" type="button">usar este link</button><button id="stop-now-playing" type="button">parar de ouvir</button></div></div><button id="save-listening-privacy" type="button">salvar privacidade</button><small id="listening-bridge-status">${state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // use o link manual ou o AVESSO Presence'}</small><em>A detecção automática de outras abas exige o AVESSO Presence. Sem ele, o link manual funciona no desktop e no celular. Navegadores comuns não deixam um site bisbilhotar o resto do aparelho. Uma rara decisão sensata.</em></section>
+      <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Status ao lado do nome <small>aparece de forma compacta nas conversas</small><input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Aparecer como<select id="profile-presence"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
+      <section class="profile-settings-card listening-privacy-card"><span class="section-code">PRIVACIDADE // OUVINDO AGORA</span><h3>Seu player não precisa virar testemunha</h3><label class="listening-privacy-switch"><input id="listening-visible" type="checkbox" ${state.profile.listening_visible?'checked':''}><span><b>mostrar o que estou ouvindo</b><small>ativa o status musical no seu Canto</small></span></label><label class="listening-privacy-switch"><input id="chat-listening-visible" type="checkbox" ${state.profile.chat_listening_visible!==false?'checked':''}><span><b>mostrar também nas conversas</b><small>fica ao lado do seu nome, sem ocupar a coluna do avatar</small></span></label><div id="profile-now-playing-preview" class="profile-now-playing-preview">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty">nada detectado agora. o silêncio também tem presença.</div>'}</div><div class="manual-now-playing"><span>SEM PONTE? // COLE O QUE ESTÁ TOCANDO</span><input id="manual-now-playing-url" type="url" inputmode="url" autocomplete="off" placeholder="YouTube ou Spotify"><div><button id="save-manual-now-playing" type="button">usar este link</button><button id="stop-now-playing" type="button">parar de ouvir</button></div></div><button id="save-listening-privacy" type="button">salvar privacidade</button><small id="listening-bridge-status">${state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // use o link manual ou o AVESSO Presence'}</small><em>A detecção automática de outras abas exige o AVESSO Presence. Sem ele, o link manual funciona no desktop e no celular. Navegadores comuns não deixam um site bisbilhotar o resto do aparelho. Uma rara decisão sensata.</em></section>
       <section class="profile-settings-card security-card"><span class="section-code">CONTA // SEGURANÇA</span><p><b>E-mail</b><br>${escapeHtml(state.session?.user?.email||'')}</p><label>Nova senha<input id="profile-password" type="password" minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password"></label><button id="change-password">alterar senha</button><small>Seu @ continua estável para links. Seu nome exibido pode trocar de personalidade quantas vezes quiser.</small></section>
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
@@ -3201,6 +3404,7 @@ async function renderProfile(){
       <button class="world-mode-option ${mode==='world'?'active':''}" data-world-mode="world"><strong>MUNDO ${mode==='world'?'<i>ATIVO</i>':''}</strong><small>Visitas, falas e acontecimentos. Sem vandalismo cosmético pessoal.</small></button>
       <button class="world-mode-option ${mode==='chaos'?'active':''}" data-world-mode="chaos"><strong>CAOS ${mode==='chaos'?'<i>ATIVO</i>':''}</strong><small>404 pode interagir pessoalmente. A sabotagem visual continua controlada pelo sistema global.</small></button>
     </div>
+    <label class="ai-browser-context-setting"><input id="ai-browser-context-visible" type="checkbox" ${state.profile.ai_browser_context_visible?'checked':''}><span><b>Aquele que Lê Tudo pode notar quando eu troco de aba</b><small>requer AVESSO Presence. A ponte envia somente domínio, título visível da aba e se há áudio; não lê formulários, mensagens ou o conteúdo interno da página.</small></span></label><small id="ai-browser-context-status">${state.profile.ai_browser_context_visible?'ATIVO // domínio, título visível da aba e áudio. Só isso.':'DESLIGADO // Aquele fica restrito ao que acontece dentro do AVESSO.'}</small>
     <div class="world-pref-foot"><span id="profile-world-status">carregando modo...</span><small>${interferenceOnline?'Interferências visuais globais estão online.':'O motor visual ainda está bloqueado globalmente.'} Personagens nunca reescrevem o que você publicou.</small></div>
   </section>`;
   $('#open-avatar-picker').onclick=openAvatarDialog;
@@ -3209,6 +3413,7 @@ async function renderProfile(){
   $('#save-listening-privacy').onclick=saveListeningPrivacy;
   $('#save-manual-now-playing').onclick=saveManualNowPlaying;
   $('#stop-now-playing').onclick=stopNowPlayingStatus;
+  const browserContextToggle=$('#ai-browser-context-visible');if(browserContextToggle)browserContextToggle.onchange=saveAIBrowserContextVisibility;
   $('#change-password').onclick=changePassword;
   $('#profile-presence').value=state.profile.presence_mode||'online';
   $('#profile-presence').onchange=e=>setPresenceMode(e.target.value);
@@ -3419,6 +3624,7 @@ document.addEventListener('click',e=>{
     const noisySurface=target.closest('.dm-floating-window,.social-notifications,dialog,form,.guestbook-composer,.plaza-chat-room');
     if(worldSurface&&!noisySurface){
       setTimeout(()=>maybeWorldCharacter('screen_action',{action_type:label,surface:state.tab,metadata:{control:label}},.10,180000),650);
+      setTimeout(()=>maybeAqueleReaction('aquele_observed',{control:label,surface:state.tab},{chance:.12,cooldown:5*60*1000}),900);
     }
   }
 },{passive:true});
@@ -3459,6 +3665,7 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'character_interactions'},payload=>{
       const row=payload.new||{};
       if(row.trigger_type==='plaza_chat')return;
+      if(['music_changed','browser_tab_changed','aquele_observed'].includes(row.trigger_type))return;
       if(row.user_id&&row.user_id!==state.profile?.id&&row.visibility!=='world')return;
       const c=state.world.charactersById[row.character_id];
       if(state.tab==='plaza'&&c?.slug!=='npc')return;
