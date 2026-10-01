@@ -439,7 +439,7 @@ function runSocialNotificationQueue(){
   if(item.sound!==false)playUiSound(item.kind==='friend'?'friend':item.kind==='attention'?'attention':item.kind==='online'?'online':item.kind==='guestbook'?'guestbook':'message');
   setTimeout(dismiss,5000);
 }
-const NOW_PLAYING_TTL_MS=180000;
+const NOW_PLAYING_TTL_MS=35000;
 function nowPlayingView(profile){
   if(!profile?.listening_visible||!profile.now_playing_title)return null;
   if(!profile.now_playing_manual){
