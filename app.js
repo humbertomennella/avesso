@@ -3814,8 +3814,32 @@ async function openNowSurface(){
   host.querySelectorAll('[data-discovery-post]').forEach(b=>b.onclick=()=>{dialog.close();openFeedPostFromNotification(b.dataset.discoveryPost);});
   host.querySelectorAll('[data-open-plaza-now]').forEach(b=>b.onclick=()=>{dialog.close();document.querySelector('[data-app-tab="plaza"]')?.click();});
 }
+async function openHealthSurface(){
+  if(!state.isAdmin)return toast('Saúde do sistema é território administrativo.');
+  const dialog=ensureDiscoveryDialog();
+  const host=$('#avesso-discovery-content');
+  host.innerHTML='<div class="discovery-loading">HEALTH.EXE // perguntando aos servidores se eles ainda respiram...</div>';
+  if(!dialog.open)dialog.showModal();
+  const started=performance.now();
+  const {data,error}=await supabase.rpc('avesso_health_snapshot');
+  const latency=Math.round(performance.now()-started);
+  if(error){host.innerHTML='<div class="discovery-empty">Não consegui montar o diagnóstico. O médico também caiu.</div>';return;}
+  const errors=Array.isArray(data?.latest_client_errors)?data.latest_client_errors:[];
+  const status=latency<500?'OK':latency<1200?'LENTO':'ATENÇÃO';
+  host.innerHTML=`<header class="discovery-head"><span>HEALTH.EXE // ADMIN</span><h2>Saúde do AVESSO</h2><p>Uma visão pequena, mas melhor que descobrir falhas por print.</p></header>
+    <section class="health-grid">
+      <article><span>API</span><b>${status}</b><small>${latency} ms</small></article>
+      <article><span>USUÁRIOS</span><b>${Number(data?.profiles||0)}</b><small>perfis</small></article>
+      <article><span>FEED</span><b>${Number(data?.posts||0)}</b><small>posts</small></article>
+      <article><span>CHAT</span><b>${Number(data?.messages||0)}</b><small>mensagens</small></article>
+      <article><span>PUSH</span><b>${Number(data?.push_subscriptions||0)}</b><small>assinaturas</small></article>
+      <article><span>ERROS 24H</span><b>${Number(data?.client_errors_24h||0)}</b><small>${Number(data?.client_errors_1h||0)} na última hora</small></article>
+    </section>
+    <section class="discovery-group"><h3>ÚLTIMOS ERROS</h3><div class="health-error-list">${errors.map(row=>`<article><b>${escapeHtml(row.message||'erro')}</b><small>${escapeHtml(row.route||row.source||'web')} · ${ago(row.created_at)}</small></article>`).join('')||'<p class="discovery-empty">Nenhum erro registrado. Isso é permitido.</p>'}</div></section>`;
+}
 window.addEventListener('avesso:open-search',openGlobalSearch);
 window.addEventListener('avesso:open-now',openNowSurface);
+window.addEventListener('avesso:open-health',openHealthSurface);
 async function openFeedPostFromNotification(postId){
   document.querySelector('[data-app-tab="feed"]')?.click();
   setTimeout(()=>document.querySelector(`[data-post-card="${CSS.escape(String(postId))}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),520);
