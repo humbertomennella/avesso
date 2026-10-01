@@ -2035,7 +2035,7 @@ function startDirectRealtime(){
         updateOwnListeningInChat();
       }
       if(state.tab==='messages')renderMessagesPage();
-      if(state.chatWindowOpen&&state.directPeerId===p.id&&!state.chatWindowMinimized)updateChatPeerHeader(p);
+      if(state.chatWindowOpen&&state.directPeerId===p.id)updateChatPeerHeader(p);
       if(state.tab==='public_profile'&&state.publicProfileId===p.id){
         const host=$('#public-now-playing');
         if(host)host.innerHTML=nowPlayingHtml(p);
@@ -2551,6 +2551,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
         <button id="dm-visit-profile">↗ visitar o Canto</button>
         <button id="dm-mute-peer">${muted?'🔊 desmutar':'🔇 mutar'} notificações</button>
         <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
+        <label class="dm-away-setting"><span>MINHA AUSÊNCIA AUTOMÁTICA</span><select id="dm-away-after"><option value="5">5 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option><option value="20">20 minutos</option><option value="30">30 minutos</option><option value="0">nunca</option></select></label>
         <div class="dm-theme-section"><span>TEMA // PIXEL 199X → 2026</span><div class="dm-theme-grid">${CHAT_THEMES.map(([id,label,color])=>`<button type="button" class="chat-theme-choice ${theme===id?'active':''}" data-chat-theme="${id}" title="${escapeAttr(label)}"><i style="--theme-color:${color}"></i><b>${escapeHtml(label)}</b></button>`).join('')}</div></div>
         <div class="dm-wallpaper-section"><span>FUNDO // CONVERSA</span><div class="dm-chat-wallpaper-grid">${CHAT_WALLPAPERS.map(([slug,name])=>`<button type="button" class="dm-chat-wallpaper ${chatWallpaper===slug?'active':''}" data-chat-wallpaper="${escapeAttr(slug)}" title="${escapeAttr(name)}" style="${slug==='none'?'':'--chat-thumb:url(\''+wallpaperUrl(slug)+'\')'}"><i></i><b>${escapeHtml(name)}</b></button>`).join('')}</div></div>
       </div>
@@ -2597,7 +2598,8 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('#dm-visit-profile').onclick=()=>{openPublicProfile(peerId);$('#dm-options-menu')?.classList.add('hidden');};
   $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
   $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
-  $$('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
+  const awaySelect=$('#dm-away-after');if(awaySelect){awaySelect.value=String(state.profile.away_after_minutes??10);awaySelect.onchange=e=>saveAwayAfterMinutes(e.target.value);}
+  $('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
   $$('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
   installChatDesktopWindowing();
   syncVoiceRecordingUI();
@@ -2625,6 +2627,7 @@ function toggleChatMinimize(){
     if(state.directPeerId){
       supabase.from('direct_messages').update({read_at:new Date().toISOString()})
         .eq('sender_id',state.directPeerId).eq('recipient_id',state.profile.id).is('read_at',null).then(()=>{});
+      profileById(state.directPeerId).then(updateChatPeerHeader);
     }
   }
   applyChatGeometry();
