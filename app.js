@@ -18,7 +18,22 @@ function bumpView(){ state.viewVersion+=1; return state.viewVersion; }
 const AVATAR_OPTIONS=[
   ['Humano 01','assets/avatars/humano-01.svg','humano'],['Humano 02','assets/avatars/humano-02.svg','humano'],['Humano 03','assets/avatars/humano-03.svg','humano'],
   ['Humana 01','assets/avatars/humana-01.svg','humana'],['Humana 02','assets/avatars/humana-02.svg','humana'],['Humana 03','assets/avatars/humana-03.svg','humana'],
-  ['Robô 01','assets/avatars/robo-01.svg','robo'],['Robô 02','assets/avatars/robo-02.svg','robo'],['Robô 03','assets/avatars/robo-03.svg','robo']
+  ['Robô 01','assets/avatars/robo-01.svg','robo'],['Robô 02','assets/avatars/robo-02.svg','robo'],['Robô 03','assets/avatars/robo-03.svg','robo'],
+  ['Mago AVESSO','assets/avatars/mago-avesso.webp','mago'],
+  ['Guerreiro AVESSO','assets/avatars/guerreiro-avesso.webp','guerreiro'],
+  ['Paladina AVESSO','assets/avatars/paladina-avesso.webp','paladina'],
+  ['Ladrão AVESSO','assets/avatars/ladrao-avesso.webp','ladrao'],
+  ['Barda AVESSO','assets/avatars/barda-avesso.webp','barda'],
+  ['Elfa AVESSO','assets/avatars/elfa-avesso.webp','elfa'],
+  ['Orc AVESSO','assets/avatars/orc-avesso.webp','orc'],
+  ['Robô CRT','assets/avatars/robo-crt-avesso.webp','robo'],
+  ['Ciborgue AVESSO','assets/avatars/ciborgue-avesso.webp','ciborgue'],
+  ['Entidade AVESSO','assets/avatars/entidade-avesso.webp','entidade'],
+  ['Anão AVESSO','assets/avatars/anao-avesso.webp','anao'],
+  ['Alienígena AVESSO','assets/avatars/alienigena-avesso.webp','alienigena'],
+  ['Lich AVESSO','assets/avatars/lich-avesso.webp','lich'],
+  ['Engenheira AVESSO','assets/avatars/engenheira-avesso.webp','engenheira'],
+  ['Robô AVESSO','assets/avatars/robo-avesso.webp','robo']
 ];
 const WALLPAPER_OPTIONS=[
   ['cidade-56k','Cidade 56K','conectando desde 1998'],
