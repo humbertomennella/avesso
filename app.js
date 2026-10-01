@@ -552,13 +552,14 @@ document.addEventListener('visibilitychange',()=>{
   if(state.pendingAttentionPeerId){
     const peerId=state.pendingAttentionPeerId;
     state.pendingAttentionPeerId=null;
-    state.chatWindowMinimized=true;
-    openChatWindow(peerId,{keepMinimized:true}).then(()=>{
-      state.chatWindowMinimized=true;
+    openChatWindow(peerId,{keepMinimized:false}).then(()=>{
+      state.chatWindowMinimized=false;
       const win=ensureChatWindow();
-      win.classList.add('minimized');
+      win.classList.remove('minimized','hidden','docked-minimized');
       applyChatGeometry();
       triggerChatNudge(peerId);
+      triggerScreenNudge();
+      playUiSound('attention');
     });
   }
 });
@@ -1768,12 +1769,7 @@ async function receiveIncomingDirectMessage(m,{source='realtime'}={}){
 
   const sameChat=state.chatWindowOpen&&state.directPeerId===m.sender_id;
   if(attention&&!muted){
-    if(document.hidden||!document.hasFocus()){
-      state.pendingAttentionPeerId=m.sender_id;
-      if(sameChat)autoMinimizeChat();
-    }else{
-      await receiveAttention(m.sender_id,m);
-    }
+    await receiveAttention(m.sender_id,m);
   }else if(sameChat){
     const hydrated=await hydrateDirectMessage(m);
     appendDirectMessage(hydrated);
@@ -1910,6 +1906,10 @@ function updateChatPeerHeader(peer){
   const name=$('#dm-peer-profile-name');if(name)name.textContent=peer.display_name;
   const small=$('.dm-peer-heading small');
   if(small)small.innerHTML=`<i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}`;
+  const listening=$('#dm-peer-listening');
+  if(listening)listening.innerHTML=nowPlayingHtml(peer,{compact:true});
+  const sideListening=$('#dm-peer-side-listening');
+  if(sideListening)sideListening.innerHTML=nowPlayingHtml(peer,{compact:true});
   const orb=$('.dm-msn-status-orb');
   if(orb){orb.className=`dm-msn-status-orb ${p.mode}`;orb.title=p.label;}
 }
@@ -2277,7 +2277,7 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
     </div>
     <header class="dm-floating-head">
       <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
-      <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><button class="dm-peer-name" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
+      <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><button class="dm-peer-name" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small><div id="dm-peer-listening" class="dm-listening-line">${nowPlayingHtml(peer,{compact:true})}</div></div>
       <div class="dm-head-actions"><span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span><button id="dm-options" class="dm-kebab" aria-label="Opções da conversa" title="Opções da conversa">•••</button></div>
       <div id="dm-options-menu" class="dm-options-menu dm-options-menu-head hidden">
         <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${escapeHtml(peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
@@ -2294,14 +2294,14 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
           <div class="dm-msn-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</div>
           <b>${escapeHtml(peer.display_name)}</b>
           <small>${escapeHtml(peer.status_message||'online o suficiente')}</small>
-          <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span>
+          <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span><div id="dm-peer-side-listening" class="dm-side-listening">${nowPlayingHtml(peer,{compact:true})}</div>
         </aside>
         <div class="dm-log" id="dm-log">${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
         <aside class="dm-msn-self" title="Seu perfil nesta conversa">
           <div class="dm-msn-self-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
           <b>VOCÊ</b>
           <small>${escapeHtml(state.profile.display_name)}</small>
-          <span class="dm-msn-presence"><i class="presence-dot ${mePresence.mode}"></i> ${mePresence.label}</span>
+          <span class="dm-msn-presence"><i class="presence-dot ${mePresence.mode}"></i> ${mePresence.label}</span><div id="dm-self-listening" class="dm-side-listening">${nowPlayingHtml(state.profile,{compact:true})}</div>
         </aside>
       </div>
       <div class="dm-tools">
@@ -2382,22 +2382,21 @@ function triggerChatNudge(peerId){
 }
 async function receiveAttention(peerId,message=null){
   if(!peerId)return;
-  if(document.hidden||!document.hasFocus()){
-    state.pendingAttentionPeerId=peerId;
-    autoMinimizeChat();
-    return;
-  }
   const alreadyOpen=state.chatWindowOpen&&state.directPeerId===peerId;
-  if(!alreadyOpen)await openChatWindow(peerId);
+  if(!alreadyOpen)await openChatWindow(peerId,{keepMinimized:false});
   else if(message)appendDirectMessage(message);
   state.chatWindowMinimized=false;
   const win=ensureChatWindow();
-  win.classList.remove('minimized','hidden');
+  win.classList.remove('minimized','hidden','docked-minimized');
   applyChatGeometry();
-  if(message?.id)markDirectRead(message.id);
+  if(message?.id&&!document.hidden)markDirectRead(message.id);
   triggerChatNudge(peerId);
-  triggerScreenNudge();
   playUiSound('attention');
+  if(document.hidden||!document.hasFocus()){
+    state.pendingAttentionPeerId=peerId;
+    return;
+  }
+  triggerScreenNudge();
 }
 async function sendDirectMessage(e){
   e?.preventDefault();
@@ -2519,6 +2518,7 @@ async function answerFriendRequest(id,accept){
     if(peer)state.friendPresence[peer.id]=cachedPresenceEntry(peer);
   }
   toast(accept?'Amizade aceita. Nenhum algoritmo comemorou.':'Pedido recusado. A civilização continua.');
+  await primeFriendPresenceCache();
   loadFriendPanel();
 }
 async function removeFriendship(id){
@@ -2526,6 +2526,7 @@ async function removeFriendship(id){
   const {error}=await supabase.from('friendships').delete().eq('id',id);
   if(error)return toast('Não foi possível remover agora.');
   toast('Amizade removida.');
+  await primeFriendPresenceCache();
   loadFriendPanel();
 }
 function openAvatarDialog(){
@@ -2724,6 +2725,7 @@ async function renderProfile(){
     </section>
     <div class="profile-settings-grid">
       <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Mensagem de status<input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Aparecer como<select id="profile-presence"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
+      <section class="profile-settings-card listening-privacy-card"><span class="section-code">PRIVACIDADE // OUVINDO AGORA</span><h3>Seu player não precisa virar testemunha</h3><label class="listening-privacy-switch"><input id="listening-visible" type="checkbox" ${state.profile.listening_visible?'checked':''}><span><b>mostrar o que estou ouvindo</b><small>aparece no Meu Canto e nas conversas enquanto estiver recente</small></span></label><div id="profile-now-playing-preview" class="profile-now-playing-preview">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty">nada detectado agora. o silêncio também tem presença.</div>'}</div><button id="save-listening-privacy" type="button">salvar privacidade</button><small id="listening-bridge-status">${state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // site sozinho não consegue ler outras abas ou apps'}</small><em>Detecção automática de outras abas/aplicativos exige o AVESSO Presence. Navegadores não entregam esse dado a sites comuns, porque às vezes a privacidade ainda vence.</em></section>
       <section class="profile-settings-card security-card"><span class="section-code">CONTA // SEGURANÇA</span><p><b>E-mail</b><br>${escapeHtml(state.session?.user?.email||'')}</p><label>Nova senha<input id="profile-password" type="password" minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password"></label><button id="change-password">alterar senha</button><small>Seu @ continua estável para links. Seu nome exibido pode trocar de personalidade quantas vezes quiser.</small></section>
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
@@ -2748,6 +2750,7 @@ async function renderProfile(){
   $('#open-avatar-picker').onclick=openAvatarDialog;
   $('#profile-story-create').onclick=openStoryCreate;
   $('#save-profile-settings').onclick=saveProfileSettings;
+  $('#save-listening-privacy').onclick=saveListeningPrivacy;
   $('#change-password').onclick=changePassword;
   $('#profile-presence').value=state.profile.presence_mode||'online';
   $('#profile-presence').onchange=e=>setPresenceMode(e.target.value);
@@ -2877,7 +2880,7 @@ async function openPublicProfile(userId){
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   applyAppTabLayout();$('#feed-status').classList.add('hidden');
   const [profileRes,friendship]=await Promise.all([
-    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen,corner_music_url,corner_music_enabled').eq('id',userId).maybeSingle(),
+    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen,corner_music_url,corner_music_enabled,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at').eq('id',userId).maybeSingle(),
     getFriendshipWith(userId)
   ]);
   if(state.tab!=='public_profile'||state.publicProfileId!==userId)return;
@@ -2892,7 +2895,7 @@ async function openPublicProfile(userId){
     : '<div class="guestbook-locked">Recados são para amigos. Civilização mínima, aparentemente.</div>';
   $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
-    <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</p><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</p>${nowPlayingHtml(p)}<p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
     <section class="public-story-section">
       <span class="section-code">STORIES // AINDA NÃO EXPIRARAM</span>
       <h2>Stories de ${escapeHtml(p.display_name)}</h2>
