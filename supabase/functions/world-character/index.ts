@@ -123,6 +123,7 @@ Deno.serve(async (req: Request) => {
       .select("created_at")
       .eq("character_id", character.id)
       .not("post_id", "is", null)
+      .contains("metadata", { review_user_id: userId })
       .gte("created_at", new Date(Date.now() - 7 * 60 * 1000).toISOString())
       .limit(1);
     if (recentAlgo?.length) return json({ skipped: true, reason: "algo_feed_cooldown" });
@@ -370,7 +371,7 @@ Deno.serve(async (req: Request) => {
       source,
       visibility,
       expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-      metadata: { model: source === "ai" ? model : null, interaction_kind: interactionKind, reaction: reactionId },
+      metadata: { model: source === "ai" ? model : null, interaction_kind: interactionKind, reaction: reactionId, review_user_id: feedReviewTrigger ? userId : null },
     })
     .select("id,body,source,visibility,created_at")
     .single();
