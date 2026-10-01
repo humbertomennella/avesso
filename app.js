@@ -717,7 +717,7 @@ async function markPresenceOffline({keepalive=false}={}){
       return;
     }catch{}
   }
-  await supabase.from('profiles').update(patch).eq('id',profileId).catch(()=>{});
+  try{await supabase.from('profiles').update(patch).eq('id',profileId);}catch{}
 }
 function startPresenceHeartbeat(){
   clearInterval(state.presenceTimer);
