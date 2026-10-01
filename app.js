@@ -3710,9 +3710,16 @@ function appendDirectMessage(m,{replaceId=null}={}){
   bindDirectMessageActions(log);
   log.scrollTop=log.scrollHeight;
 }
+async function markDirectDelivered(id){
+  if(!id||!state.profile?.id)return;
+  await supabase.from('direct_messages').update({delivered_at:new Date().toISOString()})
+    .eq('id',id).eq('recipient_id',state.profile.id).is('delivered_at',null);
+}
 async function markDirectRead(id){
   if(!id||!state.profile?.id)return;
-  await supabase.from('direct_messages').update({read_at:new Date().toISOString()}).eq('id',id).eq('recipient_id',state.profile.id).is('read_at',null);
+  const now=new Date().toISOString();
+  await supabase.from('direct_messages').update({read_at:now,delivered_at:now})
+    .eq('id',id).eq('recipient_id',state.profile.id).is('read_at',null);
 }
 function pulseIncomingChat(){
   const win=$('#dm-floating-window');if(!win)return;
@@ -3736,6 +3743,7 @@ async function showIncomingChatMinimized(peerId){
 async function receiveIncomingDirectMessage(m,{source='realtime'}={}){
   if(!m?.id||m.recipient_id!==state.profile?.id||m.sender_id===state.profile.id)return;
   if(!rememberDirectMessage(m.id))return;
+  markDirectDelivered(m.id);
   const sender=await profileById(m.sender_id);
   const attention=m.message_kind==='attention';
   const muted=isPeerMuted(m.sender_id);
@@ -4083,7 +4091,8 @@ async function loadDirectConversation(peerId,{markRead=true}={}){
     return cached;
   }
   if(markRead){
-    await supabase.from('direct_messages').update({read_at:new Date().toISOString()})
+    const readNow=new Date().toISOString();
+    await supabase.from('direct_messages').update({read_at:readNow,delivered_at:readNow})
       .eq('sender_id',peerId).eq('recipient_id',me).is('read_at',null);
   }
   const raw=(data||[]);
@@ -4170,7 +4179,7 @@ function dmMessageHtml(m){
   const grouped={};
   (m.reactions||[]).forEach(r=>{const key=String(r.reaction||'');if(key)(grouped[key]??=[]).push(r);});
   const reactionSummary=Object.entries(grouped).map(([reaction,rows])=>`<button type="button" class="dm-reaction-chip ${rows.some(r=>r.user_id===state.profile.id)?'active':''}" data-dm-react="${messageId}" data-reaction="${escapeAttr(reaction)}">${escapeHtml(reaction)} <b>${rows.length}</b></button>`).join('');
-  const receipt=mine?(m.read_at?'✓✓ lida':'✓ enviada'):'';
+  const receipt=mine?(m.read_at?'✓✓ lida':m.delivered_at?'✓✓ entregue':'✓ enviada'):'';
   const edited=m.edited_at?' · editada':'';
   const ownerActions=mine?`<button type="button" data-dm-edit="${messageId}" title="Editar">✎</button><button type="button" data-dm-delete="${messageId}" class="danger" title="Apagar">×</button>`:'';
   const actions=`<div class="dm-bubble-actions"><button type="button" data-dm-reply="${messageId}" title="Responder">↩</button><button type="button" data-dm-react-menu="${messageId}" title="Reagir">☺</button>${ownerActions}</div><div class="dm-quick-reactions hidden" data-dm-react-palette="${messageId}">${['♥','😂','👀','⚡','✓','🙃'].map(r=>`<button type="button" data-dm-react="${messageId}" data-reaction="${r}">${r}</button>`).join('')}</div>`;
@@ -4980,7 +4989,8 @@ function toggleChatMinimize(){
     clearTimeout(state.incomingMessagePulseTimer);
     win.classList.remove('incoming-pulse');
     if(state.directPeerId){
-      supabase.from('direct_messages').update({read_at:new Date().toISOString()})
+      const readNow=new Date().toISOString();
+      supabase.from('direct_messages').update({read_at:readNow,delivered_at:readNow})
         .eq('sender_id',state.directPeerId).eq('recipient_id',state.profile.id).is('read_at',null).then(()=>{});
       profileById(state.directPeerId).then(updateChatPeerHeader);
     }
