@@ -2008,6 +2008,9 @@ function startDirectRealtime(){
   startDirectFallbackPoll();
   const channel=supabase.channel(`avesso-social-${me}-${Date.now()}`)
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>receiveIncomingDirectMessage(payload.new||{}, {source:'realtime'}))
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`sender_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
+    .on('postgres_changes',{event:'*',schema:'public',table:'direct_message_reactions'},payload=>handleDirectReactionMutation(payload))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'friendships'},async payload=>{
       const f=payload.new||{};
       if(f.addressee_id!==me||f.status!=='pending')return;
@@ -2124,6 +2127,111 @@ function dmMessageHtml(m){
   const reactions=dmReactionSummary(m);
   return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}">${menu}${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}${m.edited_at?' · editada':''}${mine&&m.read_at?' · lida':''}</small>${reactions?`<div class="dm-message-reactions">${reactions}</div>`:''}</article>`;
 }
+function closeDmMessageMenus(exceptId=null){
+  document.querySelectorAll('[data-dm-message-menu]').forEach(menu=>{
+    if(exceptId&&menu.dataset.dmMessageMenu===String(exceptId))return;
+    menu.classList.add('hidden');
+  });
+}
+function openDmMessageMenu(messageId){
+  const menu=document.querySelector(`[data-dm-message-menu="${CSS.escape(String(messageId))}"]`);
+  if(!menu)return;
+  const opening=menu.classList.contains('hidden');
+  closeDmMessageMenus(opening?messageId:null);
+  menu.classList.toggle('hidden',!opening);
+}
+async function startEditDirectMessage(messageId){
+  const {data,error}=await supabase.from('direct_messages').select('id,body,sender_id,message_kind,deleted_at').eq('id',messageId).maybeSingle();
+  if(error||!data||data.sender_id!==state.profile.id||data.message_kind!=='text'||data.deleted_at)return toast('Essa mensagem não pode ser editada.');
+  const bubble=document.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
+  const body=bubble?.querySelector('.dm-message-body');
+  if(!bubble||!body)return;
+  closeDmMessageMenus();
+  const wrapper=document.createElement('div');
+  wrapper.className='dm-inline-edit';
+  wrapper.innerHTML=`<textarea maxlength="1000">${escapeHtml(data.body||'')}</textarea><div><button type="button" data-dm-edit-save="${escapeAttr(messageId)}">salvar</button><button type="button" data-dm-edit-cancel="${escapeAttr(messageId)}">cancelar</button></div>`;
+  body.replaceWith(wrapper);
+  wrapper.querySelector('textarea')?.focus();
+}
+async function saveEditDirectMessage(messageId){
+  const bubble=document.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
+  const input=bubble?.querySelector('.dm-inline-edit textarea');
+  const body=String(input?.value||'').trim();
+  if(!body)return toast('Mensagem vazia continua sendo silêncio.');
+  if(body.length>1000)return toast('Até 1000 caracteres. Nem o MSN aguentava um tratado.');
+  const {error}=await supabase.rpc('edit_direct_message',{p_message_id:messageId,p_body:body});
+  if(error)return toast('A edição tropeçou no cabo.');
+  await refreshDirectMessageBubble(messageId);
+}
+async function deleteDirectMessage(messageId){
+  if(!messageId||!confirm('Apagar esta mensagem? Ela ficará marcada como apagada para manter a conversa sincronizada.'))return;
+  const {data:attachmentPath,error}=await supabase.rpc('delete_direct_message',{p_message_id:messageId});
+  if(error)return toast('A mensagem se recusou a desaparecer.');
+  if(attachmentPath)await supabase.storage.from('avesso-chat').remove([attachmentPath]).catch(()=>{});
+  await refreshDirectMessageBubble(messageId);
+}
+async function toggleDirectMessageReaction(messageId,reaction){
+  if(!messageId||!DM_REACTIONS.includes(reaction))return;
+  const {data:existing}=await supabase.from('direct_message_reactions').select('reaction').eq('message_id',messageId).eq('user_id',state.profile.id).maybeSingle();
+  let error=null;
+  if(existing?.reaction===reaction){
+    ({error}=await supabase.from('direct_message_reactions').delete().eq('message_id',messageId).eq('user_id',state.profile.id));
+  }else{
+    ({error}=await supabase.from('direct_message_reactions').upsert({message_id:messageId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'message_id,user_id'}));
+  }
+  if(error)return toast('A reação teve uma reação adversa.');
+  closeDmMessageMenus();
+  await refreshDirectMessageBubble(messageId);
+}
+async function handleDirectMessageMutation(row){
+  if(!row?.id||!state.chatWindowOpen||!state.directPeerId)return;
+  const belongs=(row.sender_id===state.profile.id&&row.recipient_id===state.directPeerId)||(row.sender_id===state.directPeerId&&row.recipient_id===state.profile.id);
+  if(belongs)await refreshDirectMessageBubble(row.id);
+}
+async function handleDirectReactionMutation(payload){
+  const messageId=payload?.new?.message_id||payload?.old?.message_id;
+  if(!messageId||!state.chatWindowOpen)return;
+  const bubble=$('#dm-log')?.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
+  if(bubble)await refreshDirectMessageBubble(messageId);
+}
+let dmLongPressOrigin=null;
+document.addEventListener('click',e=>{
+  const menuButton=e.target.closest('[data-dm-menu-toggle]');
+  if(menuButton){e.stopPropagation();openDmMessageMenu(menuButton.dataset.dmMenuToggle);return;}
+  const react=e.target.closest('[data-dm-react]');
+  if(react){e.stopPropagation();toggleDirectMessageReaction(react.dataset.messageId,react.dataset.dmReact);return;}
+  const edit=e.target.closest('[data-dm-edit]');
+  if(edit){e.stopPropagation();startEditDirectMessage(edit.dataset.dmEdit);return;}
+  const del=e.target.closest('[data-dm-delete]');
+  if(del){e.stopPropagation();deleteDirectMessage(del.dataset.dmDelete);return;}
+  const save=e.target.closest('[data-dm-edit-save]');
+  if(save){e.stopPropagation();saveEditDirectMessage(save.dataset.dmEditSave);return;}
+  const cancel=e.target.closest('[data-dm-edit-cancel]');
+  if(cancel){e.stopPropagation();refreshDirectMessageBubble(cancel.dataset.dmEditCancel);return;}
+});
+document.addEventListener('pointerdown',e=>{
+  if(!window.matchMedia('(max-width:760px), (pointer:coarse)').matches)return;
+  if(e.target.closest('button,a,input,textarea,audio'))return;
+  const bubble=e.target.closest('.dm-bubble:not(.deleted)');
+  if(!bubble?.dataset.dmId)return;
+  clearTimeout(state.dmLongPressTimer);
+  dmLongPressOrigin={x:e.clientX,y:e.clientY,id:bubble.dataset.dmId};
+  state.dmLongPressTimer=setTimeout(()=>{
+    openDmMessageMenu(bubble.dataset.dmId);
+    try{navigator.vibrate?.(16);}catch{}
+    state.dmLongPressTimer=null;
+  },560);
+});
+document.addEventListener('pointermove',e=>{
+  if(!dmLongPressOrigin||!state.dmLongPressTimer)return;
+  if(Math.hypot(e.clientX-dmLongPressOrigin.x,e.clientY-dmLongPressOrigin.y)>12){
+    clearTimeout(state.dmLongPressTimer);state.dmLongPressTimer=null;dmLongPressOrigin=null;
+  }
+});
+['pointerup','pointercancel'].forEach(type=>document.addEventListener(type,()=>{
+  if(state.dmLongPressTimer){clearTimeout(state.dmLongPressTimer);state.dmLongPressTimer=null;}
+  dmLongPressOrigin=null;
+}));
 async function repairLegacyVoicePlayers(root=document){
   const players=[...root.querySelectorAll?.('.dm-voice-audio')||[]].filter(audio=>!audio.dataset.voiceRepaired&&audio.dataset.voiceType&&audio.dataset.voiceType!=='audio/wav').slice(0,30);
   for(const audio of players){
@@ -2190,6 +2298,7 @@ document.addEventListener('pointerdown',e=>{
   if(emoji&&!emoji.classList.contains('hidden')&&!e.target.closest('#dm-emoticon-palette,#dm-emoticons'))emoji.classList.add('hidden');
   const postEmoji=$('#post-emoticon-palette');
   if(postEmoji&&!postEmoji.classList.contains('hidden')&&!e.target.closest('#post-emoticon-palette,#post-emoticons'))postEmoji.classList.add('hidden');
+  if(!e.target.closest('[data-dm-message-menu],[data-dm-menu-toggle]'))closeDmMessageMenus();
 });
 
 function preferredVoiceMime(){
