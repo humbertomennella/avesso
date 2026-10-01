@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, dashboardSection:'overview', staffRoles:{}, badgeCatalog:{}, userBadgeMap:{}, staffChatChannel:null, staffChatRealtime:null, suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -104,6 +104,39 @@ function applyAppWallpaper(){
 
 function adminCrownHtml(extraClass=''){
   return '<span class="admin-crown-pixel '+escapeAttr(extraClass)+'" title="Administrador do AVESSO" aria-label="Administrador"><i></i></span>';
+}
+
+function staffRoleLabel(role=''){
+  return {owner:'Administrador Geral',senior_admin:'Administrador-Sênior',moderator:'Moderador'}[role]||'';
+}
+function staffRoleRank(role=''){
+  return {owner:30,senior_admin:20,moderator:10}[role]||0;
+}
+function adminAssetUrl(path=''){
+  if(!path)return'';
+  return supabase.storage.from('avesso-admin-assets').getPublicUrl(path).data.publicUrl;
+}
+function identityBadgesHtml(userId,{compact=true}={}){
+  const badgeIds=state.userBadgeMap?.[userId]||[];
+  const badges=badgeIds.map(id=>state.badgeCatalog?.[id]).filter(Boolean).filter(b=>b.active!==false).slice(0,compact?3:8);
+  return badges.map(b=>`<img class="identity-badge ${compact?'compact':''}" src="${escapeAttr(adminAssetUrl(b.image_path)||b.image_path||'')}" alt="${escapeAttr(b.name||'emblema')}" title="${escapeAttr(b.name||'emblema')}">`).join('');
+}
+function identityNameHtml(userId,name,{badges=true}={}){
+  const role=state.staffRoles?.[userId]||'';
+  return `<span class="identity-name-text">${escapeHtml(name||'alguém')}</span>${role==='owner'?adminCrownHtml('inline-owner-crown'):''}${badges?identityBadgesHtml(userId):''}`;
+}
+async function loadIdentityMetadata(){
+  if(!state.profile?.id)return;
+  const [staffRes,badgesRes,userBadgesRes]=await Promise.all([
+    supabase.from('admin_users').select('user_id,role'),
+    supabase.from('badges').select('id,name,description,image_path,active'),
+    supabase.from('user_badges').select('user_id,badge_id')
+  ]);
+  state.staffRoles=Object.fromEntries((staffRes.data||[]).map(x=>[x.user_id,x.role]));
+  state.badgeCatalog=Object.fromEntries((badgesRes.data||[]).map(x=>[x.id,x]));
+  const map={};
+  for(const row of userBadgesRes.data||[])(map[row.user_id]??=[]).push(row.badge_id);
+  state.userBadgeMap=map;
 }
 function applySiteSettings(settings=state.siteSettings||{}){
   if(!settings)return;
@@ -1478,6 +1511,7 @@ async function enterApp(){
   state.profile=data;
   if(!data){toast('Seu perfil ainda está acordando. Atualize em alguns segundos.');return;}
   await loadAdminAccess();
+  await loadIdentityMetadata();
   await loadOwnModeration();
   $('#nav-name').innerHTML=escapeHtml(data.display_name)+(state.isAdmin?adminCrownHtml('nav-admin-crown'):'');
   $('#nav-handle').textContent='@'+data.handle;
