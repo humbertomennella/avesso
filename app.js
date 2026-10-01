@@ -3981,16 +3981,23 @@ function dmMessageHtml(m){
   const reactionSummary=Object.entries(grouped).map(([reaction,rows])=>`<button type="button" class="dm-reaction-chip ${rows.some(r=>r.user_id===state.profile.id)?'active':''}" data-dm-react="${messageId}" data-reaction="${escapeAttr(reaction)}">${escapeHtml(reaction)} <b>${rows.length}</b></button>`).join('');
   const receipt=mine?(m.read_at?'✓✓ lida':'✓ enviada'):'';
   const edited=m.edited_at?' · editada':'';
-  const actions=`<div class="dm-bubble-actions"><button type="button" data-dm-reply="${messageId}" title="Responder">↩</button><button type="button" data-dm-react-menu="${messageId}" title="Reagir">☺</button></div><div class="dm-quick-reactions hidden" data-dm-react-palette="${messageId}">${['♥','😂','👀','⚡','✓','🙃'].map(r=>`<button type="button" data-dm-react="${messageId}" data-reaction="${r}">${r}</button>`).join('')}</div>`;
+  const ownerActions=mine?`<button type="button" data-dm-edit="${messageId}" title="Editar">✎</button><button type="button" data-dm-delete="${messageId}" class="danger" title="Apagar">×</button>`:'';
+  const actions=`<div class="dm-bubble-actions"><button type="button" data-dm-reply="${messageId}" title="Responder">↩</button><button type="button" data-dm-react-menu="${messageId}" title="Reagir">☺</button>${ownerActions}</div><div class="dm-quick-reactions hidden" data-dm-react-palette="${messageId}">${['♥','😂','👀','⚡','✓','🙃'].map(r=>`<button type="button" data-dm-react="${messageId}" data-reaction="${r}">${r}</button>`).join('')}</div>`;
   return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}" data-dm-text="${escapeAttr(bodyText.toLowerCase())}">${actions}${replyHtml}${bodyHtml}${attachment}${reactionSummary?`<div class="dm-reaction-summary">${reactionSummary}</div>`:''}<small class="dm-message-time">${ago(m.created_at)}${edited}${receipt?` · ${receipt}`:''}</small></article>`;
 }
 function renderDmReplyComposer(){
   let host=$('#dm-replying-to');
   if(!host)return;
-  if(!state.replyingTo){host.classList.add('hidden');host.innerHTML='';return;}
+  const context=state.editingMessage||state.replyingTo;
+  if(!context){host.classList.add('hidden');host.innerHTML='';return;}
+  const editing=Boolean(state.editingMessage);
   host.classList.remove('hidden');
-  host.innerHTML=`<div><span>↩ respondendo</span><b>${escapeHtml(String(state.replyingTo.body||state.replyingTo.message_kind||'mensagem').slice(0,120))}</b></div><button type="button" id="dm-cancel-reply" aria-label="Cancelar resposta">×</button>`;
-  $('#dm-cancel-reply').onclick=()=>{state.replyingTo=null;renderDmReplyComposer();};
+  host.innerHTML=`<div><span>${editing?'✎ editando mensagem':'↩ respondendo'}</span><b>${escapeHtml(String(context.body||context.message_kind||'mensagem').slice(0,120))}</b></div><button type="button" id="dm-cancel-reply" aria-label="Cancelar">×</button>`;
+  $('#dm-cancel-reply').onclick=()=>{
+    state.replyingTo=null;state.editingMessage=null;
+    const input=$('#dm-input');if(input&&editing)input.value='';
+    renderDmReplyComposer();syncDmComposerAction();
+  };
 }
 async function toggleDirectMessageReaction(messageId,reaction){
   if(!messageId||!reaction)return;
@@ -4026,6 +4033,39 @@ function bindDirectMessageActions(root=document){
     if(target){target.scrollIntoView({behavior:'smooth',block:'center'});target.classList.add('dm-highlight');setTimeout(()=>target.classList.remove('dm-highlight'),1200);}
     else toast('Essa mensagem é mais antiga. Carregue o histórico acima.');
   });
+  root.querySelectorAll?.('[data-dm-edit]').forEach(button=>button.onclick=async e=>{
+    e.stopPropagation();
+    const row=await directMessageForRefresh(button.dataset.dmEdit);
+    if(!row||row.sender_id!==state.profile.id||row.message_kind!=='text')return;
+    state.replyingTo=null;state.editingMessage=row;
+    const input=$('#dm-input');if(input){input.value=row.body||'';input.focus();}
+    renderDmReplyComposer();syncDmComposerAction();
+  });
+  root.querySelectorAll?.('[data-dm-delete]').forEach(button=>button.onclick=async e=>{
+    e.stopPropagation();
+    const id=button.dataset.dmDelete;
+    if(!id||!confirm('Apagar esta mensagem?'))return;
+    const {error}=await supabase.from('direct_messages').update({
+      body:'',message_kind:'deleted',deleted_at:new Date().toISOString()
+    }).eq('id',id).eq('sender_id',state.profile.id);
+    if(error)return toast('A mensagem se recusou a desaparecer.');
+    if(state.editingMessage?.id===id){state.editingMessage=null;renderDmReplyComposer();}
+    refreshDirectMessageBubble(id);
+  });
+  if(!root.dataset.dmLongPressBound){
+    root.dataset.dmLongPressBound='1';
+    let timer=null,target=null;
+    const clear=()=>{clearTimeout(timer);timer=null;target=null;};
+    root.addEventListener('pointerdown',e=>{
+      if(e.pointerType==='mouse')return;
+      target=e.target.closest('.dm-bubble');
+      if(!target)return;
+      timer=setTimeout(()=>{target?.classList.add('actions-open');try{navigator.vibrate?.(12);}catch{}},520);
+    },{passive:true});
+    root.addEventListener('pointerup',clear,{passive:true});
+    root.addEventListener('pointercancel',clear,{passive:true});
+    root.addEventListener('pointermove',clear,{passive:true});
+  }
 }
 function filterChatMessages(term=''){
   const query=String(term||'').trim().toLowerCase();
@@ -4816,6 +4856,16 @@ async function sendDirectMessage(e){
   const input=$('#dm-input');const body=input?.value.trim()||'';
   if(!body||!state.directPeerId)return;
   const peerId=state.directPeerId;
+  if(state.editingMessage){
+    const id=state.editingMessage.id;
+    const {error}=await supabase.from('direct_messages').update({body,edited_at:new Date().toISOString()})
+      .eq('id',id).eq('sender_id',state.profile.id);
+    if(error)return toast('A edição não atravessou o fio.');
+    state.editingMessage=null;state.replyingTo=null;
+    input.value='';renderDmReplyComposer();syncDmComposerAction();
+    await refreshDirectMessageBubble(id);
+    return;
+  }
   input.value='';syncDmComposerAction();
   const replyTo=state.replyingTo?.id||null;
   const {data,error}=await supabase.from('direct_messages')
