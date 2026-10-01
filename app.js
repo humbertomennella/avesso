@@ -865,7 +865,7 @@ async function uploadPostImage(){
   if(!state.postImageFile)return null;
   const ext=(state.postImageFile.name.split('.').pop()||'webp').replace(/[^a-z0-9]/gi,'').toLowerCase();
   const path=`${state.profile.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-  const {error}=await supabase.storage.from('post-images').upload(path,state.postImageFile,{cacheControl:'3600',upsert:false});
+  const {error}=await supabase.storage.from('post-images').upload(path,state.postImageFile,{cacheControl:'31536000',upsert:false});
   if(error)throw error;
   return supabase.storage.from('post-images').getPublicUrl(path).data.publicUrl;
 }
@@ -972,7 +972,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
     list.innerHTML='<div class="feed-status">Nada aqui. Talvez as pessoas estejam vivendo. Estranho, mas permitido.</div>';
     algoSay('feed_empty');return;
   }
-  list.innerHTML=posts.map(p=>{
+  list.innerHTML=posts.map((p,postIndex)=>{
     const responses=threadData.responses[p.id]||[];
     const characterReplies=threadData.characters[p.id]||[];
     const reactionRows=threadData.reactions[p.id]||[];
@@ -997,7 +997,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
     return `<article class="post-card" data-post-card="${p.id}">
       <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       <p class="post-body">${escapeHtml(p.body)}</p>
-      ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="lazy"></figure>`:''}
+      ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
       ${conversationHtml}
       <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
