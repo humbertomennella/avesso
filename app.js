@@ -3542,6 +3542,7 @@ async function refreshFriendPresenceCache({notify=true}={}){
         body:'Online agora. Uma notificação basta; o modem não precisa de bis.',
         avatar:friend.avatar_url||'',
         kind:'online',
+        target:{type:'chat',id:friend.id},
         action:()=>openQuickFriendChat(friend.id)
       });
     }
@@ -3591,6 +3592,7 @@ function noteFriendPresence(profile){
       body:'Online agora. Uma notificação basta; o modem não precisa de bis.',
       avatar:profile.avatar_url||'',
       kind:'online',
+      target:{type:'chat',id:profile.id},
       action:()=>openQuickFriendChat(profile.id)
     });
   }
@@ -3957,7 +3959,7 @@ function startDirectRealtime(){
       const f=payload.new||{};
       if(f.addressee_id!==me||f.status!=='pending')return;
       const who=await profileById(f.requester_id);
-      socialNotify({title:'Pedido de amizade',body:`${who?.display_name||'Alguém'} quer entrar na sua lista. O protocolo social ressuscitou.`,avatar:who?.avatar_url||'',kind:'friend',action:()=>openPublicProfile(f.requester_id)});
+      socialNotify({title:'Pedido de amizade',body:`${who?.display_name||'Alguém'} quer entrar na sua lista. O protocolo social ressuscitou.`,avatar:who?.avatar_url||'',kind:'friend',target:{type:'profile',id:f.requester_id},action:()=>openPublicProfile(f.requester_id)});
       if(state.tab==='profile')loadFriendPanel();
     })
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'friendships'},async payload=>{
@@ -3966,7 +3968,7 @@ function startDirectRealtime(){
         const who=await profileById(f.addressee_id);
         if(who)state.friendPresence[who.id]=cachedPresenceEntry(who);
         renderOnlineFriendsDock();
-        socialNotify({title:'Amizade aceita',body:`${who?.display_name||'Alguém'} aceitou. Nenhum contador público foi ferido.`,avatar:who?.avatar_url||'',kind:'friend',action:()=>openFriendChat(f.addressee_id)});
+        socialNotify({title:'Amizade aceita',body:`${who?.display_name||'Alguém'} aceitou. Nenhum contador público foi ferido.`,avatar:who?.avatar_url||'',kind:'friend',target:{type:'chat',id:f.addressee_id},action:()=>openFriendChat(f.addressee_id)});
       }
       if(state.tab==='messages')renderMessagesPage();
       if(state.tab==='profile')loadFriendPanel();
@@ -3999,6 +4001,7 @@ function startDirectRealtime(){
         body:`${author?.display_name||'Alguém'} escreveu na sua parede. A internet de 2007 foi restaurada com sucesso.`,
         avatar:author?.avatar_url||'',
         kind:'guestbook',
+        target:{type:'profile',id:row.author_id},
         action:()=>openPublicProfile(row.author_id)
       });
       if(state.tab==='profile')loadGuestbook(me,'#profile-guestbook');
