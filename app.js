@@ -1672,7 +1672,7 @@ function leaveApp(){
 }
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
-async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
+async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span data-staff-name>${identityNameHtml(p.id,p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
 
 function updateComposerTarget(){
   const directed=$('#post-target').value==='person';
@@ -3489,7 +3489,7 @@ function renderOnlineFriendsDock(){
       const statusLabel=entry.mode==='online'?'online':entry.mode==='away'?'ausente':'offline';
       return `<button class="online-friend-item ${entry.mode}" data-online-friend="${friend.id}" type="button">
         <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
-        <span class="online-friend-copy"><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${statusLabel}</strong><span class="online-friend-status-message">${escapeHtml(friend.status_message||'sem status. provavelmente ocupado existindo.')}</span><em>${np?`♫ ${escapeHtml(np.title)}`:entry.mode==='offline'?'◌ fora da rede':'♫ silêncio detectado'}</em></span>
+        <span class="online-friend-copy"><b data-staff-name data-profile-id="${friend.id}">${identityNameHtml(friend.id,friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${statusLabel}</strong><span class="online-friend-status-message">${escapeHtml(friend.status_message||'sem status. provavelmente ocupado existindo.')}</span><em>${np?`♫ ${escapeHtml(np.title)}`:entry.mode==='offline'?'◌ fora da rede':'♫ silêncio detectado'}</em></span>
       </button>`;
     }).join('')||'<div class="online-friends-empty">Nenhum cúmplice adicionado ainda. Estatisticamente tranquilo.</div>');
   }
@@ -4794,7 +4794,7 @@ function imageViewerCommentHtml(row,ownerId=''){
   const canDelete=row.user_id===state.profile?.id||ownerId===state.profile?.id;
   return '<article class="image-viewer-comment">'+
     '<span class="mini-avatar">'+avatarHtml(row.author?.avatar_url,row.author?.display_name||'?')+'</span>'+
-    '<div><header><button class="user-link" data-profile-id="'+escapeAttr(row.user_id)+'">'+escapeHtml(row.author?.display_name||'alguém')+'</button>'+
+    '<div><header><button class="user-link" data-staff-name data-profile-id="'+escapeAttr(row.user_id)+'">'+identityNameHtml(row.user_id,row.author?.display_name||'alguém')+'</button>'+
     '<small>@'+escapeHtml(row.author?.handle||'...')+' · '+ago(row.created_at)+'</small></header>'+
     '<p>'+escapeHtml(row.body)+'</p>'+
     (canDelete?'<button class="image-comment-delete" data-photo-comment-delete="'+escapeAttr(row.id)+'" data-photo-comment-photo="'+escapeAttr(row.photo_id)+'">apagar</button>':'')+
@@ -4840,7 +4840,7 @@ async function openAlbumPhotoViewer(photoId){
     '<div class="image-viewer-stage"><img src="'+escapeAttr(photo._url)+'" alt="'+escapeAttr(photo.caption||'Foto do álbum')+'"></div>'+
     '<aside class="image-viewer-social">'+
       '<header class="image-viewer-owner"><span class="mini-avatar">'+avatarHtml(owner.avatar_url,owner.display_name||'?')+'</span><div>'+
-      '<button class="user-link" data-profile-id="'+escapeAttr(owner.id||photo.user_id)+'">'+escapeHtml(owner.display_name||'alguém')+'</button>'+
+      '<button class="user-link" data-staff-name data-profile-id="'+escapeAttr(owner.id||photo.user_id)+'">'+identityNameHtml(owner.id||photo.user_id,owner.display_name||'alguém')+'</button>'+
       '<small>@'+escapeHtml(owner.handle||'...')+' · '+ago(photo.created_at)+'</small></div></header>'+
       '<p class="image-viewer-caption">'+escapeHtml(photo.caption||'sem legenda. corajoso.')+'</p>'+
       '<div class="image-viewer-actions"><button class="turn-feed-button" data-viewer-turn-photo="'+photo.id+'">↻ virar no feed</button></div>'+
@@ -4914,12 +4914,12 @@ async function openFeedImageViewer(postId){
   }).join('');
   const turned=post.reshare_author_id?
     '<div class="post-turned-badge"><span>↻ VIRADO DO AVESSO</span><b>original: @'+escapeHtml(post.reshare_author_handle||'alguém')+'</b><small>virado por @'+escapeHtml(post.author_handle||'alguém')+'</small></div>':'';
-  const commentHtml=comments.map(c=>'<article class="image-viewer-comment"><span class="mini-avatar">'+avatarHtml(c.author?.avatar_url,c.author?.display_name||'?')+'</span><div><header><button class="user-link" data-profile-id="'+escapeAttr(c.author_id)+'">'+escapeHtml(c.author?.display_name||'alguém')+'</button><small>@'+escapeHtml(c.author?.handle||'...')+' · '+ago(c.created_at)+'</small></header><p>'+escapeHtml(c.body)+'</p></div></article>').join('');
+  const commentHtml=comments.map(c=>'<article class="image-viewer-comment"><span class="mini-avatar">'+avatarHtml(c.author?.avatar_url,c.author?.display_name||'?')+'</span><div><header><button class="user-link" data-staff-name data-profile-id="'+escapeAttr(c.author_id)+'">'+identityNameHtml(c.author_id,c.author?.display_name||'alguém')+'</button><small>@'+escapeHtml(c.author?.handle||'...')+' · '+ago(c.created_at)+'</small></header><p>'+escapeHtml(c.body)+'</p></div></article>').join('');
   host.innerHTML='<section class="image-viewer-grid">'+
     '<div class="image-viewer-stage"><img src="'+escapeAttr(imageUrl)+'" alt="Imagem da publicação"></div>'+
     '<aside class="image-viewer-social">'+
       '<header class="image-viewer-owner"><span class="mini-avatar">'+avatarHtml(post.author_avatar,post.author_name||'?')+'</span><div>'+
-      '<button class="user-link" data-profile-id="'+post.author_id+'">'+escapeHtml(post.author_name||'alguém')+'</button><small>@'+escapeHtml(post.author_handle||'...')+' · '+ago(post.created_at)+'</small></div></header>'+
+      '<button class="user-link" data-staff-name data-profile-id="'+post.author_id+'">'+identityNameHtml(post.author_id,post.author_name||'alguém')+'</button><small>@'+escapeHtml(post.author_handle||'...')+' · '+ago(post.created_at)+'</small></div></header>'+
       turned+
       '<p class="image-viewer-caption">'+escapeHtml(post.body||'')+'</p>'+
       '<div class="image-viewer-actions"><button class="turn-feed-button" data-viewer-turn-post="'+post.id+'">↻ virar no feed</button></div>'+
