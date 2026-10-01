@@ -2176,6 +2176,7 @@ async function normalizeVoiceBlob(blob){
   }
 }
 function voiceExtension(type=''){
+  if(type.includes('wav'))return'wav';
   if(type.includes('ogg'))return'ogg';
   if(type.includes('mp4'))return'm4a';
   if(type.includes('mpeg'))return'mp3';
