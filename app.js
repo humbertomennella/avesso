@@ -2670,7 +2670,7 @@ function ownerCharactersHtml(data){
       '<div class="staff-form-grid"><label>nome<input data-char-name value="'+escapeAttr(c.name||'')+'"></label><label>função<input data-char-role value="'+escapeAttr(c.role||'')+'"></label><label>cor<input data-char-color type="color" value="'+escapeAttr(c.accent_color||'#d8ff3e')+'"></label><label>raridade<input data-char-rarity type="number" min="1" max="1000" value="'+escapeAttr(c.rarity??50)+'"></label><label>avatar URL<input data-char-avatar value="'+escapeAttr(c.avatar_url||'')+'"></label><label>local<input data-char-home value="'+escapeAttr(c.home_location||'Praça Central')+'"></label></div>'+
       '<label class="staff-wide-field">bio<textarea data-char-bio>'+escapeHtml(c.bio||'')+'</textarea></label><label class="staff-wide-field">personalidade<textarea data-char-personality>'+escapeHtml(c.personality||'')+'</textarea></label><label class="staff-wide-field">prompt do habitante<textarea data-char-system>'+escapeHtml(c.system_prompt||'')+'</textarea></label>'+
       '<div class="staff-form-grid"><label>modelo IA<input data-ai-model value="'+escapeAttr(ai.model||'gpt-5.6-luna')+'"></label><label>IA<select data-ai-enabled><option value="1" '+((ai.ai_enabled??c.ai_enabled)?'selected':'')+'>ativa</option><option value="0" '+(!(ai.ai_enabled??c.ai_enabled)?'selected':'')+'>desativada</option></select></label><label>máx. caracteres<input data-ai-max type="number" min="80" max="1200" value="'+escapeAttr(ai.max_output_chars??420)+'"></label></div>'+
-      '<label class="staff-wide-field">resumo de persona<textarea data-ai-persona>'+escapeHtml(ai.persona_summary||'')+'</textarea></label><label class="staff-wide-field">system prompt IA<textarea data-ai-prompt>'+escapeHtml(ai.system_prompt||'')+'</textarea></label>'+
+      '<label class="staff-wide-field">resumo de persona<textarea data-ai-persona>'+escapeHtml(ai.persona_summary||'')+'</textarea></label><label class="staff-wide-field">system prompt IA<textarea data-ai-prompt>'+escapeHtml(ai.system_prompt||'')+'</textarea></label><label class="staff-wide-field">regras de comportamento // JSON<textarea data-ai-behavior spellcheck="false">'+escapeHtml(JSON.stringify(ai.behavior_rules||{},null,2))+'</textarea></label><label class="staff-wide-field">regras de voz // JSON<textarea data-ai-voice spellcheck="false">'+escapeHtml(JSON.stringify(ai.voice_rules||{},null,2))+'</textarea></label>'+
       '<details><summary>frases / diálogos ('+dialogs.length+')</summary><div class="character-dialogue-list">'+dialogs.map(d=>'<div><code>'+escapeHtml(d.context)+'</code><span>'+escapeHtml(d.body)+'</span><small>peso '+d.weight+' · '+(d.enabled?'ativo':'pausado')+'</small></div>').join('')+'</div><div class="staff-form-grid"><label>contexto<input data-new-dialogue-context placeholder="feed_attention"></label><label>peso<input data-new-dialogue-weight type="number" min="1" max="100" value="1"></label></div><label class="staff-wide-field">nova frase<textarea data-new-dialogue-body maxlength="420"></textarea></label><button data-save-dialogue="'+c.id+'">adicionar frase</button></details>'+
       '<footer><button data-save-character="'+c.id+'">salvar habitante</button><button class="danger" data-deactivate-character="'+c.id+'">desativar</button></footer></article>';}).join('')+'</div>'+
   '</section>';
@@ -2839,8 +2839,10 @@ async function ownerSaveCharacter(id){
   const base=await supabase.rpc('owner_update_character',{p_character_id:id,p_patch:patch});
   if(base.error)return toast('O habitante recusou a edição.');
   let behavior={},voice={};
-  try{behavior=JSON.parse(card.dataset.behaviorRules||'{}');}catch{}
-  try{voice=JSON.parse(card.dataset.voiceRules||'{}');}catch{}
+  try{behavior=JSON.parse(card.querySelector('[data-ai-behavior]')?.value||'{}');}
+  catch{return toast('JSON das regras de comportamento está inválido.');}
+  try{voice=JSON.parse(card.querySelector('[data-ai-voice]')?.value||'{}');}
+  catch{return toast('JSON das regras de voz está inválido.');}
   const ai=await supabase.rpc('owner_upsert_character_ai',{
     p_character_id:id,p_model:card.querySelector('[data-ai-model]')?.value||'gpt-5.6-luna',
     p_persona_summary:card.querySelector('[data-ai-persona]')?.value||'',
