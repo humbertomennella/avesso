@@ -3406,3 +3406,31 @@ html.msn-screen-nudge body{
   .dm-msn-conversation{display:block!important}
   .dm-floating-window .dm-log{padding-left:55px!important;padding-right:55px!important}
 }
+
+
+/* STORY VIEWER UX 2026-10-01 */
+.story-view-dialog>.story-view-close{
+  z-index:60;
+  right:12px;
+  top:10px;
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:1px solid #536267;
+  background:#080d0ff2;
+  color:#eef3ec;
+  font:700 1.15rem/1 var(--mono);
+  box-shadow:2px 2px 0 #0008;
+}
+.story-view-dialog>.story-view-close:hover{
+  border-color:var(--acid);
+  color:var(--acid);
+}
+.story-view-card>header{padding-right:58px!important}
+.album-photo>img{
+  display:block;
+  contain:layout paint;
+  transform:translateZ(0);
+}
