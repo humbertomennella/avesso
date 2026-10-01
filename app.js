@@ -4685,5 +4685,5 @@ function showAuthLinkError(){
   if(!$('#auth-dialog').open)$('#auth-dialog').showModal();
 }
 
-await loadSiteSettings();
+await Promise.all([loadSiteSettings(),loadPublicExperience()]);
 const {data:{session}}=await supabase.auth.getSession();state.session=session;if(session)enterApp();else showAuthLinkError();
