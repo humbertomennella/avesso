@@ -4940,7 +4940,7 @@ html.msn-screen-nudge body{
 .online-friends-dock{
   position:fixed;
   right:18px;
-  bottom:74px;
+  bottom:18px;
   z-index:11350;
   width:260px;
   border:1px solid #355057;
@@ -5056,8 +5056,12 @@ html.msn-screen-nudge body{
 }
 
 /* Quando a conversa grande está aberta, o dock sai da frente. */
+body:has(.dm-floating-window:not(.hidden).minimized) .online-friends-dock{
+  bottom:70px;
+}
 body:has(.dm-floating-window:not(.hidden):not(.minimized)) .online-friends-dock{
   right:min(610px,calc(100vw - 278px));
+  bottom:18px;
 }
 
 /* O status não deve ser exibido para tecnologias assistivas como player invisível ou ruído. */
