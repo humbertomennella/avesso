@@ -872,7 +872,7 @@ function scheduleIdleWorld(){
   if(!state.session)return;
   const delay=(6+Math.random()*6)*60*1000;
   state.world.idleTimer=setTimeout(async()=>{
-    if(state.tab==='tower') await askWorldCharacter('tower_pulse',{character:'rei_engajamento',action_type:'idle_tower',surface:'tower'});
+    if(state.tab==='tower') { /* O Rei publica na Torre; não invade a tela do usuário. */ }
     else if(state.tab==='plaza') { /* a Praça fala dentro do chat, não por cima dele */ }
     else await askWorldCharacter('idle');
     scheduleIdleWorld();
@@ -1722,40 +1722,62 @@ async function renderPlaza(){
     await sendPlazaMessage(prompt,true);
   });
 }
-function towerFallback(){
-  const lines=['CAMPANHA // VIDA REAL É BETA. O produto final segue sem previsão.','OPORTUNIDADE // monetize o silêncio antes que alguém crie um plano Pro.','EM ALTA // pessoas conversando sem intermediário. Mercado em pânico.','AVISO // respirar sem publicar reduz impressões. Faça por sua conta e risco.','PESQUISA INTERNA // 100% do Rei concorda com o Rei.'];
-  return lines[Math.floor(Math.random()*lines.length)];
+function towerFallbackEvent(){
+  return {title:'VIDA REAL É BETA',description:'O produto final segue sem previsão. O Rei recomenda conversar com alguém antes que isso vire feature paga.',config:{kind:'campanha',cta:'subir na torre',importance:'normal'}};
 }
-function renderTowerCard(text=towerFallback()){
+function kingEventKind(event){return String(event?.config?.kind||'campanha').toUpperCase();}
+function renderTowerEventCard(event=towerFallbackEvent()){
   const box=$('#tower-live');if(!box)return;
-  box.innerHTML=`<div class="tower-crown">♛</div><span class="section-code">TORRE DO ENGAJAMENTO // AO VIVO</span><h3>Mensagem do Rei</h3><p>${escapeHtml(text)}</p><button id="open-tower">subir na torre →</button>`;
+  const safeEvent=event||towerFallbackEvent();
+  box.innerHTML=`<div class="tower-crown">♛</div><span class="section-code">TORRE DO ENGAJAMENTO // ${escapeHtml(kingEventKind(safeEvent))}</span><h3>${escapeHtml(safeEvent.title||'Mensagem do Rei')}</h3><p>${escapeHtml(safeEvent.description||'O Rei está preparando uma campanha desnecessariamente estratégica.')}</p><small class="tower-event-cta">→ ${escapeHtml(safeEvent.config?.cta||'subir na torre')}</small><button id="open-tower">subir na torre →</button>`;
   $('#open-tower').onclick=()=>document.querySelector('[data-app-tab="tower"]')?.click();
 }
-async function updateTowerAI(trigger='tower_pulse'){
-  if(!state.session||!state.profile)return;
-  const result=await askWorldCharacter(trigger,{character:'rei_engajamento',silent:true,action_type:trigger,surface:'tower'});
-  renderTowerCard(result?.interaction?.body||towerFallback());
+async function latestKingEvents(limit=6){
+  const {data}=await supabase.from('world_events').select('*')
+    .eq('status','active')
+    .contains('config',{creator:'rei_engajamento'})
+    .order('created_at',{ascending:false})
+    .limit(limit);
+  return data||[];
+}
+async function refreshKingBroadcast({ensure=false}={}){
+  if(!state.session||!state.profile)return null;
+  let event=null;
+  if(ensure){
+    try{
+      const {data,error}=await supabase.functions.invoke('king-broadcast',{body:{}});
+      if(!error)event=data?.event||null;
+    }catch{}
+  }
+  if(!event)event=(await latestKingEvents(1))[0]||null;
+  renderTowerEventCard(event||towerFallbackEvent());
+  return event;
 }
 function scheduleTowerPulse(){
   clearTimeout(state.world.towerTimer);
   if(!state.session)return;
-  state.world.towerTimer=setTimeout(async()=>{if(isFeedTab())await updateTowerAI('tower_pulse');scheduleTowerPulse();},(150+Math.random()*120)*1000);
-  setTimeout(()=>{if(isFeedTab())updateTowerAI('tower_opened')},2200);
+  const run=async()=>{
+    await refreshKingBroadcast({ensure:true});
+    state.world.towerTimer=setTimeout(run,(9+Math.random()*3)*60*1000);
+  };
+  state.world.towerTimer=setTimeout(run,3500);
 }
 async function renderTowerPage(){
   if(state.tab!=='tower')return;
   const king=state.world.characters.rei_engajamento;
   $('#feed-status').classList.add('hidden');
+  const events=await latestKingEvents(6);
+  const featured=events[0]||towerFallbackEvent();
+  const cards=events.length?events.map(event=>`<article class="tower-event-card"><b>${escapeHtml(kingEventKind(event))}</b><h3>${escapeHtml(event.title)}</h3><p>${escapeHtml(event.description)}</p><small>→ ${escapeHtml(event.config?.cta||'participar sem formulário')}</small></article>`).join(''):`<article class="tower-event-card"><b>CAMPANHA</b><h3>${escapeHtml(featured.title)}</h3><p>${escapeHtml(featured.description)}</p><small>→ ${escapeHtml(featured.config?.cta||'subir na torre')}</small></article>`;
   $('#feed-list').innerHTML=`<section class="tower-world">
-    <div class="tower-header"><span>♛ TORRE DO ENGAJAMENTO</span><h2>PROPAGANDA, CAOS E OPORTUNIDADES™</h2><p>Um monumento vertical à ideia de que tudo fica melhor quando alguém coloca um KPI em cima.</p></div>
-    <div class="tower-king">${characterVisual(king,'tower-king-hq')}<div id="tower-page-message">O Rei está preparando um PowerPoint que ninguém solicitou.</div></div>
-    <div class="tower-grid"><article><b>CAMPANHA OFICIAL</b><h3>VIDA REAL É BETA</h3><p>Aproveite enquanto ainda não tem assinatura mensal.</p></article><article><b>EM ALTA</b><ol><li>Humanos falando com humanos</li><li>Não monetizar tudo</li><li>Silêncio sem anúncios</li></ol></article><article><b>OPORTUNIDADE DO REI</b><p>Teste um recurso inexistente. Ganhe um badge invisível e absolutamente nenhum benefício.</p></article></div>
-    <button id="tower-refresh" class="tower-refresh">pedir outra ideia péssima ao Rei</button>
+    <div class="tower-header"><span>♛ TORRE DO ENGAJAMENTO</span><h2>PROPAGANDA, CAOS E OPORTUNIDADES™</h2><p>O Rei publica campanhas e eventos aqui. A boa notícia: ele perdeu o direito de aparecer a cada três minutos na sua tela.</p></div>
+    <div class="tower-king">${characterVisual(king,'tower-king-hq')}<div><span class="section-code">${escapeHtml(kingEventKind(featured))} // AGORA</span><h3>${escapeHtml(featured.title)}</h3><p>${escapeHtml(featured.description)}</p></div></div>
+    <div class="tower-event-feed">${cards}</div>
+    <button id="tower-refresh" class="tower-refresh">atualizar boletim da torre</button>
   </section>`;
+  renderTowerEventCard(featured);
   trackAction('tower_opened','tower');
-  const result=await askWorldCharacter('tower_opened',{character:'rei_engajamento',silent:true,action_type:'tower_opened',surface:'tower'});
-  if(state.tab==='tower'&&result?.interaction?.body)$('#tower-page-message').textContent=result.interaction.body;
-  $('#tower-refresh').onclick=async()=>{trackAction('tower_pulse','tower');const r=await askWorldCharacter('tower_pulse',{character:'rei_engajamento',silent:true,action_type:'manual_campaign',surface:'tower'});if(r?.interaction?.body)$('#tower-page-message').textContent=r.interaction.body;};
+  $('#tower-refresh').onclick=async()=>{await refreshKingBroadcast({ensure:true});if(state.tab==='tower')renderTowerPage();};
 }
 
 async function acceptedFriendProfiles(){
@@ -3406,7 +3428,17 @@ function subscribeRealtime(){
       toast(state.world.settings?.world_interventions_enabled?'AVESSO.SYS: interferências liberadas. Péssima hora para perder o 404 de vista.':'AVESSO.SYS: interferências visuais suspensas.');
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'world_events'},payload=>{
-      if(payload.new?.status==='active')toast(`EVENTO DO MUNDO // ${payload.new.title}`);
+      const event=payload.new||{};
+      if(event.status!=='active')return;
+      if(event.config?.creator==='rei_engajamento'){
+        renderTowerEventCard(event);
+        if(state.tab==='tower')renderTowerPage();
+        if(event.config?.importance==='important'){
+          socialNotify({title:'♛ Torre do Engajamento',body:event.title||'O Rei publicou algo que, contra as probabilidades, merece atenção.',kind:'world'});
+        }
+        return;
+      }
+      if(event.config?.importance==='important')toast(`EVENTO DO MUNDO // ${event.title}`);
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'post_reactions'},()=>{if(isFeedTab())loadFeed();})
     .on('postgres_changes',{event:'*',schema:'public',table:'profile_media'},payload=>{
@@ -3426,6 +3458,7 @@ function subscribeRealtime(){
       const c=state.world.charactersById[row.character_id];
       if(state.tab==='plaza'&&c?.slug!=='npc')return;
       if(state.tab==='tower'&&c?.slug!=='rei_engajamento')return;
+      if(c?.slug==='rei_engajamento'&&row.trigger_type==='king_broadcast')return;
       if(c)showEncounter({character:c,interaction:{id:row.id,body:row.body,source:row.source}});
     })
     .subscribe();
