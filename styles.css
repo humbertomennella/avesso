@@ -9000,3 +9000,41 @@ body.avesso-own-corner .profile-avatar-large img{
   .dm-floating-window #dm-form{grid-template-columns:38px minmax(0,1fr) 76px!important}
   .dm-send-action{width:76px!important;min-width:76px!important}
 }
+
+
+/* AVESSO AVATAR QUALITY FIX 2026-10-01 */
+.avatar-choice img,
+.avatar-choice-modal img{
+  width:min(100%,180px)!important;
+  height:auto!important;
+  aspect-ratio:1/1!important;
+  object-fit:cover!important;
+  object-position:center!important;
+  display:block!important;
+  margin-inline:auto!important;
+  background:#050708!important;
+  image-rendering:auto!important;
+  backface-visibility:hidden;
+}
+.avatar-choice,
+.avatar-choice-modal{
+  min-width:0;
+  overflow:hidden;
+}
+.avatar img,
+.mini-avatar img,
+.profile-avatar-large img,
+.public-profile-avatar img,
+.friend-avatar img,
+.plaza-avatar img{
+  object-fit:cover!important;
+  object-position:center!important;
+  image-rendering:auto!important;
+}
+@media(max-width:760px){
+  .avatar-choice img,
+  .avatar-choice-modal img{
+    width:100%!important;
+    max-width:160px!important;
+  }
+}
