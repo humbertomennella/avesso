@@ -16,6 +16,7 @@
   let swipeStart=null;
   let notificationRows=[];
   let currentNotificationKey='';
+  let notificationFilter='all';
 
   const escapeHtml=(value='')=>String(value).replace(/[&<>"']/g,c=>({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
@@ -76,6 +77,7 @@
       title:String(detail.title||'AVESSO').slice(0,140),
       body:String(detail.body||'').slice(0,260),
       createdAt:Number(detail.createdAt||Date.now()),
+      target:detail.target||null,
       read:false
     });
     notificationRows=notificationRows.slice(0,60);
@@ -95,10 +97,21 @@
         <div><small>AVESSO // NOTIFICAÇÕES</small><b>aconteceu enquanto você tinha uma vida</b></div>
         <button type="button" data-mobile-center-close aria-label="Fechar">×</button>
       </header>
+      <nav class="mobile-ux-notification-filters">
+        <button type="button" class="active" data-notification-filter="all">tudo</button>
+        <button type="button" data-notification-filter="messages">mensagens</button>
+        <button type="button" data-notification-filter="reactions">reações</button>
+        <button type="button" data-notification-filter="people">pessoas</button>
+      </nav>
       <div class="mobile-ux-notification-list"></div>
       <footer><button type="button" data-mobile-center-clear>limpar histórico</button></footer>`;
     document.body.appendChild(sheet);
     q('[data-mobile-center-close]',sheet).onclick=closeNotificationCenter;
+    qa('[data-notification-filter]',sheet).forEach(button=>button.onclick=()=>{
+      notificationFilter=button.dataset.notificationFilter||'all';
+      qa('[data-notification-filter]',sheet).forEach(x=>x.classList.toggle('active',x===button));
+      renderNotificationCenter();
+    });
     q('[data-mobile-center-clear]',sheet).onclick=()=>{
       notificationRows=[];
       persistNotifications();
@@ -113,7 +126,9 @@
       row.read=true;
       persistNotifications();
       renderNotificationBadge();
-      openDestination(row.kind);
+      closeNotificationCenter();
+      if(row.target)window.dispatchEvent(new CustomEvent('avesso:open-target',{detail:{target:row.target}}));
+      else openDestination(row.kind);
     });
     return sheet;
   }
@@ -123,12 +138,18 @@
     if(!sheet)return;
     const list=q('.mobile-ux-notification-list',sheet);
     if(!list)return;
-    if(!notificationRows.length){
-      list.innerHTML='<div class="mobile-ux-notification-empty">Nada pendente. A internet sobreviveu sem você.</div>';
+    const filtered=notificationRows.filter(row=>{
+      if(notificationFilter==='messages')return row.kind==='message'||row.kind==='attention';
+      if(notificationFilter==='reactions')return ['interaction','story','photo'].includes(row.kind);
+      if(notificationFilter==='people')return row.kind==='friend'||row.kind==='guestbook';
+      return true;
+    });
+    if(!filtered.length){
+      list.innerHTML='<div class="mobile-ux-notification-empty">Nada aqui. O filtro encontrou paz.</div>';
       return;
     }
     const icons={message:'↔',attention:'⚡',friend:'+',guestbook:'▤',story:'◫',photo:'▧',interaction:'♥'};
-    list.innerHTML=notificationRows.map(row=>`
+    list.innerHTML=filtered.map(row=>`
       <button type="button" class="mobile-ux-notification-item ${row.read?'':'unread'}" data-mobile-notification-id="${row.id}">
         <i>${icons[row.kind]||'•'}</i>
         <span><b>${escapeHtml(row.title)}</b><em>${escapeHtml(row.body)}</em><small>${timeAgo(row.createdAt)}</small></span>
@@ -174,11 +195,25 @@
     if(!sheet)return;
     if(!q('[data-mobile-ux-notifications]',sheet)){
       const permission=q('[data-mobile-notifications]',sheet);
+      const search=document.createElement('button');
+      search.type='button';
+      search.className='mobile-notification-row mobile-ux-search-link';
+      search.innerHTML='<i>⌕</i><span>BUSCAR.EXE</span>';
+      search.onclick=()=>{sheet.classList.remove('open');window.dispatchEvent(new CustomEvent('avesso:open-search'));};
+      permission?.before(search);
+
+      const now=document.createElement('button');
+      now.type='button';
+      now.className='mobile-notification-row mobile-ux-now-link';
+      now.innerHTML='<i>◉</i><span>AGORA.EXE // ao vivo</span>';
+      now.onclick=()=>{sheet.classList.remove('open');window.dispatchEvent(new CustomEvent('avesso:open-now'));};
+      permission?.before(now);
+
       const center=document.createElement('button');
       center.type='button';
       center.className='mobile-notification-row mobile-ux-center-link';
       center.dataset.mobileUxNotifications='1';
-      center.innerHTML='<i>◉</i><span>central de notificações</span><b class="hidden">0</b>';
+      center.innerHTML='<i>▤</i><span>central de notificações</span><b class="hidden">0</b>';
       center.onclick=openNotificationCenter;
       permission?.before(center);
 
