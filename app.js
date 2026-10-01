@@ -460,14 +460,26 @@ function startPresenceHeartbeat(){
   beat();state.presenceTimer=setInterval(beat,45000);
 }
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden||!state.profile)return;
+  if(!state.profile)return;
+  if(document.hidden){
+    autoMinimizeChat();
+    return;
+  }
   startPresenceHeartbeat();
   if(state.pendingAttentionPeerId){
     const peerId=state.pendingAttentionPeerId;
     state.pendingAttentionPeerId=null;
-    openChatWindow(peerId).then(()=>{triggerScreenNudge();triggerChatNudge(peerId);});
+    state.chatWindowMinimized=true;
+    openChatWindow(peerId,{keepMinimized:true}).then(()=>{
+      state.chatWindowMinimized=true;
+      const win=ensureChatWindow();
+      win.classList.add('minimized');
+      applyChatGeometry();
+      triggerChatNudge(peerId);
+    });
   }
 });
+window.addEventListener('blur',()=>{if(state.profile)autoMinimizeChat();});
 const PHOTO_REACTIONS=[
   ['nao_foi_horrivel','♥','não foi horrível'],
   ['eu_vi','◉','eu vi'],
@@ -1107,8 +1119,10 @@ function applyAppTabLayout(){
 }
 document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   const previousTab=state.tab;
-  if(previousTab==='plaza'&&b.dataset.appTab!=='plaza')stopPlazaRealtime();
-  state.tab=b.dataset.appTab;
+  const nextTab=b.dataset.appTab;
+  if(previousTab==='plaza'&&nextTab!=='plaza')stopPlazaRealtime();
+  if(nextTab!=='messages')autoMinimizeChat();
+  state.tab=nextTab;
   applyAppWallpaper();
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
@@ -2479,6 +2493,7 @@ async function deleteGuestbookEntry(id,imagePath,profileId,selector){
 async function openPublicProfile(userId){
   if(!userId)return;
   if(userId===state.profile.id){document.querySelector('[data-app-tab="profile"]')?.click();return;}
+  autoMinimizeChat();
   state.tab='public_profile';state.publicProfileId=userId;bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   applyAppTabLayout();$('#feed-status').classList.add('hidden');
