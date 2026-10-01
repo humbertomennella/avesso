@@ -3824,7 +3824,7 @@ function bindHoldToTalk(){
 
 const CHAT_GEOMETRY_KEY='avesso.chat.geometry.v2';
 function chatDesktopEnabled(){
-  return window.matchMedia('(min-width: 761px)').matches;
+  return window.matchMedia('(min-width: 821px)').matches;
 }
 function defaultChatGeometry(){
   const width=Math.min(560,Math.max(360,window.innerWidth-44));
