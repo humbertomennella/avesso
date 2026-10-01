@@ -4054,6 +4054,22 @@ function startDirectRealtime(){
   });
 }
 
+function directCacheKey(peerId){
+  return `avesso_chat_cache_v1:${state.profile?.id||'anon'}:${peerId}`;
+}
+function saveDirectCache(peerId,rows){
+  try{
+    const clean=(rows||[]).slice(-80).map(row=>({...row,attachment_url:row.attachment_url||''}));
+    localStorage.setItem(directCacheKey(peerId),JSON.stringify({savedAt:Date.now(),rows:clean}));
+  }catch{}
+}
+function readDirectCache(peerId){
+  try{
+    const payload=JSON.parse(localStorage.getItem(directCacheKey(peerId))||'null');
+    if(!payload?.rows||Date.now()-Number(payload.savedAt||0)>7*24*60*60*1000)return[];
+    return payload.rows;
+  }catch{return[];}
+}
 async function loadDirectConversation(peerId,{markRead=true}={}){
   if(!peerId)return[];
   const me=state.profile.id;
@@ -4061,7 +4077,11 @@ async function loadDirectConversation(peerId,{markRead=true}={}){
   const {data,error}=await supabase.from('direct_messages').select('*')
     .or(`and(sender_id.eq.${me},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${me})`)
     .order('created_at',{ascending:false}).limit(pageSize+1);
-  if(error)return[];
+  if(error){
+    const cached=readDirectCache(peerId);
+    if(cached.length)toast('MODO OFFLINE // mostrando as últimas mensagens salvas neste aparelho.');
+    return cached;
+  }
   if(markRead){
     await supabase.from('direct_messages').update({read_at:new Date().toISOString()})
       .eq('sender_id',peerId).eq('recipient_id',me).is('read_at',null);
@@ -4072,7 +4092,9 @@ async function loadDirectConversation(peerId,{markRead=true}={}){
   state.directHistoryCursor=page.length?page[page.length-1].created_at:null;
   const rows=page.slice().reverse();
   rows.forEach(m=>{if(m.recipient_id===me)rememberDirectMessage(m.id);});
-  return hydrateDirectMessages(rows);
+  const hydrated=await hydrateDirectMessages(rows);
+  saveDirectCache(peerId,hydrated);
+  return hydrated;
 }
 async function loadMoreDirectHistory(){
   if(!state.directPeerId||!state.directHistoryHasMore||!state.directHistoryCursor)return;
