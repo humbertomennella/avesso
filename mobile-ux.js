@@ -251,6 +251,19 @@
       };
       permission?.before(install);
     }
+    const adminVisible=!q('#admin-nav-button')?.classList.contains('hidden');
+    let health=q('[data-mobile-ux-health]',sheet);
+    if(adminVisible&&!health){
+      health=document.createElement('button');
+      health.type='button';
+      health.className='mobile-notification-row mobile-ux-health-link';
+      health.dataset.mobileUxHealth='1';
+      health.innerHTML='<i>＋</i><span>HEALTH.EXE // saúde do sistema</span>';
+      health.onclick=()=>{sheet.classList.remove('open');window.dispatchEvent(new CustomEvent('avesso:open-health'));};
+      q('[data-mobile-notifications]',sheet)?.before(health);
+    }else if(health){
+      health.classList.toggle('hidden',!adminVisible);
+    }
     renderNotificationBadge();
     syncInstallButton();
   }
