@@ -3880,6 +3880,179 @@ async function togglePhotoReaction(photoId,reaction,userId,editable){
   delete state.albumDataCache[userId];
   loadAlbum(userId,editable);
 }
+function ensureImageViewer(){
+  let dialog=$('#avesso-image-viewer');
+  if(dialog)return dialog;
+  dialog=document.createElement('dialog');
+  dialog.id='avesso-image-viewer';
+  dialog.className='avesso-image-viewer';
+  dialog.innerHTML='<button class="image-viewer-close" type="button" aria-label="Fechar">×</button><div id="image-viewer-content"></div>';
+  document.body.appendChild(dialog);
+  dialog.querySelector('.image-viewer-close').onclick=()=>dialog.close();
+  dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+  return dialog;
+}
+function imageViewerCommentHtml(row,ownerId=''){
+  const canDelete=row.user_id===state.profile?.id||ownerId===state.profile?.id;
+  return '<article class="image-viewer-comment">'+
+    '<span class="mini-avatar">'+avatarHtml(row.author?.avatar_url,row.author?.display_name||'?')+'</span>'+
+    '<div><header><button class="user-link" data-profile-id="'+escapeAttr(row.user_id)+'">'+escapeHtml(row.author?.display_name||'alguém')+'</button>'+
+    '<small>@'+escapeHtml(row.author?.handle||'...')+' · '+ago(row.created_at)+'</small></header>'+
+    '<p>'+escapeHtml(row.body)+'</p>'+
+    (canDelete?'<button class="image-comment-delete" data-photo-comment-delete="'+escapeAttr(row.id)+'" data-photo-comment-photo="'+escapeAttr(row.photo_id)+'">apagar</button>':'')+
+    '</div></article>';
+}
+async function loadPhotoViewerData(photoId){
+  const {data:photo,error}=await supabase.from('profile_photos').select('*').eq('id',photoId).maybeSingle();
+  if(error||!photo)return null;
+  const [ownerRes,commentsRes,reactionsRes]=await Promise.all([
+    supabase.from('profiles').select('id,display_name,handle,avatar_url').eq('id',photo.user_id).maybeSingle(),
+    supabase.from('photo_comments').select('id,photo_id,user_id,body,created_at,edited_at').eq('photo_id',photoId).order('created_at',{ascending:true}),
+    supabase.from('photo_reactions').select('photo_id,user_id,reaction,created_at').eq('photo_id',photoId)
+  ]);
+  const comments=commentsRes.data||[];
+  const ids=[...new Set(comments.map(x=>x.user_id).filter(Boolean))];
+  let profiles={};
+  if(ids.length){
+    const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',ids);
+    profiles=Object.fromEntries((data||[]).map(x=>[x.id,x]));
+  }
+  return{
+    photo:{...photo,_url:publicAlbumUrl(photo.storage_path)},
+    owner:ownerRes.data||{},
+    comments:comments.map(x=>({...x,author:profiles[x.user_id]||{}})),
+    reactions:reactionsRes.data||[]
+  };
+}
+async function openAlbumPhotoViewer(photoId){
+  if(!photoId)return;
+  const dialog=ensureImageViewer();
+  const host=$('#image-viewer-content');
+  host.innerHTML='<div class="image-viewer-loading">abrindo pixels...</div>';
+  if(!dialog.open)dialog.showModal();
+  const data=await loadPhotoViewerData(photoId);
+  if(!data){host.innerHTML='<div class="image-viewer-error">A foto sumiu atrás do servidor.</div>';return;}
+  const photo=data.photo,owner=data.owner,comments=data.comments,reactions=data.reactions;
+  const reactionButtons=PHOTO_REACTIONS.map(([id,icon,label])=>{
+    const rows=reactions.filter(x=>x.reaction===id);
+    const active=rows.some(x=>x.user_id===state.profile.id);
+    return '<button class="'+(active?'active':'')+'" data-viewer-photo-react="'+id+'" data-photo-id="'+photo.id+'"><span>'+icon+'</span>'+escapeHtml(label)+(rows.length?' <b>'+rows.length+'</b>':'')+'</button>';
+  }).join('');
+  host.innerHTML='<section class="image-viewer-grid">'+
+    '<div class="image-viewer-stage"><img src="'+escapeAttr(photo._url)+'" alt="'+escapeAttr(photo.caption||'Foto do álbum')+'"></div>'+
+    '<aside class="image-viewer-social">'+
+      '<header class="image-viewer-owner"><span class="mini-avatar">'+avatarHtml(owner.avatar_url,owner.display_name||'?')+'</span><div>'+
+      '<button class="user-link" data-profile-id="'+escapeAttr(owner.id||photo.user_id)+'">'+escapeHtml(owner.display_name||'alguém')+'</button>'+
+      '<small>@'+escapeHtml(owner.handle||'...')+' · '+ago(photo.created_at)+'</small></div></header>'+
+      '<p class="image-viewer-caption">'+escapeHtml(photo.caption||'sem legenda. corajoso.')+'</p>'+
+      '<div class="image-viewer-actions"><button class="turn-feed-button" data-viewer-turn-photo="'+photo.id+'">↻ virar no feed</button></div>'+
+      '<div class="image-viewer-reactions">'+reactionButtons+'</div>'+
+      '<section class="image-viewer-comments"><header><b>CONVERSA // '+comments.length+'</b><small>comentários sem pódio</small></header>'+
+      '<div class="image-viewer-comment-list">'+(comments.map(c=>imageViewerCommentHtml(c,photo.user_id)).join('')||'<p class="image-viewer-empty">Ninguém comentou. A imagem sobreviveu.</p>')+'</div></section>'+
+      '<form id="photo-viewer-comment-form" class="image-viewer-comment-form"><textarea maxlength="420" placeholder="comente a imagem..."></textarea><button type="submit">comentar</button></form>'+
+    '</aside></section>';
+  bindProfileLinks();
+  host.querySelectorAll('[data-viewer-photo-react]').forEach(b=>b.onclick=()=>toggleViewerPhotoReaction(photo.id,b.dataset.viewerPhotoReact));
+  host.querySelector('[data-viewer-turn-photo]')?.addEventListener('click',()=>turnPhotoToFeed(photo.id));
+  host.querySelector('#photo-viewer-comment-form')?.addEventListener('submit',e=>{e.preventDefault();sendPhotoViewerComment(photo.id);});
+  host.querySelectorAll('[data-photo-comment-delete]').forEach(b=>b.onclick=()=>deletePhotoViewerComment(b.dataset.photoCommentDelete,b.dataset.photoCommentPhoto));
+}
+async function sendPhotoViewerComment(photoId){
+  const form=$('#photo-viewer-comment-form'),input=form?.querySelector('textarea');
+  const body=String(input?.value||'').trim();
+  if(body.length<2)return toast('Comentário curto demais até para 56K.');
+  const {error}=await supabase.from('photo_comments').insert({photo_id:photoId,user_id:state.profile.id,body});
+  if(error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'O comentário caiu atrás da imagem.');
+  await openAlbumPhotoViewer(photoId);
+}
+async function deletePhotoViewerComment(commentId,photoId){
+  if(!confirm('Apagar este comentário?'))return;
+  const {error}=await supabase.from('photo_comments').delete().eq('id',commentId);
+  if(error)return toast('O comentário se agarrou ao banco.');
+  await openAlbumPhotoViewer(photoId);
+}
+async function toggleViewerPhotoReaction(photoId,reaction){
+  const {data:existing}=await supabase.from('photo_reactions').select('reaction').eq('photo_id',photoId).eq('user_id',state.profile.id).maybeSingle();
+  let result;
+  if(existing?.reaction===reaction)result=await supabase.from('photo_reactions').delete().eq('photo_id',photoId).eq('user_id',state.profile.id);
+  else result=await supabase.from('photo_reactions').upsert({photo_id:photoId,user_id:state.profile.id,reaction},{onConflict:'photo_id,user_id'});
+  if(result.error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'A reação tropeçou.');
+  await openAlbumPhotoViewer(photoId);
+}
+async function turnPhotoToFeed(photoId){
+  if(!photoId)return;
+  const {data,error}=await supabase.rpc('virar_foto',{p_photo_id:photoId});
+  if(error)return toast(state.suspended?'Sua conta está suspensa para novas publicações.':'Não foi possível virar esta foto no feed.');
+  toast('Foto virada no feed. O original continua com crédito, como deveria.');
+  trackAction('photo_turned','feed',{photo_id:photoId,post_id:data});
+  if(isFeedTab())loadFeed();
+  loadImpact();
+}
+async function turnPostToFeed(postId){
+  if(!postId)return;
+  const {data,error}=await supabase.rpc('virar_post',{p_post_id:postId});
+  if(error)return toast(state.suspended?'Sua conta está suspensa para novas publicações.':'Não foi possível virar esta publicação.');
+  toast('Publicação virada no feed. A origem ficou presa nela, sem truque de autoria.');
+  trackAction('post_turned','feed',{source_post_id:postId,post_id:data});
+  if(isFeedTab())loadFeed();
+  loadImpact();
+}
+async function openFeedImageViewer(postId){
+  if(!postId)return;
+  const dialog=ensureImageViewer(),host=$('#image-viewer-content');
+  host.innerHTML='<div class="image-viewer-loading">abrindo pixels...</div>';
+  if(!dialog.open)dialog.showModal();
+  const {data:post,error}=await supabase.from('feed_attention').select('*').eq('id',postId).maybeSingle();
+  if(error||!post){host.innerHTML='<div class="image-viewer-error">A publicação não está mais disponível.</div>';return;}
+  const imageUrl=post.image_url?postImageSrc(post.image_url):(post.reshare_photo_storage_path?publicAlbumUrl(post.reshare_photo_storage_path):'');
+  if(!imageUrl){host.innerHTML='<div class="image-viewer-error">Essa publicação perdeu a imagem no caminho.</div>';return;}
+  const thread=await loadThreadData([post]);
+  const comments=thread.responses[post.id]||[];
+  const reactions=thread.reactions[post.id]||[];
+  const reactionButtons=ACID_REACTIONS.map(([id,icon,label])=>{
+    const rows=reactions.filter(x=>x.reaction===id);
+    const active=rows.some(x=>x.user_id===state.profile.id);
+    return '<button class="'+(active?'active':'')+'" data-viewer-post-react="'+id+'"><span>'+icon+'</span>'+escapeHtml(label)+(rows.length?' <b>'+rows.length+'</b>':'')+'</button>';
+  }).join('');
+  const turned=post.reshare_author_id?
+    '<div class="post-turned-badge"><span>↻ VIRADO DO AVESSO</span><b>original: @'+escapeHtml(post.reshare_author_handle||'alguém')+'</b><small>virado por @'+escapeHtml(post.author_handle||'alguém')+'</small></div>':'';
+  const commentHtml=comments.map(c=>'<article class="image-viewer-comment"><span class="mini-avatar">'+avatarHtml(c.author?.avatar_url,c.author?.display_name||'?')+'</span><div><header><button class="user-link" data-profile-id="'+escapeAttr(c.author_id)+'">'+escapeHtml(c.author?.display_name||'alguém')+'</button><small>@'+escapeHtml(c.author?.handle||'...')+' · '+ago(c.created_at)+'</small></header><p>'+escapeHtml(c.body)+'</p></div></article>').join('');
+  host.innerHTML='<section class="image-viewer-grid">'+
+    '<div class="image-viewer-stage"><img src="'+escapeAttr(imageUrl)+'" alt="Imagem da publicação"></div>'+
+    '<aside class="image-viewer-social">'+
+      '<header class="image-viewer-owner"><span class="mini-avatar">'+avatarHtml(post.author_avatar,post.author_name||'?')+'</span><div>'+
+      '<button class="user-link" data-profile-id="'+post.author_id+'">'+escapeHtml(post.author_name||'alguém')+'</button><small>@'+escapeHtml(post.author_handle||'...')+' · '+ago(post.created_at)+'</small></div></header>'+
+      turned+
+      '<p class="image-viewer-caption">'+escapeHtml(post.body||'')+'</p>'+
+      '<div class="image-viewer-actions"><button class="turn-feed-button" data-viewer-turn-post="'+post.id+'">↻ virar no feed</button></div>'+
+      '<div class="image-viewer-reactions">'+reactionButtons+'</div>'+
+      '<section class="image-viewer-comments"><header><b>CONVERSA // '+comments.length+'</b><small>sem algoritmo premiando interrupção</small></header><div class="image-viewer-comment-list">'+(commentHtml||'<p class="image-viewer-empty">Ainda sem comentários.</p>')+'</div></section>'+
+      '<form id="post-viewer-comment-form" class="image-viewer-comment-form"><textarea maxlength="420" placeholder="entre na conversa..."></textarea><button type="submit">comentar</button></form>'+
+    '</aside></section>';
+  bindProfileLinks();
+  host.querySelector('[data-viewer-turn-post]')?.addEventListener('click',()=>turnPostToFeed(post.id));
+  host.querySelectorAll('[data-viewer-post-react]').forEach(b=>b.onclick=()=>toggleViewerPostReaction(post.id,b.dataset.viewerPostReact));
+  host.querySelector('#post-viewer-comment-form')?.addEventListener('submit',e=>{e.preventDefault();sendPostViewerComment(post.id);});
+}
+async function sendPostViewerComment(postId){
+  const input=$('#post-viewer-comment-form')?.querySelector('textarea');
+  const body=String(input?.value||'').trim();
+  if(body.length<2)return toast('Comentário curto demais.');
+  const {error}=await supabase.from('responses').insert({post_id:postId,author_id:state.profile.id,body});
+  if(error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'O comentário caiu no vazio.');
+  if(isFeedTab())loadFeed();
+  await openFeedImageViewer(postId);
+}
+async function toggleViewerPostReaction(postId,reaction){
+  const {data:existing}=await supabase.from('post_reactions').select('reaction').eq('post_id',postId).eq('user_id',state.profile.id).maybeSingle();
+  let result;
+  if(existing?.reaction===reaction)result=await supabase.from('post_reactions').delete().eq('post_id',postId).eq('user_id',state.profile.id);
+  else result=await supabase.from('post_reactions').upsert({post_id:postId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'post_id,user_id'});
+  if(result.error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'A reação caiu no vazio.');
+  if(isFeedTab())loadFeed();
+  await openFeedImageViewer(postId);
+}
+
 
 function profileMediaCardHtml(row,editable=false){
   const label=row.media_kind==='youtube'?'▶ YOUTUBE':row.media_kind==='spotify'?'♫ SPOTIFY':row.media_kind==='video'?'▶ VÍDEO':'♫ ÁUDIO';
