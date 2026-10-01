@@ -55,7 +55,9 @@ const STORY_REACTIONS=[
   ['quatro_zero_quatro','404','isso merece um 404']
 ];
 function avessoEmoticonButtons(attribute='data-emoticon-value'){
-  return AVESSO_EMOTICONS.map(value=>`<button type="button" ${attribute}="${escapeAttr(value)}" title="inserir ${escapeAttr(value)}">${escapeHtml(value)}</button>`).join('');
+  const native=AVESSO_EMOTICONS.map(value=>`<button type="button" ${attribute}="${escapeAttr(value)}" title="inserir ${escapeAttr(value)}">${escapeHtml(value)}</button>`).join('');
+  const custom=(state.customAssets?.emoticon||[]).filter(x=>x.active!==false).map(asset=>{const token=asset.token||(':'+asset.slug+':');return `<button type="button" class="custom-emoticon-choice" ${attribute}="${escapeAttr(token)}" title="${escapeAttr(asset.name||asset.slug)}"><img src="${escapeAttr(assetPublicUrl(asset.storage_path))}" alt="${escapeAttr(asset.name||'emoticon')}"></button>`;}).join('');
+  return native+custom;
 }
 function setupFeedEmoticons(){
   const palette=$('#post-emoticon-palette');
@@ -87,13 +89,17 @@ const CHAT_THEMES=[
   ['arcade_os','Arcade OS','#ff4fd8']
 ];
 const CHAT_WALLPAPERS=[['none','Sem fundo','o vazio também é um layout'],...WALLPAPER_OPTIONS];
+function assetPublicUrl(path){return path?supabase.storage.from('avesso-assets').getPublicUrl(path).data.publicUrl:'';}
+function allWallpaperOptions(){const custom=(state.customAssets?.wallpaper||[]).filter(x=>x.active!==false).map(x=>[x.slug,x.name,x.metadata?.tagline||'arquivo do owner']);return [...WALLPAPER_OPTIONS,...custom.filter(row=>!WALLPAPER_OPTIONS.some(base=>base[0]===row[0]))];}
+function allChatWallpapers(){return [['none','Sem fundo','o vazio também é um layout'],...allWallpaperOptions()];}
+function allAvatarOptions(){const custom=(state.customAssets?.avatar||[]).filter(x=>x.active!==false).map(x=>[x.name,assetPublicUrl(x.storage_path),'custom']);return [...AVATAR_OPTIONS,...custom];}
 function chatThemeClass(theme=state.profile?.chat_theme||'bbs_cyan'){
   return CHAT_THEMES.some(x=>x[0]===theme)?`theme-${theme}`:'theme-bbs_cyan';
 }
 function chatWallpaperCss(slug=state.profile?.chat_wallpaper||'none'){
-  return CHAT_WALLPAPERS.some(x=>x[0]===slug)&&slug!=='none'?`url("${wallpaperUrl(slug)}")`:'none';
+  return allChatWallpapers().some(x=>x[0]===slug)&&slug!=='none'?`url("${wallpaperUrl(slug)}")`:'none';
 }
-function wallpaperUrl(slug){return `assets/wallpapers/${slug||'cidade-56k'}.webp`;}
+function wallpaperUrl(slug){const custom=(state.customAssets?.wallpaper||[]).find(x=>x.slug===slug&&x.active!==false);return custom?assetPublicUrl(custom.storage_path):`assets/wallpapers/${slug||'cidade-56k'}.webp`;}
 function applyAppWallpaper(){
   const useProfileWallpaper=state.tab==='profile';
   const slug=(useProfileWallpaper?state.profile?.profile_wallpaper:state.profile?.app_wallpaper)||'cidade-56k';
