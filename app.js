@@ -2279,8 +2279,8 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
   $$('[data-reply-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-box="${b.dataset.replyCancel}"]`)?.classList.add('hidden'));
   $$('[data-reply-emoticons]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-emoticon-palette="${b.dataset.replyEmoticons}"]`)?.classList.toggle('hidden'));
   $$('[data-reply-emoticon]').forEach(b=>b.onclick=()=>{const box=b.closest('[data-reply-box]'),input=box?.querySelector('textarea');if(input){input.value+=`${input.value?' ':''}${b.dataset.replyEmoticon}`;input.focus();}});
-  $('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
-  $('[data-reaction-toggle]').forEach(b=>b.onclick=e=>{
+  $$('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
+  $$('[data-reaction-toggle]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
     const shell=b.closest('.reaction-shell');
     const opening=!shell?.classList.contains('open');
@@ -2293,7 +2293,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
     shell?.classList.toggle('open',opening);
     b.setAttribute('aria-expanded',String(opening));
   });
-  $('[data-react-post]').forEach(b=>b.onclick=e=>{
+  $$('[data-react-post]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
     b.closest('.reaction-shell')?.classList.remove('open');
     toggleReaction(b.dataset.reactPost,b.dataset.reaction,b.classList.contains('active'));
@@ -2308,13 +2308,13 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       });
     });
   }
-  $('[data-post-edit]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postEdit}"]`)?.classList.remove('hidden'));
+  $$('[data-post-edit]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postEdit}"]`)?.classList.remove('hidden'));
   $$('[data-post-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postCancel}"]`)?.classList.add('hidden'));
   $$('[data-post-save]').forEach(b=>b.onclick=()=>savePostEdit(b.dataset.postSave));
-  $('[data-post-delete]').forEach(b=>b.onclick=()=>deleteOwnPost(b.dataset.postDelete));
-  $('[data-turn-post]').forEach(b=>b.onclick=()=>turnPostToFeed(b.dataset.turnPost));
-  $('[data-photo-open]').forEach(img=>img.onclick=()=>openAlbumPhotoViewer(img.dataset.photoOpen));
-  $('[data-feed-image-open]').forEach(img=>img.onclick=()=>openFeedImageViewer(img.dataset.feedImageOpen));
+  $$('[data-post-delete]').forEach(b=>b.onclick=()=>deleteOwnPost(b.dataset.postDelete));
+  $$('[data-turn-post]').forEach(b=>b.onclick=()=>turnPostToFeed(b.dataset.turnPost));
+  $$('[data-photo-open]').forEach(img=>img.onclick=()=>openAlbumPhotoViewer(img.dataset.photoOpen));
+  $$('[data-feed-image-open]').forEach(img=>img.onclick=()=>openFeedImageViewer(img.dataset.feedImageOpen));
 }
 async function savePostEdit(postId){
   const panel=document.querySelector(`[data-post-edit-panel="${CSS.escape(postId)}"]`);
