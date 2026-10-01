@@ -1550,14 +1550,24 @@ $('#nav-profile-link').onclick=()=>document.querySelector('[data-app-tab="profil
 supabase.auth.onAuthStateChange((_event,session)=>{state.session=session;if(session)enterApp();else leaveApp();});
 async function loadAdminAccess(){
   if(!state.profile?.id){
-    state.isAdmin=false;state.adminRole=null;
+    state.isAdmin=false;state.adminRole=null;state.staffRole=null;state.staffRank=0;state.staffRoles={};
     return false;
   }
-  const {data,error}=await supabase.from('admin_users').select('role').eq('user_id',state.profile.id).maybeSingle();
-  state.isAdmin=!error&&Boolean(data?.role);
-  state.adminRole=state.isAdmin?data.role:null;
+  const {data,error}=await supabase.from('admin_users').select('user_id,role');
+  const rows=error?[]:(data||[]);
+  state.staffRoles=Object.fromEntries(rows.map(row=>[row.user_id,row.role]));
+  state.staffRole=state.staffRoles[state.profile.id]||null;
+  state.staffRank=staffRankValue(state.staffRole);
+  state.isAdmin=state.staffRank>=10;
+  state.adminRole=state.staffRole;
   const nav=$('#admin-nav-button');
-  if(nav)nav.classList.toggle('hidden',!state.isAdmin);
+  if(nav){
+    nav.classList.toggle('hidden',!state.isAdmin);
+    nav.textContent=state.isAdmin?'♛ dashboard':'dashboard';
+    nav.title=state.isAdmin?staffRoleLabel(state.staffRole):'';
+  }
+  startIdentityDecoration();
+  decorateIdentityNodes(document);
   return state.isAdmin;
 }
 async function enterApp(){
