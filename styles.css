@@ -3759,3 +3759,468 @@ html.msn-screen-nudge body{
   .dm-floating-window .dm-peer-name{font-size:.86rem!important}
   .dm-floating-window .dm-floating-head small{font-size:.52rem!important}
 }
+
+
+/* AVESSO CHAT REALTIME + HOLD TO TALK 2026-10-01 */
+
+.dm-floating-window #dm-form{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  gap:8px!important;
+  align-items:stretch!important;
+}
+.dm-send-action{
+  width:92px!important;
+  min-width:92px!important;
+  height:auto!important;
+  min-height:44px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+  padding:6px 10px!important;
+  border:2px outset color-mix(in srgb,var(--dm-accent) 42%,#dfe8e6)!important;
+  border-radius:0!important;
+  background:linear-gradient(#f4fbfa,#cfdddd)!important;
+  color:#1f3538!important;
+  cursor:pointer!important;
+  user-select:none!important;
+  -webkit-user-select:none!important;
+  touch-action:none!important;
+  box-shadow:none!important;
+}
+.dm-send-action:hover{
+  background:color-mix(in srgb,var(--dm-accent) 12%,#e9f2f0)!important;
+  border-color:var(--dm-accent)!important;
+}
+.dm-send-action.text-ready{
+  background:var(--dm-accent)!important;
+  color:var(--dm-dark)!important;
+}
+.dm-send-action.text-ready b{
+  font:800 .64rem/1 var(--mono)!important;
+}
+.dm-send-action small{
+  font:800 .39rem/1 var(--mono)!important;
+  letter-spacing:.06em;
+}
+.dm-send-action.recording{
+  background:#631d22!important;
+  color:#fff!important;
+  border-color:#ff7a70!important;
+  animation:dmRecordPulse .7s steps(2,end) infinite;
+}
+.dm-send-action.recording b{
+  font:800 .58rem/1 var(--mono)!important;
+}
+.dm-send-action.recording small{
+  color:#ffd8d3!important;
+}
+.dm-rec-dot{
+  width:9px;height:9px;
+  flex:0 0 9px;
+  background:#ff5b50;
+  box-shadow:0 0 0 2px #26080a,0 0 10px #ff5b5099;
+}
+@keyframes dmRecordPulse{50%{filter:brightness(.78)}}
+
+/* Microfone pixelado sem depender de emoji e da boa vontade da fonte do sistema. */
+.avesso-mic-icon{
+  width:20px;
+  height:24px;
+  position:relative;
+  display:inline-block;
+  flex:0 0 20px;
+}
+.avesso-mic-icon:before{
+  content:"";
+  position:absolute;
+  left:6px;top:1px;
+  width:8px;height:13px;
+  border:2px solid currentColor;
+  background:color-mix(in srgb,var(--dm-accent) 18%,#fff);
+}
+.avesso-mic-icon:after{
+  content:"";
+  position:absolute;
+  left:3px;top:9px;
+  width:14px;height:9px;
+  border-left:2px solid currentColor;
+  border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;
+}
+.avesso-mic-icon i{
+  position:absolute;
+  left:9px;top:18px;
+  width:2px;height:5px;
+  background:currentColor;
+}
+.avesso-mic-icon i:after{
+  content:"";
+  position:absolute;
+  left:-4px;bottom:0;
+  width:10px;height:2px;
+  background:currentColor;
+}
+
+/* Áudio compacto e estável no desktop. */
+.dm-floating-window .dm-bubble:has(.dm-audio-card){
+  width:min(360px,78%)!important;
+  max-width:min(360px,78%)!important;
+  min-width:0!important;
+  padding:8px!important;
+}
+.dm-audio-card{
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  padding:7px!important;
+  overflow:hidden!important;
+  border:1px solid color-mix(in srgb,var(--dm-accent) 48%,#91a2a4)!important;
+  background:color-mix(in srgb,var(--dm-paper) 92%,transparent)!important;
+}
+.dm-audio-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:6px;
+}
+.dm-audio-head>span{
+  color:color-mix(in srgb,var(--dm-accent) 75%,#233638)!important;
+  font:800 .55rem/1 var(--mono)!important;
+  letter-spacing:.045em;
+}
+.dm-audio-head>small{
+  margin:0!important;
+  color:color-mix(in srgb,var(--dm-ink) 60%,#66777a)!important;
+  font:700 .49rem/1 var(--mono)!important;
+}
+.dm-audio-card audio{
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  height:36px!important;
+  margin:0!important;
+}
+.dm-message-time{
+  margin-top:5px!important;
+}
+
+/* Feedback local do chamar atenção. Nada de destruir e recriar a janela inteira. */
+#dm-attention.sent{
+  animation:dmAttentionSent .42s steps(2,end);
+}
+@keyframes dmAttentionSent{
+  0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-3px);background:#fff3bc!important}
+  75%{transform:translateX(3px);background:#fff3bc!important}
+}
+
+@media(max-width:760px){
+  .dm-send-action{
+    width:64px!important;
+    min-width:64px!important;
+    padding:5px!important;
+  }
+  .dm-send-action small{display:none!important}
+  .dm-floating-window .dm-bubble:has(.dm-audio-card){
+    width:min(300px,88%)!important;
+    max-width:88%!important;
+  }
+}
+
+
+/* AVESSO LINKS + EDITING + OVERFLOW 2026-10-01 */
+
+/* Texto humano também inclui quem descobre a tecla F e se recusa a soltá-la. */
+.post-card,
+.post-card > *,
+.post-body,
+.conversation-item,
+.conversation-item > div,
+.conversation-item p,
+.profile-media-card,
+.profile-media-card > p,
+.album-photo,
+.album-photo-meta,
+.album-photo-meta p,
+.story-comment p,
+.guestbook-entry,
+.guestbook-entry p{
+  min-width:0;
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.post-card{overflow:hidden}
+.post-route{
+  min-width:0;
+  flex-wrap:wrap;
+}
+.post-meta{
+  white-space:nowrap;
+}
+.post-body{
+  white-space:pre-wrap;
+  line-height:1.55;
+}
+
+/* Link de YouTube / Spotify no compositor */
+.media-composer{
+  flex-wrap:wrap!important;
+}
+.media-link-row{
+  flex:1 1 100%;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:5px 9px;
+  align-items:center;
+  padding:8px 9px;
+  border:1px dashed #344246;
+  background:#0b0f10;
+}
+.media-link-row>span{
+  color:var(--cyan);
+  font:800 .55rem var(--mono);
+}
+.media-link-row input{
+  min-width:0;
+  width:100%;
+  margin:0!important;
+  padding:8px 9px!important;
+  background:#080b0c!important;
+  color:#eef2eb!important;
+  border:1px solid #354247!important;
+  font:.72rem var(--sans)!important;
+}
+.media-link-row small{
+  grid-column:2;
+  color:#748180;
+  font:500 .50rem/1.4 var(--mono);
+}
+
+/* Players externos */
+.post-embed iframe{
+  display:block;
+  width:100%;
+  max-width:100%;
+  border:0;
+  background:#050708;
+}
+.post-youtube .embed-frame{
+  position:relative;
+  width:100%;
+  aspect-ratio:16/9;
+  background:#000;
+  overflow:hidden;
+}
+.post-youtube .embed-frame iframe{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+}
+.post-spotify iframe{
+  min-height:352px;
+  border-radius:8px;
+}
+.post-spotify iframe[src*="/track/"],
+.post-spotify iframe[src*="/episode/"]{
+  min-height:152px;
+  height:152px;
+}
+.post-media.compact.post-spotify iframe{
+  min-height:232px;
+}
+.post-media.compact.post-spotify iframe[src*="/track/"],
+.post-media.compact.post-spotify iframe[src*="/episode/"]{
+  min-height:152px;
+}
+
+/* Edição das publicações */
+.post-owner-actions{
+  display:flex;
+  gap:5px;
+  margin-left:auto;
+}
+.post-owner-actions button{
+  border-color:#3b474a!important;
+}
+.post-owner-actions .danger{
+  color:#ff8178!important;
+  border-color:#66363a!important;
+}
+.post-edit-panel{
+  margin:10px 0 12px;
+  padding:9px;
+  border:1px solid #3b494d;
+  background:#090d0f;
+}
+.post-edit-panel textarea{
+  width:100%;
+  min-height:92px;
+  resize:vertical;
+  margin:0;
+  background:#06090a;
+  color:#e8ede8;
+  border:1px solid #354247;
+  padding:9px;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.post-edit-panel>div{
+  display:flex;
+  justify-content:flex-end;
+  gap:6px;
+  margin-top:7px;
+}
+.post-edit-panel button{
+  border:1px solid #3b494d;
+  background:#101719;
+  color:#dbe3df;
+  padding:6px 9px;
+  font:700 .53rem var(--mono);
+  cursor:pointer;
+}
+.post-edit-panel button:first-child{
+  border-color:var(--acid);
+  color:var(--acid);
+}
+
+/* Álbum: editar sem abrir um formulário do século passado em outra página */
+.album-owner-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:5px;
+  margin-top:7px;
+}
+.album-owner-actions button{
+  padding:6px;
+  background:#0a0e10;
+  border:1px solid #354247;
+  color:#9eaaa7;
+  font:600 .49rem var(--mono);
+  cursor:pointer;
+}
+.album-owner-actions .album-delete{
+  margin:0;
+  color:#ff7a6f;
+  border-color:#552d31;
+}
+.album-caption-edit{
+  margin-top:6px;
+  padding:7px;
+  border:1px dashed #354247;
+  background:#090d0f;
+}
+.album-caption-edit input{
+  width:100%;
+  margin:0!important;
+  min-width:0;
+}
+.album-caption-edit>div{
+  display:flex;
+  gap:5px;
+  justify-content:flex-end;
+  margin-top:5px;
+}
+.album-caption-edit button{
+  padding:5px 7px;
+  border:1px solid #354247;
+  background:#111719;
+  color:#dce4e1;
+  font:600 .47rem var(--mono);
+}
+
+/* Meu Canto: arquivo ou link, sem obrigar upload quando já existe a internet. */
+.profile-media-upload{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr) auto!important;
+}
+.profile-media-owner-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:5px;
+  margin-top:8px;
+}
+.profile-media-owner-actions button{
+  padding:6px;
+  border:1px solid #354247;
+  background:#0b1012;
+  color:#a8b2af;
+  font:600 .50rem var(--mono);
+  cursor:pointer;
+}
+.profile-media-owner-actions .profile-media-delete{
+  margin:0;
+  color:#ff7a6f;
+  border-color:#552d31;
+}
+.profile-media-edit{
+  margin-top:7px;
+  padding:8px;
+  border:1px dashed #354247;
+  background:#090d0f;
+}
+.profile-media-edit textarea,
+.profile-media-edit input{
+  width:100%;
+  min-width:0;
+  margin:0 0 6px!important;
+  background:#06090a;
+  color:#e7ece7;
+  border:1px solid #354247;
+  padding:8px;
+}
+.profile-media-edit textarea{min-height:72px;resize:vertical}
+.profile-media-edit>div{
+  display:flex;
+  justify-content:flex-end;
+  gap:5px;
+}
+.profile-media-edit button{
+  border:1px solid #354247;
+  background:#111719;
+  color:#dce4e1;
+  padding:5px 8px;
+  font:600 .48rem var(--mono);
+}
+
+/* Minimizado significa canto inferior da tela, não uma janela anã perdida no mapa. */
+@media(min-width:761px) and (pointer:fine){
+  .dm-floating-window.desktop-windowed.minimized{
+    left:auto!important;
+    top:auto!important;
+    right:16px!important;
+    bottom:16px!important;
+    width:min(320px,calc(100vw - 24px))!important;
+    height:58px!important;
+    min-height:58px!important;
+    max-height:58px!important;
+    overflow:hidden!important;
+    box-shadow:7px 7px 0 #020405,0 0 24px #22d9ee18!important;
+  }
+}
+
+/* As bolhas também não podem atravessar a parede com uma palavra infinita. */
+.dm-bubble,
+.dm-bubble p,
+.dm-attention-event{
+  min-width:0!important;
+  overflow-wrap:anywhere!important;
+  word-break:break-word!important;
+}
+
+@media(max-width:760px){
+  .media-link-row{grid-template-columns:1fr}
+  .media-link-row small{grid-column:1}
+  .profile-media-upload{grid-template-columns:1fr!important}
+  .post-owner-actions{
+    width:100%;
+    margin-left:0;
+  }
+  .post-actions{flex-wrap:wrap}
+  .post-owner-actions button{flex:1}
+}

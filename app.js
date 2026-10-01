@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -396,7 +396,7 @@ async function registerNotificationWorker(){
   }catch{return null;}
 }
 async function browserNotify({title='AVESSO',body='',avatar='',kind='message',action=null}={}){
-  if(!document.hidden||!('Notification' in window)||Notification.permission!=='granted')return;
+  if((!document.hidden&&document.hasFocus())||!('Notification' in window)||Notification.permission!=='granted')return;
   const icon=avatar?new URL(avatar,SITE_URL).href:new URL('assets/avatars/robo-01.svg',SITE_URL).href;
   const options={
     body,
@@ -460,14 +460,26 @@ function startPresenceHeartbeat(){
   beat();state.presenceTimer=setInterval(beat,45000);
 }
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden||!state.profile)return;
+  if(!state.profile)return;
+  if(document.hidden){
+    autoMinimizeChat();
+    return;
+  }
   startPresenceHeartbeat();
   if(state.pendingAttentionPeerId){
     const peerId=state.pendingAttentionPeerId;
     state.pendingAttentionPeerId=null;
-    openChatWindow(peerId).then(()=>{triggerScreenNudge();triggerChatNudge(peerId);});
+    state.chatWindowMinimized=true;
+    openChatWindow(peerId,{keepMinimized:true}).then(()=>{
+      state.chatWindowMinimized=true;
+      const win=ensureChatWindow();
+      win.classList.add('minimized');
+      applyChatGeometry();
+      triggerChatNudge(peerId);
+    });
   }
 });
+window.addEventListener('blur',()=>{if(state.profile)autoMinimizeChat();});
 const PHOTO_REACTIONS=[
   ['nao_foi_horrivel','♥','não foi horrível'],
   ['eu_vi','◉','eu vi'],
@@ -870,13 +882,47 @@ $('#post-media').addEventListener('change',e=>{
   if(!kind){e.target.value='';state.postMediaFile=null;return toast('Use um arquivo de áudio ou vídeo compatível. GIF continua sendo imagem, por mais que tente.');}
   if(file.size>mediaSizeLimit(kind)){e.target.value='';state.postMediaFile=null;return toast(`${kind==='video'?'Vídeo':'Áudio'} acima de ${mediaSizeLabel(kind)}. O servidor também tem limites emocionais.`);}
   state.postMediaFile=file;
+  const mediaLink=$('#post-media-link');if(mediaLink)mediaLink.value='';
+  const mediaLinkStatus=$('#post-media-link-status');if(mediaLinkStatus)mediaLinkStatus.textContent='arquivo local selecionado';
   $('#media-preview-icon').textContent=kind==='video'?'▶':'♫';
   $('#media-preview-name').textContent=file.name;
   $('#media-preview-kind').textContent=`${kind==='video'?'vídeo':'música/áudio'} · ${Math.max(.1,file.size/1024/1024).toFixed(1)} MB`;
   preview.classList.remove('hidden');
   trackAction('media_selected','composer',{type:file.type,size:file.size,kind});
 });
-$('#remove-media').onclick=()=>{state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');};
+$('#remove-media').onclick=()=>{state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');const s=$('#post-media-link-status');if(s)s.textContent='link reconhecido vira player, não caça-clique';};
+function parseExternalMediaLink(raw){
+  const value=String(raw||'').trim();
+  if(!value)return null;
+  let url;
+  try{url=new URL(value);}catch{return null;}
+  if(url.protocol!=='https:'&&url.protocol!=='http:')return null;
+  const host=url.hostname.toLowerCase().replace(/^www\./,'');
+  if(['youtube.com','m.youtube.com','music.youtube.com','youtu.be','youtube-nocookie.com'].includes(host)){
+    let id='';
+    if(host==='youtu.be')id=url.pathname.split('/').filter(Boolean)[0]||'';
+    else if(url.pathname==='/watch')id=url.searchParams.get('v')||'';
+    else{
+      const parts=url.pathname.split('/').filter(Boolean);
+      if(['shorts','embed','live'].includes(parts[0]))id=parts[1]||'';
+    }
+    if(!/^[A-Za-z0-9_-]{6,20}$/.test(id))return null;
+    return {kind:'youtube',provider:'YouTube',url:`https://www.youtube-nocookie.com/embed/${id}`,canonical:`https://www.youtube.com/watch?v=${id}`};
+  }
+  if(host==='open.spotify.com'){
+    const parts=url.pathname.split('/').filter(Boolean);
+    let offset=parts[0]==='embed'?1:0;
+    if(parts[offset]?.startsWith('intl-'))offset++;
+    const type=parts[offset],id=parts[offset+1];
+    if(!['track','album','playlist','episode','show','artist'].includes(type)||!/^[A-Za-z0-9]+$/.test(id||''))return null;
+    return {kind:'spotify',provider:'Spotify',url:`https://open.spotify.com/embed/${type}/${id}`,canonical:`https://open.spotify.com/${type}/${id}`,spotifyType:type};
+  }
+  return null;
+}
+function externalMediaShareUrl(raw){
+  const parsed=parseExternalMediaLink(raw);
+  return parsed?.canonical||String(raw||'');
+}
 function mediaKindFromFile(file){
   if(!file?.type)return null;
   if(file.type.startsWith('audio/'))return'audio';
@@ -887,9 +933,14 @@ function mediaSizeLimit(kind){return kind==='video'?50*1024*1024:20*1024*1024;}
 function mediaSizeLabel(kind){return kind==='video'?'50 MB':'20 MB';}
 function publicMediaUrl(path){return supabase.storage.from('avesso-media').getPublicUrl(path).data.publicUrl;}
 function feedMediaHtml(url,kind,{compact=false}={}){
-  if(!url||!['audio','video'].includes(kind))return'';
-  if(kind==='audio')return `<figure class="post-media post-audio ${compact?'compact':''}"><div class="post-media-label">♫ ÁUDIO // dê play por sua conta</div><audio controls preload="metadata" src="${escapeAttr(url)}"></audio></figure>`;
-  return `<figure class="post-media post-video ${compact?'compact':''}"><div class="post-media-label">▶ VÍDEO // movimento detectado</div><video controls playsinline preload="metadata" src="${escapeAttr(url)}"></video></figure>`;
+  if(!url||!['audio','video','youtube','spotify'].includes(kind))return'';
+  const cls=`post-media ${compact?'compact':''}`;
+  if(kind==='audio')return `<figure class="${cls} post-audio"><div class="post-media-label">♫ ÁUDIO // dê play por sua conta</div><audio controls preload="metadata" src="${escapeAttr(url)}"></audio></figure>`;
+  if(kind==='video')return `<figure class="${cls} post-video"><div class="post-media-label">▶ VÍDEO // movimento detectado</div><video controls playsinline preload="metadata" src="${escapeAttr(url)}"></video></figure>`;
+  const external=parseExternalMediaLink(url);
+  if(!external||external.kind!==kind)return'';
+  if(kind==='youtube')return `<figure class="${cls} post-embed post-youtube"><div class="post-media-label">▶ YOUTUBE // janela para outro pedaço da internet</div><div class="embed-frame"><iframe src="${escapeAttr(external.url)}" title="Vídeo do YouTube" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div></figure>`;
+  return `<figure class="${cls} post-embed post-spotify"><div class="post-media-label">♫ SPOTIFY // aperte play conscientemente</div><iframe src="${escapeAttr(external.url)}" title="Conteúdo do Spotify" loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe></figure>`;
 }
 async function uploadPostMedia(){
   const file=state.postMediaFile;if(!file)return{url:null,kind:null};
@@ -911,18 +962,31 @@ async function uploadPostImage(){
   if(error)throw error;
   return supabase.storage.from('post-images').getPublicUrl(path).data.publicUrl;
 }
+$('#post-media-link').addEventListener('input',e=>{
+  const parsed=parseExternalMediaLink(e.target.value);
+  const status=$('#post-media-link-status');
+  if(!e.target.value.trim()){if(status)status.textContent='link reconhecido vira player, não caça-clique';return;}
+  if(parsed){
+    if(status)status.textContent=`${parsed.provider} reconhecido · player será incorporado`;
+    state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');
+  }else if(status)status.textContent='use um link válido do YouTube ou Spotify';
+});
 $('#publish-post').onclick=async()=>{
   const body=$('#post-body').value.trim();
   const directed=$('#post-target').value==='person';
+  const external=parseExternalMediaLink($('#post-media-link')?.value||'');
+  if($('#post-media-link')?.value.trim()&&!external)return toast('Esse link não é um YouTube ou Spotify reconhecível.');
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
-  if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||state.postMediaFile))return toast('Imagem, música e vídeo privados ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
-  if(body.length<3&&!state.postImageFile&&!state.postMediaFile)return toast('Dê ao menos uma frase, imagem, música ou vídeo. Telepatia ainda não foi integrada.');
+  if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||state.postMediaFile||external))return toast('Imagem, música e vídeo privados ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
+  if(body.length<3&&!state.postImageFile&&!state.postMediaFile&&!external)return toast('Dê ao menos uma frase, imagem, música, vídeo ou link. Telepatia ainda não foi integrada.');
   $('#publish-post').disabled=true;
-  let image_url=null,media_url=null,media_kind=null;
+  let image_url=null,media_url=external?.url||null,media_kind=external?.kind||null;
   try{
     image_url=await uploadPostImage();
-    const media=await uploadPostMedia();
-    media_url=media.url;media_kind=media.kind;
+    if(!external){
+      const media=await uploadPostMedia();
+      media_url=media.url;media_kind=media.kind;
+    }
   }catch(e){
     $('#publish-post').disabled=false;
     console.error('media upload failed',e);
@@ -931,7 +995,7 @@ $('#publish-post').onclick=async()=>{
   const {data:createdPost,error}=await supabase.from('posts').insert({
     author_id:state.profile.id,
     recipient_id:directed?state.recipient.id:null,
-    body:body||(media_kind==='video'?'Vídeo publicado no AVESSO.':media_kind==='audio'?'Áudio publicado no AVESSO.':'Imagem publicada no AVESSO.'),
+    body:body||(media_kind==='youtube'?'Vídeo do YouTube publicado no AVESSO.':media_kind==='spotify'?'Spotify publicado no AVESSO.':media_kind==='video'?'Vídeo publicado no AVESSO.':media_kind==='audio'?'Áudio publicado no AVESSO.':'Imagem publicada no AVESSO.'),
     image_url,
     media_url,
     media_kind,
@@ -942,7 +1006,9 @@ $('#publish-post').onclick=async()=>{
   $('#post-body').value='';$('#recipient-search').value='';$('#char-count').textContent='420';state.recipient=null;
   state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');
   state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');
-  const mediaLabel=media_kind==='video'?'Vídeo entregue ao feed.':media_kind==='audio'?'Áudio entregue ao feed.':image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
+  if($('#post-media-link'))$('#post-media-link').value='';
+  if($('#post-media-link-status'))$('#post-media-link-status').textContent='link reconhecido vira player, não caça-clique';
+  const mediaLabel=media_kind==='youtube'?'Vídeo do YouTube incorporado ao feed.':media_kind==='spotify'?'Spotify incorporado ao feed.':media_kind==='video'?'Vídeo entregue ao feed.':media_kind==='audio'?'Áudio entregue ao feed.':image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
   toast(mediaLabel);
   trackAction(media_kind?`${media_kind}_posted`:image_url?'image_posted':'post_created','composer',{directed,media_kind});
   if(isFeedTab())loadFeed();
@@ -1048,14 +1114,16 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       const active=rows.some(x=>x.user_id===state.profile.id);
       return `<button class="acid-reaction ${active?'active':''}" data-react-post="${p.id}" data-reaction="${id}" aria-pressed="${active}"><span>${icon}</span>${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`;
     }).join('');
+    const ownerActions=p.author_id===state.profile.id?`<div class="post-owner-actions"><button data-post-edit="${p.id}">editar</button><button class="danger" data-post-delete="${p.id}">apagar</button></div>`:'';
     return `<article class="post-card" data-post-card="${p.id}">
       <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
-      <p class="post-body">${escapeHtml(p.body)}</p>
+      <p class="post-body" data-post-body="${p.id}">${escapeHtml(p.body)}</p>
+      ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea>${['youtube','spotify'].includes(p.media_kind)?`<input type="url" data-post-media-link-edit="${p.id}" value="${escapeAttr(externalMediaShareUrl(p.media_url))}" placeholder="link do YouTube ou Spotify">`:''}<div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
       ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
       ${feedMediaHtml(p.media_url,p.media_kind)}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
       ${conversationHtml}
-      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
+      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button>${ownerActions}${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
       <div class="inline-reply hidden" data-reply-box="${p.id}"><label>RESPOSTA // fale com a pessoa, não com a métrica</label><textarea maxlength="420" placeholder="Escreva algo que valha o espaço que ocupa."></textarea><div class="reply-emoticon-row"><button type="button" data-reply-emoticons="${p.id}">☻ avessícones</button><div class="feed-emoticon-palette hidden" data-reply-emoticon-palette="${p.id}">${avessoEmoticonButtons('data-reply-emoticon')}</div></div><div><button data-reply-send="${p.id}">publicar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
     </article>`;
   }).join('');
@@ -1063,11 +1131,57 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
     const box=document.querySelector(`[data-reply-box="${b.dataset.replyToggle}"]`);
     box?.classList.toggle('hidden');box?.querySelector('textarea')?.focus();
   });
-  $('[data-reply-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-box="${b.dataset.replyCancel}"]`)?.classList.add('hidden'));
-  $('[data-reply-emoticons]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-emoticon-palette="${b.dataset.replyEmoticons}"]`)?.classList.toggle('hidden'));
-  $('[data-reply-emoticon]').forEach(b=>b.onclick=()=>{const box=b.closest('[data-reply-box]'),input=box?.querySelector('textarea');if(input){input.value+=`${input.value?' ':''}${b.dataset.replyEmoticon}`;input.focus();}});
-  $('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
+  $$('[data-reply-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-box="${b.dataset.replyCancel}"]`)?.classList.add('hidden'));
+  $$('[data-reply-emoticons]').forEach(b=>b.onclick=()=>document.querySelector(`[data-reply-emoticon-palette="${b.dataset.replyEmoticons}"]`)?.classList.toggle('hidden'));
+  $$('[data-reply-emoticon]').forEach(b=>b.onclick=()=>{const box=b.closest('[data-reply-box]'),input=box?.querySelector('textarea');if(input){input.value+=`${input.value?' ':''}${b.dataset.replyEmoticon}`;input.focus();}});
+  $$('[data-reply-send]').forEach(b=>b.onclick=()=>sendReply(b.dataset.replySend));
   $$('[data-react-post]').forEach(b=>b.onclick=()=>toggleReaction(b.dataset.reactPost,b.dataset.reaction,b.classList.contains('active')));
+  $$('[data-post-edit]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postEdit}"]`)?.classList.remove('hidden'));
+  $$('[data-post-cancel]').forEach(b=>b.onclick=()=>document.querySelector(`[data-post-edit-panel="${b.dataset.postCancel}"]`)?.classList.add('hidden'));
+  $$('[data-post-save]').forEach(b=>b.onclick=()=>savePostEdit(b.dataset.postSave));
+  $$('[data-post-delete]').forEach(b=>b.onclick=()=>deleteOwnPost(b.dataset.postDelete));
+}
+async function savePostEdit(postId){
+  const panel=document.querySelector(`[data-post-edit-panel="${CSS.escape(postId)}"]`);
+  const body=String(panel?.querySelector('textarea')?.value||'').trim();
+  if(body.length<1)return toast('A postagem precisa ter pelo menos 1 caractere.');
+  if(body.length>420)return toast('Até 420 caracteres. A parede do AVESSO não virou tese.');
+  const patch={body,edited_at:new Date().toISOString()};
+  const linkInput=panel?.querySelector('[data-post-media-link-edit]');
+  if(linkInput){
+    const parsed=parseExternalMediaLink(linkInput.value);
+    if(!parsed)return toast('O link editado precisa ser do YouTube ou Spotify.');
+    patch.media_url=parsed.url;patch.media_kind=parsed.kind;
+  }
+  const {error}=await supabase.from('posts').update(patch).eq('id',postId).eq('author_id',state.profile.id);
+  if(error)return toast('A edição não foi salva.');
+  toast('Post editado. A internet aceitou uma rara correção.');
+  if(isFeedTab())loadFeed();
+}
+function storagePathFromPublicUrl(raw,bucket){
+  try{
+    const url=new URL(raw);
+    const marker=`/storage/v1/object/public/${bucket}/`;
+    const index=url.pathname.indexOf(marker);
+    if(index<0)return null;
+    return decodeURIComponent(url.pathname.slice(index+marker.length));
+  }catch{return null;}
+}
+async function deleteOwnPost(postId){
+  if(!postId||!confirm('Apagar esta postagem? Respostas e reações ligadas a ela também podem desaparecer.'))return;
+  const {data:post,error:fetchError}=await supabase.from('posts').select('id,author_id,image_url,media_url,media_kind').eq('id',postId).eq('author_id',state.profile.id).maybeSingle();
+  if(fetchError||!post)return toast('Não encontrei essa postagem como sua.');
+  const {error}=await supabase.from('posts').delete().eq('id',postId).eq('author_id',state.profile.id);
+  if(error)return toast('A postagem se recusou a desaparecer.');
+  const imagePath=storagePathFromPublicUrl(post.image_url,'post-images');
+  if(imagePath?.startsWith(`${state.profile.id}/`))supabase.storage.from('post-images').remove([imagePath]).catch(()=>{});
+  if(['audio','video'].includes(post.media_kind)){
+    const mediaPath=storagePathFromPublicUrl(post.media_url,'avesso-media');
+    if(mediaPath?.startsWith(`${state.profile.id}/`))supabase.storage.from('avesso-media').remove([mediaPath]).catch(()=>{});
+  }
+  toast('Postagem apagada. Sem cerimônia de despedida.');
+  if(isFeedTab())loadFeed();
+  loadImpact();
 }
 async function toggleReaction(postId,reaction,active){
   if(!ACID_REACTIONS.some(x=>x[0]===reaction))return;
@@ -1107,8 +1221,10 @@ function applyAppTabLayout(){
 }
 document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   const previousTab=state.tab;
-  if(previousTab==='plaza'&&b.dataset.appTab!=='plaza')stopPlazaRealtime();
-  state.tab=b.dataset.appTab;
+  const nextTab=b.dataset.appTab;
+  if(previousTab==='plaza'&&nextTab!=='plaza')stopPlazaRealtime();
+  if(nextTab!=='messages')autoMinimizeChat();
+  state.tab=nextTab;
   applyAppWallpaper();
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
@@ -1351,8 +1467,115 @@ function noteFriendPresence(profile){
     });
   }
 }
-function stopDirectRealtime(){
-  if(state.directChannel){supabase.removeChannel(state.directChannel);state.directChannel=null;}
+function stopDirectRealtime({resetWatch=true}={}){
+  clearTimeout(state.directReconnectTimer);state.directReconnectTimer=null;
+  clearInterval(state.directPollTimer);state.directPollTimer=null;
+  if(resetWatch){
+    state.directWatchStartedAt=null;
+    state.directSeenIds=new Set();
+  }
+  const channel=state.directChannel;
+  state.directChannel=null;
+  state.directChannelStatus='CLOSED';
+  if(channel)supabase.removeChannel(channel);
+}
+function rememberDirectMessage(id){
+  if(!id)return false;
+  if(state.directSeenIds.has(id))return false;
+  state.directSeenIds.add(id);
+  if(state.directSeenIds.size>400){
+    const first=state.directSeenIds.values().next().value;
+    state.directSeenIds.delete(first);
+  }
+  return true;
+}
+function scheduleDirectReconnect(){
+  if(state.directReconnectTimer||!state.profile?.id||!state.directWatchStartedAt)return;
+  state.directReconnectTimer=setTimeout(()=>{
+    state.directReconnectTimer=null;
+    if(state.directChannel){supabase.removeChannel(state.directChannel);state.directChannel=null;}
+    startDirectRealtime();
+  },1400);
+}
+async function directAttachmentUrl(path){
+  if(!path)return'';
+  const cached=state.directAttachmentUrlCache[path];
+  if(cached&&cached.expiresAt>Date.now()+30000)return cached.url;
+  const {data}=await supabase.storage.from('avesso-chat').createSignedUrl(path,3600);
+  const url=data?.signedUrl||'';
+  if(url)state.directAttachmentUrlCache[path]={url,expiresAt:Date.now()+3300000};
+  return url;
+}
+async function hydrateDirectMessage(m){
+  if(!m?.attachment_path)return m;
+  return {...m,attachment_url:await directAttachmentUrl(m.attachment_path)};
+}
+function appendDirectMessage(m,{replaceId=null}={}){
+  const log=$('#dm-log');if(!log||!m)return;
+  if(m.id&&log.querySelector(`[data-dm-id="${CSS.escape(String(m.id))}"]`))return;
+  const html=dmMessageHtml(m);
+  if(replaceId){
+    const old=log.querySelector(`[data-dm-id="${CSS.escape(String(replaceId))}"]`);
+    if(old){old.outerHTML=html;log.scrollTop=log.scrollHeight;return;}
+  }
+  log.querySelector('.dm-empty')?.remove();
+  log.insertAdjacentHTML('beforeend',html);
+  log.scrollTop=log.scrollHeight;
+}
+async function markDirectRead(id){
+  if(!id||!state.profile?.id)return;
+  await supabase.from('direct_messages').update({read_at:new Date().toISOString()}).eq('id',id).eq('recipient_id',state.profile.id).is('read_at',null);
+}
+async function receiveIncomingDirectMessage(m,{source='realtime'}={}){
+  if(!m?.id||m.recipient_id!==state.profile?.id||m.sender_id===state.profile.id)return;
+  if(!rememberDirectMessage(m.id))return;
+  const sender=await profileById(m.sender_id);
+  const attention=m.message_kind==='attention';
+  const muted=isPeerMuted(m.sender_id);
+  if(!muted){
+    socialNotify({
+      title:attention?`${sender?.display_name||'Alguém'} chamou sua atenção`:`Mensagem de ${sender?.display_name||'alguém'}`,
+      body:attention?'CHAMAR ATENÇÃO. O protocolo de 2006 foi executado.':(m.message_kind==='image'?'enviou uma imagem':m.message_kind==='audio'?'enviou uma mensagem de voz':m.message_kind==='file'?'enviou um arquivo':String(m.body||'').slice(0,90)),
+      avatar:sender?.avatar_url||'',
+      kind:attention?'attention':'message',
+      sound:!attention,
+      action:()=>openFriendChat(m.sender_id)
+    });
+  }
+
+  const sameChat=state.chatWindowOpen&&state.directPeerId===m.sender_id;
+  if(attention&&!muted){
+    if(document.hidden||!document.hasFocus()){
+      state.pendingAttentionPeerId=m.sender_id;
+      if(sameChat)autoMinimizeChat();
+    }else{
+      await receiveAttention(m.sender_id,m);
+    }
+  }else if(sameChat){
+    const hydrated=await hydrateDirectMessage(m);
+    appendDirectMessage(hydrated);
+    if(!document.hidden&&document.hasFocus())markDirectRead(m.id);
+  }
+
+  if(state.tab==='messages'&&!sameChat)renderMessagesPage();
+}
+async function pollDirectInbox(){
+  if(!state.profile?.id||!state.directWatchStartedAt)return;
+  const {data,error}=await supabase.from('direct_messages')
+    .select('*')
+    .eq('recipient_id',state.profile.id)
+    .is('read_at',null)
+    .gt('created_at',state.directWatchStartedAt)
+    .order('created_at',{ascending:true})
+    .limit(30);
+  if(error)return;
+  const rows=data||[];
+  for(const m of rows)await receiveIncomingDirectMessage(m,{source:'poll'});
+  if(rows.length)state.directWatchStartedAt=rows[rows.length-1].created_at;
+}
+function startDirectFallbackPoll(){
+  clearInterval(state.directPollTimer);
+  state.directPollTimer=setInterval(()=>pollDirectInbox(),4000);
 }
 async function notifyPendingFriendRequests(){
   if(!state.profile?.id)return;
@@ -1377,27 +1600,10 @@ async function notifyPendingFriendRequests(){
 function startDirectRealtime(){
   if(state.directChannel||!state.profile?.id)return;
   const me=state.profile.id;
-  state.directChannel=supabase.channel(`avesso-social-${me}-${Date.now()}`)
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages'},async payload=>{
-      const m=payload.new||{};
-      if(m.sender_id!==me&&m.recipient_id!==me)return;
-      if(m.sender_id===me){if(state.chatWindowOpen&&state.directPeerId===m.recipient_id)refreshChatWindow();return;}
-      const sender=await profileById(m.sender_id);
-      const attention=m.message_kind==='attention';
-      const muted=isPeerMuted(m.sender_id);
-      if(!muted){
-        socialNotify({
-          title:attention?`${sender?.display_name||'Alguém'} chamou sua atenção`:`Mensagem de ${sender?.display_name||'alguém'}`,
-          body:attention?'CHAMAR ATENÇÃO. O protocolo de 2006 foi executado.':(m.message_kind==='image'?'enviou uma imagem':m.message_kind==='audio'?'enviou uma mensagem de voz':m.message_kind==='file'?'enviou um arquivo':String(m.body||'').slice(0,90)),
-          avatar:sender?.avatar_url||'',kind:attention?'attention':'message',
-          sound:!attention,
-          action:()=>openFriendChat(m.sender_id)
-        });
-        if(attention)await receiveAttention(m.sender_id);
-      }
-      if(state.tab==='messages')renderMessagesPage();
-      if((muted||!attention)&&state.chatWindowOpen&&state.directPeerId===m.sender_id)refreshChatWindow();
-    })
+  if(!state.directWatchStartedAt)state.directWatchStartedAt=new Date(Date.now()-1500).toISOString();
+  startDirectFallbackPoll();
+  const channel=supabase.channel(`avesso-social-${me}-${Date.now()}`)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>receiveIncomingDirectMessage(payload.new||{}, {source:'realtime'}))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'friendships'},async payload=>{
       const f=payload.new||{};
       if(f.addressee_id!==me||f.status!=='pending')return;
@@ -1419,7 +1625,7 @@ function startDirectRealtime(){
       const p=payload.new||{};
       if(p.id!==me)noteFriendPresence(p);
       if(state.tab==='messages')renderMessagesPage();
-      if(state.chatWindowOpen&&state.directPeerId===p.id)openChatWindow(p.id,{keepMinimized:true});
+      if(state.chatWindowOpen&&state.directPeerId===p.id&&!state.chatWindowMinimized)updateChatPeerHeader(p);
     })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'guestbook_entries'},async payload=>{
       const row=payload.new||{};
@@ -1433,9 +1639,16 @@ function startDirectRealtime(){
         action:()=>openPublicProfile(row.author_id)
       });
       if(state.tab==='profile')loadGuestbook(me,'#profile-guestbook');
-    })
-    .subscribe();
+    });
+  state.directChannel=channel;
+  channel.subscribe(status=>{
+    if(state.directChannel!==channel)return;
+    state.directChannelStatus=status;
+    if(status==='SUBSCRIBED')pollDirectInbox();
+    if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))scheduleDirectReconnect();
+  });
 }
+
 async function loadDirectConversation(peerId){
   if(!peerId)return[];
   const me=state.profile.id;
@@ -1445,22 +1658,39 @@ async function loadDirectConversation(peerId){
   if(error)return[];
   await supabase.from('direct_messages').update({read_at:new Date().toISOString()})
     .eq('sender_id',peerId).eq('recipient_id',me).is('read_at',null);
-  return Promise.all((data||[]).map(async m=>{
-    if(!m.attachment_path)return m;
-    const {data:signed}=await supabase.storage.from('avesso-chat').createSignedUrl(m.attachment_path,3600);
-    return {...m,attachment_url:signed?.signedUrl||''};
-  }));
+  const rows=data||[];
+  rows.forEach(m=>{if(m.recipient_id===me)rememberDirectMessage(m.id);});
+  return Promise.all(rows.map(hydrateDirectMessage));
 }
 function dmMessageHtml(m){
   const mine=m.sender_id===state.profile.id;
-  if(m.message_kind==='attention')return `<article class="dm-attention-event">⚡ ${escapeHtml(m.body||'CHAMAR ATENÇÃO')} <small>${ago(m.created_at)}</small></article>`;
+  const messageId=escapeAttr(String(m.id||`local-${Date.now()}`));
+  if(m.message_kind==='attention')return `<article class="dm-attention-event" data-dm-id="${messageId}">⚡ ${escapeHtml(m.body||'CHAMAR ATENÇÃO')} <small>${ago(m.created_at)}</small></article>`;
+  const voiceDuration=m.message_kind==='audio'?String(m.body||'').match(/(\d+)s/)?.[1]:null;
   const attachment=m.attachment_url?(m.message_kind==='image'
-    ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}"></a>`
+    ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}" loading="eager" decoding="async"></a>`
     :m.message_kind==='audio'
-      ?`<div class="dm-audio-card"><span>VOICE.MSG</span><audio controls preload="metadata" src="${escapeAttr(m.attachment_url)}"></audio></div>`
+      ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio controls preload="auto" src="${escapeAttr(m.attachment_url)}"></audio></div>`
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
-  return `<article class="dm-bubble ${mine?'mine':'theirs'}">${m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p>${escapeHtml(m.body)}</p>`:''}${attachment}<small>${ago(m.created_at)}${mine&&m.read_at?' · lida':''}</small></article>`;
+  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p>${escapeHtml(m.body)}</p>`:'');
+  return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}${mine&&m.read_at?' · lida':''}</small></article>`;
 }
+function updateChatPeerHeader(peer){
+  if(!peer||state.directPeerId!==peer.id)return;
+  const p=presenceView(peer);
+  const muted=isPeerMuted(peer.id);
+  const title=$('#dm-restore-name');
+  if(title){
+    title.innerHTML=`<i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}`;
+    title.title=`Abrir conversa com ${peer.display_name}`;
+  }
+  const name=$('#dm-peer-profile-name');if(name)name.textContent=peer.display_name;
+  const small=$('.dm-peer-heading small');
+  if(small)small.innerHTML=`<i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}`;
+  const orb=$('.dm-msn-status-orb');
+  if(orb){orb.className=`dm-msn-status-orb ${p.mode}`;orb.title=p.label;}
+}
+
 async function renderMessagesPage(){
   if(state.tab!=='messages')return;
   const friends=await acceptedFriendProfiles();
@@ -1489,7 +1719,7 @@ document.addEventListener('pointerdown',e=>{
 
 function preferredVoiceMime(){
   if(!window.MediaRecorder)return'';
-  const candidates=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4','audio/webm','audio/ogg'];
+  const candidates=['audio/ogg;codecs=opus','audio/webm;codecs=opus','audio/mp4','audio/ogg','audio/webm'];
   return candidates.find(type=>MediaRecorder.isTypeSupported?.(type))||'';
 }
 function voiceExtension(type=''){
@@ -1503,21 +1733,31 @@ function voiceElapsed(){
   const sec=Math.max(0,Math.floor((Date.now()-state.voiceStartedAt)/1000));
   return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
 }
-function syncVoiceRecordingUI(){
-  const btn=$('#dm-voice');
-  const cancel=$('#dm-voice-cancel');
-  const recording=state.voiceRecorder?.state==='recording';
-  if(btn){
-    btn.classList.toggle('recording',recording);
-    btn.textContent=recording?`■ enviar ${voiceElapsed()}`:'🎙 voz';
-    btn.title=recording?'Parar e enviar áudio':'Gravar mensagem de voz';
+function syncDmComposerAction(){
+  const input=$('#dm-input');
+  const btn=$('#dm-send-action');
+  if(!btn)return;
+  const hasText=Boolean(input?.value.trim());
+  const recording=state.voiceRecorder?.state==='recording'||state.voicePendingStart;
+  btn.classList.toggle('recording',recording);
+  btn.classList.toggle('text-ready',hasText&&!recording);
+  btn.type=hasText&&!recording?'submit':'button';
+  btn.setAttribute('aria-label',recording?'Solte para enviar áudio':hasText?'Enviar mensagem':'Segure para gravar áudio');
+  btn.title=recording?'Solte para enviar':hasText?'Enviar mensagem':'Segure para gravar voz';
+  if(recording){
+    btn.innerHTML=`<span class="dm-rec-dot"></span><b>REC ${voiceElapsed()}</b><small>solte</small>`;
+  }else if(hasText){
+    btn.innerHTML='<b>ENVIAR →</b>';
+  }else{
+    btn.innerHTML='<span class="avesso-mic-icon" aria-hidden="true"><i></i></span><small>SEGURE</small>';
   }
-  if(cancel)cancel.classList.toggle('hidden',!recording);
 }
+function syncVoiceRecordingUI(){syncDmComposerAction();}
 function clearVoiceRecordingState(){
   clearInterval(state.voiceTimer);
   state.voiceTimer=null;
   state.voiceRecorder=null;
+  state.voicePendingStart=false;
   state.voiceStream?.getTracks?.().forEach(track=>track.stop());
   state.voiceStream=null;
   state.voiceChunks=[];
@@ -1526,28 +1766,33 @@ function clearVoiceRecordingState(){
   syncVoiceRecordingUI();
 }
 function cancelVoiceRecording(quiet=false){
-  if(!state.voiceRecorder)return;
-  try{
-    state.voiceRecorder.onstop=null;
-    if(state.voiceRecorder.state!=='inactive')state.voiceRecorder.stop();
-  }catch{}
-  clearVoiceRecordingState();
-  if(!quiet)toast('Gravação cancelada. O microfone voltou a fingir que não ouviu nada.');
-}
-async function toggleVoiceRecording(){
-  if(state.voiceRecorder?.state==='recording'){
-    try{state.voiceRecorder.stop();}catch{}
-    return;
+  state.voiceHoldActive=false;
+  if(state.voiceRecorder){
+    try{
+      state.voiceRecorder.onstop=null;
+      if(state.voiceRecorder.state!=='inactive')state.voiceRecorder.stop();
+    }catch{}
   }
-  if(!state.directPeerId)return;
-  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return toast('Este navegador não oferece gravação de voz por aqui.');
+  clearVoiceRecordingState();
+  if(!quiet)toast('Gravação cancelada. O microfone voltou ao silêncio.');
+}
+async function startVoiceRecording({hold=false}={}){
+  if(state.voiceRecorder||state.voicePendingStart||!state.directPeerId)return false;
+  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toast('Este navegador não oferece gravação de voz por aqui.');return false;}
+  state.voicePendingStart=true;
+  syncVoiceRecordingUI();
   try{
     const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+    if(hold&&!state.voiceHoldActive){
+      stream.getTracks().forEach(track=>track.stop());
+      state.voicePendingStart=false;syncVoiceRecordingUI();return false;
+    }
     const mime=preferredVoiceMime();
     const recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
     const peerId=state.directPeerId;
     state.voiceStream=stream;
     state.voiceRecorder=recorder;
+    state.voicePendingStart=false;
     state.voiceChunks=[];
     state.voiceStartedAt=Date.now();
     state.voicePeerId=peerId;
@@ -1555,32 +1800,91 @@ async function toggleVoiceRecording(){
     recorder.onerror=()=>{clearVoiceRecordingState();toast('A gravação tropeçou no próprio cabo.');};
     recorder.onstop=async()=>{
       const chunks=[...state.voiceChunks];
-      const type=(recorder.mimeType||mime||'audio/webm').split(';')[0];
-      clearInterval(state.voiceTimer);
-      state.voiceTimer=null;
+      const type=(recorder.mimeType||mime||'audio/ogg').split(';')[0];
+      const startedAt=state.voiceStartedAt;
+      clearInterval(state.voiceTimer);state.voiceTimer=null;
       stream.getTracks().forEach(track=>track.stop());
-      const duration=Math.max(1,Math.round((Date.now()-state.voiceStartedAt)/1000));
-      state.voiceRecorder=null;state.voiceStream=null;state.voiceChunks=[];state.voiceStartedAt=0;state.voicePeerId=null;
+      state.voiceRecorder=null;state.voiceStream=null;state.voiceChunks=[];state.voiceStartedAt=0;state.voicePeerId=null;state.voicePendingStart=false;
       syncVoiceRecordingUI();
-      if(!chunks.length)return toast('O áudio terminou antes de começar. Um clássico.');
+      if(!chunks.length)return toast('O áudio terminou antes de começar.');
+      const duration=Math.max(1,Math.round((Date.now()-startedAt)/1000));
       const blob=new Blob(chunks,{type});
-      if(blob.size>10*1024*1024)return toast('Áudio acima de 10 MB. Nem a nostalgia justifica um podcast inteiro.');
+      if(blob.size>10*1024*1024)return toast('Áudio acima de 10 MB. Nem o AVESSO precisa de um podcast inteiro.');
       const ext=voiceExtension(type);
       const file=new File([blob],`voz-${Date.now()}.${ext}`,{type});
-      await sendDirectAttachment(file,{recipientId:peerId,voiceDuration:duration});
+      const optimisticId=`voice-local-${crypto.randomUUID()}`;
+      const optimisticUrl=URL.createObjectURL(blob);
+      if(state.chatWindowOpen&&state.directPeerId===peerId){
+        appendDirectMessage({
+          id:optimisticId,
+          sender_id:state.profile.id,
+          recipient_id:peerId,
+          body:`Mensagem de voz · ${duration}s`,
+          message_kind:'audio',
+          attachment_url:optimisticUrl,
+          attachment_name:file.name,
+          attachment_type:type,
+          attachment_size:file.size,
+          created_at:new Date().toISOString()
+        });
+      }
+      await sendDirectAttachment(file,{recipientId:peerId,voiceDuration:duration,optimisticId,optimisticUrl});
     };
-    recorder.start(250);
+    recorder.start();
     state.voiceTimer=setInterval(()=>{
       syncVoiceRecordingUI();
       if(Date.now()-state.voiceStartedAt>=180000&&state.voiceRecorder?.state==='recording')state.voiceRecorder.stop();
-    },500);
+    },250);
     syncVoiceRecordingUI();
+    return true;
   }catch(err){
     clearVoiceRecordingState();
     if(String(err?.name)==='NotAllowedError')return toast('O microfone foi bloqueado. Libere a permissão do site para enviar voz.');
     toast('Não consegui abrir o microfone. A tecnologia continua com senso de humor.');
+    return false;
   }
 }
+function stopVoiceRecording({send=true}={}){
+  state.voiceHoldActive=false;
+  if(!state.voiceRecorder){
+    if(!send){state.voicePendingStart=false;syncVoiceRecordingUI();}
+    return;
+  }
+  if(!send){
+    cancelVoiceRecording(true);
+    return;
+  }
+  try{
+    if(state.voiceRecorder.state==='recording')state.voiceRecorder.stop();
+  }catch{clearVoiceRecordingState();}
+}
+function bindHoldToTalk(){
+  const btn=$('#dm-send-action');
+  const input=$('#dm-input');
+  if(!btn||!input)return;
+  input.addEventListener('input',syncDmComposerAction);
+  btn.onpointerdown=e=>{
+    if(input.value.trim()||e.button!==0)return;
+    e.preventDefault();
+    try{btn.setPointerCapture(e.pointerId);}catch{}
+    state.voiceHoldActive=true;
+    startVoiceRecording({hold:true});
+  };
+  btn.onpointerup=e=>{
+    if(input.value.trim())return;
+    e.preventDefault();
+    state.voiceHoldActive=false;
+    stopVoiceRecording({send:true});
+  };
+  btn.onpointercancel=e=>{
+    if(input.value.trim())return;
+    e.preventDefault();
+    stopVoiceRecording({send:false});
+  };
+  btn.oncontextmenu=e=>{if(!input.value.trim())e.preventDefault();};
+  syncDmComposerAction();
+}
+
 const CHAT_GEOMETRY_KEY='avesso.chat.geometry.v2';
 function chatDesktopEnabled(){
   return window.matchMedia('(min-width: 761px) and (pointer:fine)').matches;
@@ -1618,18 +1922,25 @@ function applyChatGeometry(){
   const win=$('#dm-floating-window');if(!win)return;
   if(!chatDesktopEnabled()){
     ['left','top','right','bottom','width','height'].forEach(prop=>win.style.removeProperty(prop));
-    win.classList.remove('maximized','desktop-windowed');
+    win.classList.remove('maximized','desktop-windowed','docked-minimized');
     return;
   }
   win.classList.add('desktop-windowed');
+  if(state.chatWindowMinimized){
+    win.classList.remove('maximized');
+    win.classList.add('docked-minimized');
+    Object.assign(win.style,{left:'auto',top:'auto',right:'16px',bottom:'16px',width:'min(320px, calc(100vw - 24px))',height:'58px'});
+    return;
+  }
+  win.classList.remove('docked-minimized');
   if(state.chatMaximized){
     win.classList.add('maximized');
-    Object.assign(win.style,{left:'6px',top:'6px',right:'auto',bottom:'auto',width:'calc(100vw - 12px)',height:state.chatWindowMinimized?'38px':'calc(100vh - 12px)'});
+    Object.assign(win.style,{left:'6px',top:'6px',right:'auto',bottom:'auto',width:'calc(100vw - 12px)',height:'calc(100vh - 12px)'});
     return;
   }
   win.classList.remove('maximized');
   const g=loadChatGeometry();
-  Object.assign(win.style,{left:`${g.left}px`,top:`${g.top}px`,right:'auto',bottom:'auto',width:`${g.width}px`,height:state.chatWindowMinimized?'38px':`${g.height}px`});
+  Object.assign(win.style,{left:`${g.left}px`,top:`${g.top}px`,right:'auto',bottom:'auto',width:`${g.width}px`,height:`${g.height}px`});
 }
 function toggleChatMaximize(){
   if(!state.chatWindowOpen||!chatDesktopEnabled())return;
@@ -1774,12 +2085,10 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
         <button id="dm-attention" title="Chamar atenção">⚡ chamar atenção</button>
         <button id="dm-emoticons" title="Emoticons">☺ emoticons</button>
         <button id="dm-attach" title="Enviar arquivo ou imagem">📎 arquivo</button>
-        <button id="dm-voice" class="dm-voice-button" title="Gravar mensagem de voz">🎙 voz</button>
-        <button id="dm-voice-cancel" class="dm-voice-cancel hidden" title="Cancelar gravação">× cancelar</button>
         <input id="dm-file-input" type="file" hidden accept="image/*,audio/*,.pdf,.txt,.zip,.docx">
         <div id="dm-emoticon-palette" class="dm-emoticon-palette hidden">${avessoEmoticonButtons('data-emoticon')}</div>
       </div>
-      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem... ou grave voz no celular sem fingir que 2006 tinha tudo."><button>Enviar</button></form>
+      <form id="dm-form"><input id="dm-input" maxlength="1000" autocomplete="off" placeholder="Digite uma mensagem..."><button id="dm-send-action" class="dm-send-action" type="button" aria-label="Segure para gravar áudio"></button></form>
     </div>`;
   $('#dm-minimize').onclick=toggleChatMinimize;
   $('#dm-maximize').onclick=toggleChatMaximize;
@@ -1790,11 +2099,10 @@ async function openChatWindow(peerId,{keepMinimized=false}={}){
   $('#dm-form').onsubmit=sendDirectMessage;
   $('#dm-attention').onclick=sendAttention;
   $('#dm-emoticons').onclick=()=>{$('#dm-emoticon-palette').classList.toggle('hidden');$('#dm-options-menu')?.classList.add('hidden');};
-  $$('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();});
+  $$('[data-emoticon]').forEach(b=>b.onclick=()=>{const input=$('#dm-input');input.value+=b.dataset.emoticon;input.focus();syncDmComposerAction();});
   $('#dm-attach').onclick=()=>$('#dm-file-input').click();
-  $('#dm-file-input').onchange=e=>{const f=e.target.files?.[0];if(f)sendDirectAttachment(f);};
-  $('#dm-voice').onclick=toggleVoiceRecording;
-  $('#dm-voice-cancel').onclick=()=>cancelVoiceRecording();
+  $('#dm-file-input').onchange=e=>{const file=e.target.files?.[0];if(file)sendDirectAttachment(file);};
+  bindHoldToTalk();
   $('#dm-options').onclick=e=>{e.stopPropagation();$('#dm-options-menu').classList.toggle('hidden');$('#dm-emoticon-palette')?.classList.add('hidden');};
   $('#dm-visit-profile').onclick=()=>{openPublicProfile(peerId);$('#dm-options-menu')?.classList.add('hidden');};
   $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
@@ -1823,8 +2131,17 @@ function toggleChatMinimize(){
   applyChatGeometry();
   if(!state.chatWindowMinimized)setTimeout(()=>$('#dm-input')?.focus(),80);
 }
+function autoMinimizeChat(){
+  if(!state.chatWindowOpen||state.chatWindowMinimized)return;
+  state.chatWindowMinimized=true;
+  const win=ensureChatWindow();
+  win.classList.add('minimized');
+  const button=$('#dm-minimize');
+  if(button){button.textContent='□';button.title='Restaurar';}
+  applyChatGeometry();
+}
 function closeChatWindow(silent=false){
-  if(state.voiceRecorder)cancelVoiceRecording(true);
+  if(state.voiceRecorder||state.voicePendingStart)cancelVoiceRecording(true);
   state.chatWindowOpen=false;state.chatWindowMinimized=false;state.directPeerId=null;
   const win=$('#dm-floating-window');if(win)win.classList.add('hidden');
   if(!silent)toast('Conversa fechada. Nenhum “tchau” automático foi enviado.');
@@ -1840,12 +2157,21 @@ function triggerChatNudge(peerId){
   if(!state.chatWindowOpen||state.directPeerId!==peerId)return;
   const win=ensureChatWindow();win.classList.remove('nudge');void win.offsetWidth;win.classList.add('nudge');setTimeout(()=>win.classList.remove('nudge'),1100);
 }
-async function receiveAttention(peerId){
+async function receiveAttention(peerId,message=null){
   if(!peerId)return;
-  if(document.hidden)state.pendingAttentionPeerId=peerId;
-  await openChatWindow(peerId);
+  if(document.hidden||!document.hasFocus()){
+    state.pendingAttentionPeerId=peerId;
+    autoMinimizeChat();
+    return;
+  }
+  const alreadyOpen=state.chatWindowOpen&&state.directPeerId===peerId;
+  if(!alreadyOpen)await openChatWindow(peerId);
+  else if(message)appendDirectMessage(message);
   state.chatWindowMinimized=false;
-  ensureChatWindow().classList.remove('minimized','hidden');
+  const win=ensureChatWindow();
+  win.classList.remove('minimized','hidden');
+  applyChatGeometry();
+  if(message?.id)markDirectRead(message.id);
   triggerChatNudge(peerId);
   triggerScreenNudge();
   playUiSound('attention');
@@ -1854,32 +2180,58 @@ async function sendDirectMessage(e){
   e?.preventDefault();
   const input=$('#dm-input');const body=input?.value.trim()||'';
   if(!body||!state.directPeerId)return;
-  input.value='';
-  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:state.directPeerId,body,message_kind:'text'});
-  if(error){input.value=body;return toast('A mensagem não atravessou o fio. Confirme que vocês ainda são amigos.');}
-  await refreshChatWindow();
+  const peerId=state.directPeerId;
+  input.value='';syncDmComposerAction();
+  const {data,error}=await supabase.from('direct_messages')
+    .insert({sender_id:state.profile.id,recipient_id:peerId,body,message_kind:'text'})
+    .select('*').single();
+  if(error){
+    input.value=body;syncDmComposerAction();
+    return toast('A mensagem não atravessou o fio. Confirme que vocês ainda são amigos.');
+  }
+  if(state.chatWindowOpen&&state.directPeerId===peerId)appendDirectMessage(data);
 }
 async function sendAttention(){
   if(!state.directPeerId)return;
+  const peerId=state.directPeerId;
   const body=`${state.profile.display_name} chamou sua atenção. A internet acaba de voltar para 2006.`;
-  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:state.directPeerId,body,message_kind:'attention'});
+  const {data,error}=await supabase.from('direct_messages')
+    .insert({sender_id:state.profile.id,recipient_id:peerId,body,message_kind:'attention'})
+    .select('*').single();
   if(error)return toast('Nem chamar atenção chamou atenção.');
-  playUiSound('attention');triggerChatNudge(state.directPeerId);triggerScreenNudge();await refreshChatWindow();
+  if(state.chatWindowOpen&&state.directPeerId===peerId)appendDirectMessage(data);
+  playUiSound('attention');
+  const button=$('#dm-attention');
+  if(button){button.classList.remove('sent');void button.offsetWidth;button.classList.add('sent');setTimeout(()=>button.classList.remove('sent'),450);}
 }
-async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDuration=0}={}){
+async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDuration=0,optimisticId=null,optimisticUrl=null}={}){
   if(!recipientId||!file)return;
-  if(file.size>10*1024*1024)return toast('Até 10 MB por arquivo. A nostalgia não inclui conexão discada real.');
+  const clearOptimistic=()=>{
+    if(optimisticId)document.querySelector(`[data-dm-id="${CSS.escape(String(optimisticId))}"]`)?.remove();
+    if(optimisticUrl)URL.revokeObjectURL(optimisticUrl);
+  };
+  if(file.size>10*1024*1024){clearOptimistic();return toast('Até 10 MB por arquivo. A nostalgia não inclui conexão discada real.');}
   const allowed=/^(image\/(jpeg|png|webp|gif)|audio\/(webm|ogg|mp4|mpeg|wav|x-wav|aac|x-m4a)|application\/pdf|text\/plain|application\/(zip|x-zip-compressed)|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/i.test(file.type||'');
-  if(!allowed)return toast('Formato não aceito nessa conversa.');
+  if(!allowed){clearOptimistic();return toast('Formato não aceito nessa conversa.');}
   const path=`${state.profile.id}/${recipientId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
-  const {error:upErr}=await supabase.storage.from('avesso-chat').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type});
-  if(upErr)return toast('O arquivo caiu no chão antes de chegar.');
+  const {error:upErr}=await supabase.storage.from('avesso-chat').upload(path,file,{cacheControl:'86400',upsert:false,contentType:file.type});
+  if(upErr){clearOptimistic();return toast('O arquivo caiu no chão antes de chegar.');}
   const kind=file.type.startsWith('image/')?'image':file.type.startsWith('audio/')?'audio':'file';
   const body=kind==='audio'?`Mensagem de voz${voiceDuration?' · '+voiceDuration+'s':''}`:file.name;
-  const {error}=await supabase.from('direct_messages').insert({sender_id:state.profile.id,recipient_id:recipientId,body,message_kind:kind,attachment_path:path,attachment_name:file.name,attachment_type:file.type,attachment_size:file.size});
-  if(error){await supabase.storage.from('avesso-chat').remove([path]);return toast('O banco recusou o pacote. Elegante.');}
-  if(kind==='audio')toast('Mensagem de voz enviada. O modem imaginário sobreviveu.');
-  if(state.chatWindowOpen&&state.directPeerId===recipientId)await refreshChatWindow();
+  const {data,error}=await supabase.from('direct_messages')
+    .insert({sender_id:state.profile.id,recipient_id:recipientId,body,message_kind:kind,attachment_path:path,attachment_name:file.name,attachment_type:file.type,attachment_size:file.size})
+    .select('*').single();
+  if(error){
+    await supabase.storage.from('avesso-chat').remove([path]);
+    clearOptimistic();
+    return toast('O banco recusou o pacote. Elegante.');
+  }
+  const hydrated=await hydrateDirectMessage(data);
+  if(state.chatWindowOpen&&state.directPeerId===recipientId){
+    if(optimisticId)appendDirectMessage(hydrated,{replaceId:optimisticId});
+    else appendDirectMessage(hydrated);
+  }
+  if(optimisticUrl)setTimeout(()=>URL.revokeObjectURL(optimisticUrl),500);
 }
 function openFriendChat(peerId){
   state.tab='messages';bumpView();applyAppTabLayout();
@@ -1995,12 +2347,15 @@ function renderAlbumPhotos(host,photos,userId,editable,reactions=[]){
   host.dataset.albumUser=userId;
   host.innerHTML=photos.map((photo,index)=>`<article class="album-photo" data-album-photo="${photo.id}">
     <img src="${escapeAttr(photo._url)}" alt="${escapeAttr(photo.caption||'Foto do álbum')}" loading="${index<10?'eager':'lazy'}" decoding="async" fetchpriority="${index<4?'high':'auto'}">
-    <div class="album-photo-meta"><p>${escapeHtml(photo.caption||'sem legenda. corajoso.')}</p><small>${ago(photo.created_at)}</small></div>
+    <div class="album-photo-meta"><p data-photo-caption="${photo.id}">${escapeHtml(photo.caption||'sem legenda. corajoso.')}</p><small>${ago(photo.created_at)}</small></div>
     <div class="photo-reactions" data-photo-reactions="${photo.id}">${albumReactionButtons(photo.id,reactions)}</div>
-    ${editable?`<button class="album-delete" data-photo-delete="${photo.id}" data-storage-path="${escapeAttr(photo.storage_path)}">apagar foto</button>`:''}
+    ${editable?`<div class="album-owner-actions"><button data-photo-edit="${photo.id}">editar legenda</button><button class="album-delete" data-photo-delete="${photo.id}" data-storage-path="${escapeAttr(photo.storage_path)}">apagar foto</button></div><div class="album-caption-edit hidden" data-photo-edit-panel="${photo.id}"><input maxlength="180" value="${escapeAttr(photo.caption||'')}" placeholder="legenda"><div><button data-photo-save="${photo.id}">salvar</button><button data-photo-cancel="${photo.id}">cancelar</button></div></div>`:''}
   </article>`).join('')||'<p class="album-empty">Álbum vazio. Nenhuma lembrança foi monetizada.</p>';
   host.querySelectorAll('[data-photo-react]').forEach(b=>b.onclick=()=>togglePhotoReaction(b.dataset.photoReact,b.dataset.reaction,userId,editable));
   host.querySelectorAll('[data-photo-delete]').forEach(b=>b.onclick=()=>deleteAlbumPhoto(b.dataset.photoDelete,b.dataset.storagePath));
+  host.querySelectorAll('[data-photo-edit]').forEach(b=>b.onclick=()=>host.querySelector(`[data-photo-edit-panel="${b.dataset.photoEdit}"]`)?.classList.remove('hidden'));
+  host.querySelectorAll('[data-photo-cancel]').forEach(b=>b.onclick=()=>host.querySelector(`[data-photo-edit-panel="${b.dataset.photoCancel}"]`)?.classList.add('hidden'));
+  host.querySelectorAll('[data-photo-save]').forEach(b=>b.onclick=()=>saveAlbumPhotoCaption(b.dataset.photoSave));
 }
 function updateAlbumReactions(host,photos,reactions,userId,editable){
   if(!host||host.dataset.albumUser!==userId)return;
@@ -2042,10 +2397,20 @@ async function uploadAlbumPhoto(){
   if(error){await supabase.storage.from('avesso-albums').remove([path]);return toast('A foto chegou, o álbum fingiu que não conhece.');}
   $('#album-file').value='';$('#album-caption').value='';delete state.albumDataCache[state.profile.id];toast('Foto adicionada. Nenhum filtro de pôr do sol obrigatório.');loadAlbum(state.profile.id,true);
 }
+async function saveAlbumPhotoCaption(id){
+  const panel=document.querySelector(`[data-photo-edit-panel="${CSS.escape(id)}"]`);
+  const caption=String(panel?.querySelector('input')?.value||'').trim().slice(0,180);
+  const {error}=await supabase.from('profile_photos').update({caption}).eq('id',id).eq('user_id',state.profile.id);
+  if(error)return toast('A legenda se recusou a mudar.');
+  delete state.albumDataCache[state.profile.id];
+  toast('Legenda atualizada.');
+  loadAlbum(state.profile.id,true);
+}
 async function deleteAlbumPhoto(id,path){
   if(!confirm('Apagar esta foto do seu Canto?'))return;
-  await supabase.from('profile_photos').delete().eq('id',id).eq('user_id',state.profile.id);
-  await supabase.storage.from('avesso-albums').remove([path]);
+  const {error}=await supabase.from('profile_photos').delete().eq('id',id).eq('user_id',state.profile.id);
+  if(error)return toast('A foto se recusou a desaparecer.');
+  if(path)await supabase.storage.from('avesso-albums').remove([path]);
   delete state.albumDataCache[state.profile.id];
   loadAlbum(state.profile.id,true);
 }
@@ -2059,11 +2424,13 @@ async function togglePhotoReaction(photoId,reaction,userId,editable){
 }
 
 function profileMediaCardHtml(row,editable=false){
+  const label=row.media_kind==='youtube'?'▶ YOUTUBE':row.media_kind==='spotify'?'♫ SPOTIFY':row.media_kind==='video'?'▶ VÍDEO':'♫ ÁUDIO';
+  const linked=['youtube','spotify'].includes(row.media_kind);
   return `<article class="profile-media-card" data-profile-media="${row.id}">
-    <div class="profile-media-head"><span>${row.media_kind==='video'?'▶ VÍDEO':'♫ ÁUDIO'}</span><small>${ago(row.created_at)}</small></div>
+    <div class="profile-media-head"><span>${label}</span><small>${ago(row.created_at)}</small></div>
     ${feedMediaHtml(row.media_url,row.media_kind,{compact:true})}
-    ${row.caption?`<p>${escapeHtml(row.caption)}</p>`:''}
-    ${editable?`<button class="profile-media-delete" data-profile-media-delete="${row.id}" data-profile-media-path="${escapeAttr(row.storage_path)}">apagar mídia</button>`:''}
+    <p data-profile-media-caption="${row.id}">${escapeHtml(row.caption||'sem legenda. silêncio também é curadoria.')}</p>
+    ${editable?`<div class="profile-media-owner-actions"><button data-profile-media-edit="${row.id}">editar</button><button class="profile-media-delete" data-profile-media-delete="${row.id}" data-profile-media-path="${escapeAttr(row.storage_path||'')}">apagar mídia</button></div><div class="profile-media-edit hidden" data-profile-media-edit-panel="${row.id}"><textarea maxlength="420">${escapeHtml(row.caption||'')}</textarea>${linked?`<input type="url" value="${escapeAttr(externalMediaShareUrl(row.media_url))}" data-profile-media-link-input="${row.id}" placeholder="novo link do YouTube ou Spotify">`:''}<div><button data-profile-media-save="${row.id}">salvar</button><button data-profile-media-cancel="${row.id}">cancelar</button></div></div>`:''}
   </article>`;
 }
 async function loadProfileMedia(userId,editable=false,selector=editable?'#profile-media-list':'#public-media-list'){
@@ -2072,25 +2439,49 @@ async function loadProfileMedia(userId,editable=false,selector=editable?'#profil
   if(error){host.innerHTML='<p class="profile-media-empty">A discoteca caiu atrás do servidor.</p>';return;}
   host.innerHTML=(data||[]).map(row=>profileMediaCardHtml(row,editable)).join('')||'<p class="profile-media-empty">Nada tocando por aqui. Silêncio também é curadoria.</p>';
   host.querySelectorAll('[data-profile-media-delete]').forEach(b=>b.onclick=()=>deleteProfileMedia(b.dataset.profileMediaDelete,b.dataset.profileMediaPath));
+  host.querySelectorAll('[data-profile-media-edit]').forEach(b=>b.onclick=()=>host.querySelector(`[data-profile-media-edit-panel="${b.dataset.profileMediaEdit}"]`)?.classList.remove('hidden'));
+  host.querySelectorAll('[data-profile-media-cancel]').forEach(b=>b.onclick=()=>host.querySelector(`[data-profile-media-edit-panel="${b.dataset.profileMediaCancel}"]`)?.classList.add('hidden'));
+  host.querySelectorAll('[data-profile-media-save]').forEach(b=>b.onclick=()=>saveProfileMediaEdit(b.dataset.profileMediaSave));
 }
 async function uploadProfileMedia(){
   const file=$('#profile-media-file')?.files?.[0]||null;
-  if(!file)return toast('Escolha uma música ou vídeo primeiro.');
-  const kind=mediaKindFromFile(file);
-  if(!kind)return toast('Esse arquivo não decidiu se é música ou vídeo.');
-  if(file.size>mediaSizeLimit(kind))return toast(`${kind==='video'?'Vídeo':'Áudio'} acima de ${mediaSizeLabel(kind)}.`);
+  const external=parseExternalMediaLink($('#profile-media-link')?.value||'');
+  if($('#profile-media-link')?.value.trim()&&!external)return toast('Use um link válido do YouTube ou Spotify.');
+  if(!file&&!external)return toast('Escolha um arquivo ou cole um link do YouTube/Spotify.');
+  if(file&&external)return toast('Escolha arquivo ou link. Os dois juntos viram burocracia.');
   const caption=String($('#profile-media-caption')?.value||'').trim().slice(0,420);
-  const ext=(file.name.split('.').pop()||(kind==='video'?'mp4':'mp3')).replace(/[^a-z0-9]/gi,'').toLowerCase();
-  const path=`${state.profile.id}/profile/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  let kind=external?.kind||mediaKindFromFile(file),media_url=external?.url||null,path=null;
+  if(!kind)return toast('Esse arquivo não decidiu se é música ou vídeo.');
+  if(file&&file.size>mediaSizeLimit(kind))return toast(`${kind==='video'?'Vídeo':'Áudio'} acima de ${mediaSizeLabel(kind)}.`);
   const btn=$('#profile-media-upload');if(btn){btn.disabled=true;btn.textContent='enviando...';}
-  const {error:uploadError}=await supabase.storage.from('avesso-media').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
-  if(uploadError){if(btn){btn.disabled=false;btn.textContent='publicar no Canto';}return toast('A mídia ficou presa no cabo. Tente novamente.');}
-  const media_url=publicMediaUrl(path);
+  if(file){
+    const ext=(file.name.split('.').pop()||(kind==='video'?'mp4':'mp3')).replace(/[^a-z0-9]/gi,'').toLowerCase();
+    path=`${state.profile.id}/profile/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const {error:uploadError}=await supabase.storage.from('avesso-media').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
+    if(uploadError){if(btn){btn.disabled=false;btn.textContent='publicar no Canto';}return toast('A mídia ficou presa no cabo. Tente novamente.');}
+    media_url=publicMediaUrl(path);
+  }
   const {error}=await supabase.from('profile_media').insert({user_id:state.profile.id,media_url,storage_path:path,media_kind:kind,caption});
   if(btn){btn.disabled=false;btn.textContent='publicar no Canto';}
-  if(error){await supabase.storage.from('avesso-media').remove([path]);return toast('O arquivo chegou, mas o Canto fingiu que não conhece.');}
-  $('#profile-media-file').value='';$('#profile-media-caption').value='';
-  toast(kind==='video'?'Vídeo publicado no seu Canto.':'Áudio publicado no seu Canto.');
+  if(error){if(path)await supabase.storage.from('avesso-media').remove([path]);return toast('A mídia chegou, mas o Canto fingiu que não conhece.');}
+  $('#profile-media-file').value='';$('#profile-media-caption').value='';if($('#profile-media-link'))$('#profile-media-link').value='';
+  toast(kind==='youtube'?'YouTube incorporado ao seu Canto.':kind==='spotify'?'Spotify incorporado ao seu Canto.':kind==='video'?'Vídeo publicado no seu Canto.':'Áudio publicado no seu Canto.');
+  loadProfileMedia(state.profile.id,true,'#profile-media-list');
+}
+async function saveProfileMediaEdit(id){
+  const panel=document.querySelector(`[data-profile-media-edit-panel="${CSS.escape(id)}"]`);
+  if(!panel)return;
+  const caption=String(panel.querySelector('textarea')?.value||'').trim().slice(0,420);
+  const linkInput=panel.querySelector('[data-profile-media-link-input]');
+  const patch={caption};
+  if(linkInput){
+    const parsed=parseExternalMediaLink(linkInput.value);
+    if(!parsed)return toast('O novo link precisa ser do YouTube ou Spotify.');
+    patch.media_url=parsed.url;patch.media_kind=parsed.kind;
+  }
+  const {error}=await supabase.from('profile_media').update(patch).eq('id',id).eq('user_id',state.profile.id);
+  if(error)return toast('A edição não foi salva.');
+  toast('Mídia editada. O passado digital aceitou revisão.');
   loadProfileMedia(state.profile.id,true,'#profile-media-list');
 }
 async function deleteProfileMedia(id,path){
@@ -2121,7 +2512,7 @@ async function renderProfile(){
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
     <section class="profile-album-control"><span class="section-code">ÁLBUM // FOTOS QUE VOCÊ DECIDIU NÃO APAGAR</span><h2>Seu álbum</h2><p>Poste imagens no seu Canto. Reações existem, mas continuam sem virar olimpíada social.</p><div class="album-upload-row"><input id="album-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><input id="album-caption" maxlength="180" placeholder="legenda opcional. autocontrole também."><button id="album-upload">adicionar foto</button></div><div id="profile-album" class="profile-album-grid"><p>carregando memórias...</p></div></section>
-    <section class="profile-media-control"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Sua fita, seu clipe, seu problema</h2><p>Publique música ou vídeo diretamente no seu Canto. Sem autoplay, porque ainda resta alguma civilização.</p><div class="profile-media-upload"><input id="profile-media-file" type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/wav,audio/webm,video/mp4,video/webm,video/quicktime"><input id="profile-media-caption" maxlength="420" placeholder="legenda opcional. contexto não machuca."><button id="profile-media-upload">publicar no Canto</button></div><div id="profile-media-list" class="profile-media-grid"><p>rebobinando...</p></div></section>
+    <section class="profile-media-control"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Sua fita, seu clipe, seu problema</h2><p>Envie um arquivo ou cole um link do YouTube/Spotify. Sem autoplay, porque ainda resta alguma civilização.</p><div class="profile-media-upload"><input id="profile-media-file" type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/wav,audio/webm,video/mp4,video/webm,video/quicktime"><input id="profile-media-link" type="url" inputmode="url" placeholder="link do YouTube ou Spotify"><input id="profile-media-caption" maxlength="420" placeholder="legenda opcional. contexto não machuca."><button id="profile-media-upload">publicar no Canto</button></div><div id="profile-media-list" class="profile-media-grid"><p>rebobinando...</p></div></section>
     <section class="guestbook-section guestbook-own"><span class="section-code">RECADOS // DEIXARAM ISSO AQUI</span><h2>Recados no seu Canto</h2><p>Amigos podem deixar texto, links, emojis e imagens. Você continua com a sofisticada tecnologia chamada “apagar”.</p><div id="profile-guestbook" class="guestbook-list"><p>procurando bilhetes na porta...</p></div></section>
     <section class="friends-control"><span class="section-code">PESSOAS // AMIGOS</span><h2>Lista de pessoas que você aceitou voluntariamente</h2><div id="friends-panel"><p>carregando relações humanas...</p></div></section>
     <section class="blocked-control"><span class="section-code">CONTROLE // BLOQUEADOS</span><h2>Porta fechada também é interface</h2><p>Bloquear encerra amizade e impede novas mensagens. Desbloquear não cria amizade de volta, porque nem botão deveria ter esse poder.</p><div id="blocked-panel"><p>consultando bloqueios...</p></div></section>
@@ -2145,6 +2536,8 @@ async function renderProfile(){
   $('#profile-presence').onchange=e=>setPresenceMode(e.target.value);
   $('#album-upload').onclick=uploadAlbumPhoto;
   $('#profile-media-upload').onclick=uploadProfileMedia;
+  $('#profile-media-file').onchange=e=>{if(e.target.files?.[0])$('#profile-media-link').value='';};
+  $('#profile-media-link').oninput=e=>{if(parseExternalMediaLink(e.target.value))$('#profile-media-file').value='';};
   $('#choose-profile-wallpaper').onclick=()=>openWallpaperDialog('profile');
   $('#choose-app-wallpaper').onclick=()=>openWallpaperDialog('app');
   document.querySelectorAll('[data-world-mode]').forEach(b=>b.onclick=()=>saveWorldMode(b.dataset.worldMode));
@@ -2256,6 +2649,7 @@ async function deleteGuestbookEntry(id,imagePath,profileId,selector){
 async function openPublicProfile(userId){
   if(!userId)return;
   if(userId===state.profile.id){document.querySelector('[data-app-tab="profile"]')?.click();return;}
+  autoMinimizeChat();
   state.tab='public_profile';state.publicProfileId=userId;bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   applyAppTabLayout();$('#feed-status').classList.add('hidden');
