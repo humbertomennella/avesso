@@ -2051,10 +2051,32 @@ function dmMessageHtml(m){
   const attachment=m.attachment_url?(m.message_kind==='image'
     ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}" loading="eager" decoding="async"></a>`
     :m.message_kind==='audio'
-      ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio controls preload="metadata"><source src="${escapeAttr(m.attachment_url)}" type="${escapeAttr(m.attachment_type||'audio/wav')}">Seu navegador recusou este áudio.</audio><a class="dm-audio-open" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener">abrir áudio</a></div>`
+      ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio class="dm-voice-audio" data-voice-type="${escapeAttr(m.attachment_type||'')}" controls preload="metadata"><source src="${escapeAttr(m.attachment_url)}" type="${escapeAttr(m.attachment_type||'audio/wav')}">Seu navegador recusou este áudio.</audio><a class="dm-audio-open" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener">abrir áudio</a></div>`
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
   const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p>${escapeHtml(m.body)}</p>`:'');
   return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}${mine&&m.read_at?' · lida':''}</small></article>`;
+}
+async function repairLegacyVoicePlayers(root=document){
+  const players=[...root.querySelectorAll?.('.dm-voice-audio')||[]].filter(audio=>!audio.dataset.voiceRepaired&&audio.dataset.voiceType&&audio.dataset.voiceType!=='audio/wav').slice(0,30);
+  for(const audio of players){
+    audio.dataset.voiceRepaired='working';
+    try{
+      const source=audio.querySelector('source');
+      const src=source?.src||audio.currentSrc;
+      if(!src){audio.dataset.voiceRepaired='skip';continue;}
+      const response=await fetch(src,{cache:'force-cache'});
+      if(!response.ok)throw new Error('voice fetch failed');
+      const normalized=await normalizeVoiceBlob(await response.blob());
+      if(normalized.type!=='audio/wav')throw new Error('voice normalize failed');
+      const local=URL.createObjectURL(normalized.blob);
+      audio.dataset.voiceObjectUrl=local;
+      audio.innerHTML=`<source src="${escapeAttr(local)}" type="audio/wav">Seu navegador recusou este áudio.`;
+      audio.load();
+      audio.dataset.voiceRepaired='yes';
+    }catch{
+      audio.dataset.voiceRepaired='failed';
+    }
+  }
 }
 function updateChatPeerHeader(peer){
   if(!peer||state.directPeerId!==peer.id)return;
@@ -2544,6 +2566,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   installChatDesktopWindowing();
   syncVoiceRecordingUI();
   const log=$('#dm-log');if(log)log.scrollTop=log.scrollHeight;
+  repairLegacyVoicePlayers(win);
 }
 async function refreshChatWindow(){
   if(!state.chatWindowOpen||!state.directPeerId)return;
