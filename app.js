@@ -2939,137 +2939,85 @@ async function renderAdminDashboard(){
   if(!state.isAdmin){await goToFeedHome();return;}
   $('#feed-status').classList.add('hidden');
   const host=$('#feed-list');
-  host.innerHTML='<section class="admin-shell"><div class="admin-loading">ADMIN.SYS // carregando a chave mestra sem fingir que isso é um SaaS...</div></section>';
-  const {data,error}=await supabase.rpc('admin_dashboard_snapshot');
+  host.innerHTML='<section class="staff-dashboard-shell"><div class="admin-loading">STAFF.SYS // carregando permissões e separando poderes antes que humanos descubram outro menu...</div></section>';
+  const {data,error}=await supabase.rpc('staff_dashboard_snapshot');
   if(state.tab!=='admin')return;
   if(error){
-    console.error('admin dashboard',error);
-    host.innerHTML='<section class="admin-shell"><div class="admin-error">A dashboard não conseguiu provar que você manda aqui.</div></section>';
+    console.error('staff dashboard',error);
+    host.innerHTML='<section class="staff-dashboard-shell"><div class="admin-error">A dashboard não conseguiu validar seu cargo.</div></section>';
     return;
   }
-  state.adminSnapshot=data||{};
-  const counts=data?.counts||{};
-  const users=Array.isArray(data?.recent_users)?data.recent_users:[];
-  const reports=Array.isArray(data?.reports)?data.reports:[];
-  const world=data?.world||{};
-  const site=data?.site||state.siteSettings||{};
-  const recentPosts=Array.isArray(data?.recent_posts)?data.recent_posts:[];
-  const recentResponses=Array.isArray(data?.recent_responses)?data.recent_responses:[];
-  const recentPhotos=Array.isArray(data?.recent_photos)?data.recent_photos:[];
-  const recentStories=Array.isArray(data?.recent_stories)?data.recent_stories:[];
-  const audit=Array.isArray(data?.audit)?data.audit:[];
+  state.staffSnapshot=data||{};
+  state.staffRole=data?.role||state.staffRole;
+  state.staffRank=staffRankValue(state.staffRole);
+  state.adminRole=state.staffRole;
+  const allowed=staffSectionsForRole();
+  if(!allowed.includes(state.staffSection))state.staffSection='overview';
+  if(state.staffSection==='users')await loadStaffPublicContent();
+  const sectionRender={
+    overview:()=>renderStaffOverview(state.staffSnapshot),
+    reports:()=>renderStaffReports(state.staffSnapshot),
+    users:()=>renderStaffUsers(state.staffSnapshot),
+    monitor:()=>renderStaffMonitor(state.staffSnapshot),
+    plaza:()=>renderStaffPlaza(state.staffSnapshot),
+    chat:()=>renderStaffChat(),
+    team:()=>renderStaffTeam(state.staffSnapshot),
+    appearance:()=>ownerAppearanceSection(state.staffSnapshot),
+    pages:()=>ownerPagesSection(state.staffSnapshot),
+    assets:()=>ownerAssetsSection(state.staffSnapshot),
+    badges:()=>ownerBadgesSection(state.staffSnapshot),
+    inhabitants:()=>ownerInhabitantsSection(state.staffSnapshot),
+    database:()=>ownerDatabaseSection(),
+    world:()=>ownerWorldSection(),
+    audit:()=>renderStaffAudit(state.staffSnapshot)
+  };
+  const roleText=staffRoleLabel(state.staffRole);
+  host.innerHTML='<section class="staff-dashboard-shell">'+staffDashboardHero()+
+    '<div class="staff-dashboard-layout"><aside class="staff-dashboard-nav"><div class="staff-nav-role"><span>'+escapeHtml(roleText)+'</span><small>@'+escapeHtml(state.profile.handle)+'</small></div>'+
+    allowed.map(staffSectionButton).join('')+'</aside><main class="staff-dashboard-content" id="staff-dashboard-content">'+(sectionRender[state.staffSection]?.()||'')+'</main></div></section>';
 
-  const statCards=[
-    ['habitantes',counts.users??0,'contas registradas'],
-    ['novos // 7d',counts.users_7d??0,'entraram nesta semana'],
-    ['online',counts.online_now??0,'presenças agora'],
-    ['suspensos',counts.suspended_users??0,'bloqueados para novas ações'],
-    ['publicações',counts.posts??0,'posts no sistema'],
-    ['respostas',counts.responses??0,'respostas humanas'],
-    ['stories',counts.stories_active??0,'ativos agora'],
-    ['mensagens',counts.direct_messages??0,'somente contagem, não conteúdo'],
-    ['amizades',counts.friendships??0,'conexões aceitas'],
-    ['denúncias',counts.reports_open??0,'abertas']
-  ].map(([label,value,detail])=>'<article><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(String(value))+'</strong><small>'+escapeHtml(detail)+'</small></article>').join('');
+  $('#staff-dashboard-refresh')?.addEventListener('click',()=>renderAdminDashboard());
+  host.querySelectorAll('[data-staff-section]').forEach(b=>b.onclick=()=>{state.staffSection=b.dataset.staffSection;renderAdminDashboard();});
+  host.querySelectorAll('[data-staff-jump]').forEach(b=>b.onclick=()=>{state.staffSection=b.dataset.staffJump;renderAdminDashboard();});
+  host.querySelectorAll('[data-report-save]').forEach(b=>b.onclick=()=>staffSaveReport(b.dataset.reportSave,false));
+  host.querySelectorAll('[data-report-claim]').forEach(b=>b.onclick=()=>staffSaveReport(b.dataset.reportClaim,true));
+  host.querySelectorAll('[data-staff-ban]').forEach(b=>b.onclick=()=>openStaffBanDialog(b.dataset.staffBan));
+  host.querySelectorAll('[data-staff-unban]').forEach(b=>b.onclick=()=>staffUnban(b.dataset.staffUnban));
+  host.querySelectorAll('[data-staff-notify-user]').forEach(b=>b.onclick=()=>openStaffNotifyDialog(b.dataset.staffNotifyUser));
+  host.querySelectorAll('[data-staff-delete-kind]').forEach(b=>b.onclick=()=>staffDeleteContent(b.dataset.staffDeleteKind,b.dataset.staffDeleteId));
+  host.querySelectorAll('[data-staff-team-jump]').forEach(b=>b.onclick=()=>{state.staffSection='team';renderAdminDashboard();});
+  $('#staff-term-form')?.addEventListener('submit',staffSaveTerm);
+  host.querySelectorAll('[data-term-edit]').forEach(b=>b.onclick=()=>staffEditTerm(b.dataset.termEdit));
+  host.querySelectorAll('[data-hit-save]').forEach(b=>b.onclick=()=>staffSaveHit(b.dataset.hitSave));
+  host.querySelectorAll('[data-staff-role-user]').forEach(select=>select.onchange=()=>staffSetRole(select.dataset.staffRoleUser,select.value));
+  host.querySelectorAll('[data-staff-warning]').forEach(b=>b.onclick=()=>staffWarn(b.dataset.staffWarning));
+  host.querySelectorAll('[data-staff-chat-scope]').forEach(b=>b.onclick=()=>{state.staffChatScope=b.dataset.staffChatScope;loadStaffChat(state.staffChatScope);host.querySelectorAll('[data-staff-chat-scope]').forEach(x=>x.classList.toggle('active',x===b));});
+  $('#staff-chat-form')?.addEventListener('submit',staffSendChat);
 
-  const usersHtml=users.map(user=>{
-    const presence=adminPresenceLabel(user);
-    const isSelf=user.id===state.profile.id;
-    const status=user.suspended?'SUSPENSO':(user.admin_role?user.admin_role.toUpperCase():'USUÁRIO');
-    const roleControl=state.adminRole==='owner'
-      ?'<select class="admin-role-select" data-admin-role-user="'+escapeAttr(user.id)+'" '+(isSelf?'disabled':'')+'>'+
-        '<option value="none" '+(!user.admin_role?'selected':'')+'>usuário</option>'+
-        '<option value="admin" '+(user.admin_role==='admin'?'selected':'')+'>admin</option>'+
-        '<option value="owner" '+(user.admin_role==='owner'?'selected':'')+'>owner</option></select>'
-      :'<span class="admin-role-label">'+escapeHtml(user.admin_role||'usuário')+'</span>';
-    return '<article class="admin-user-row '+(user.suspended?'is-suspended':'')+'">'+
-      '<button class="admin-user-profile" data-profile-id="'+escapeAttr(user.id)+'"><span class="admin-user-avatar">'+avatarHtml(user.avatar_url,user.display_name||'?')+'</span>'+
-      '<span><b>'+escapeHtml(user.display_name||'sem nome')+'</b><small>@'+escapeHtml(user.handle||'...')+'</small></span></button>'+
-      '<em class="'+presence+'">'+presence+'</em>'+
-      '<strong class="admin-account-state" title="'+escapeAttr(user.suspension_reason||'')+'">'+status+'</strong>'+
-      '<time>'+ago(user.created_at)+'</time>'+
-      '<div class="admin-user-controls">'+roleControl+
-        (isSelf?'<span class="admin-self-tag">VOCÊ</span>':'<button class="'+(user.suspended?'restore':'danger')+'" data-admin-suspend-user="'+escapeAttr(user.id)+'" data-admin-suspend-value="'+(user.suspended?'0':'1')+'">'+(user.suspended?'reativar':'suspender')+'</button>')+
-      '</div></article>';
-  }).join('')||'<p class="admin-empty">Nenhum perfil. Administração perfeita por ausência de humanidade.</p>';
-
-  const reportsHtml=reports.map(report=>{
-    const target=report.reported_profile?.handle?'@'+report.reported_profile.handle:(report.post_id?'post '+String(report.post_id).slice(0,8):'conteúdo');
-    return '<article class="admin-report-card"><header><div><b>'+escapeHtml(String(report.reason||'denúncia'))+'</b>'+
-      '<small>'+escapeHtml(report.reporter?.handle?'@'+report.reporter.handle:'reportante')+' · '+ago(report.created_at)+'</small></div>'+
-      '<select data-admin-report-status="'+escapeAttr(report.id)+'">'+adminReportStatusOptions(report.status)+'</select></header>'+
-      '<p>'+escapeHtml(report.details||'sem detalhes')+'</p><footer><span>alvo: '+escapeHtml(target)+'</span>'+
-      (report.post_id?'<code>'+escapeHtml(String(report.post_id))+'</code>':'')+'</footer></article>';
-  }).join('')||'<p class="admin-empty">Nenhuma denúncia na fila. Estranhamente civilizado.</p>';
-
-  const colorFields=[
-    ['bg','fundo',site.color_bg||'#090b0c','--bg'],
-    ['panel','painel',site.color_panel||'#111517','--panel'],
-    ['panel2','painel 2',site.color_panel2||'#191f21','--panel2'],
-    ['ink','texto',site.color_ink||'#f5f3e8','--ink'],
-    ['muted','texto apagado',site.color_muted||'#8e9999','--muted'],
-    ['line','linhas',site.color_line||'#293235','--line'],
-    ['acid','ácido',site.color_acid||'#d8ff3e','--acid'],
-    ['cyan','ciano',site.color_cyan||'#22d9ee','--cyan'],
-    ['coral','coral',site.color_coral||'#ff5c4d','--coral'],
-    ['violet','violeta',site.color_violet||'#9b7cff','--violet']
-  ].map(([key,label,value,cssVar])=>'<label><span>'+label+'</span><input id="admin-color-'+key+'" data-admin-color-var="'+cssVar+'" type="color" value="'+escapeAttr(value)+'"></label>').join('');
-
-  const moderationContent=
-    '<div class="admin-content-column"><h4>PUBLICAÇÕES</h4>'+recentPosts.map(x=>adminContentCard('post',x)).join('')+'</div>'+
-    '<div class="admin-content-column"><h4>RESPOSTAS</h4>'+recentResponses.map(x=>adminContentCard('response',x)).join('')+'</div>'+
-    '<div class="admin-content-column"><h4>FOTOS</h4>'+recentPhotos.map(x=>adminContentCard('photo',x)).join('')+'</div>'+
-    '<div class="admin-content-column"><h4>STORIES</h4>'+recentStories.map(x=>adminContentCard('story',x)).join('')+'</div>';
-
-  host.innerHTML='<section class="admin-shell">'+
-    '<header class="admin-hero"><div><span class="section-code">ADMIN.SYS // ACESSO '+escapeHtml((state.adminRole||'admin').toUpperCase())+'</span>'+
-    '<h2>Painel do AVESSO '+adminCrownHtml('admin-hero-crown')+'</h2>'+
-    '<p>Controle operacional, visual e de moderação. Mensagens privadas continuam privadas. Poder total não precisa virar bisbilhotagem.</p></div>'+
-    '<button id="admin-refresh" type="button">↻ atualizar</button></header>'+
-
-    '<div class="admin-stats">'+statCards+'</div>'+
-
-    '<section class="admin-panel admin-appearance-panel"><div class="admin-panel-head"><div><span class="section-code">APARÊNCIA // CHAVE MESTRA</span>'+
-    '<h3>Personalização global</h3></div><small>cores + CSS global</small></div>'+
-    '<div class="admin-site-copy"><label>nome da rede<input id="admin-site-name" maxlength="40" value="'+escapeAttr(site.site_name||'AVESSO')+'"></label>'+
-    '<label>frase principal<input id="admin-site-tagline" maxlength="120" value="'+escapeAttr(site.tagline||'menos palco, mais presença')+'"></label></div>'+
-    '<label class="admin-announcement">aviso global<textarea id="admin-announcement" maxlength="240" placeholder="vazio = sem aviso">'+escapeHtml(site.announcement||'')+'</textarea></label>'+
-    '<div class="admin-presets"><span>PRESETS</span><button data-admin-preset="avesso">AVESSO</button><button data-admin-preset="phosphor">Fósforo</button>'+
-    '<button data-admin-preset="cyan">Ciano</button><button data-admin-preset="magenta">Magenta CRT</button></div>'+
-    '<div class="admin-color-grid">'+colorFields+'</div>'+
-    '<label class="admin-custom-css"><span>CSS GLOBAL // 20.000 caracteres</span><textarea id="admin-custom-css" spellcheck="false" placeholder="/* você realmente pediu a chave mestra */">'+escapeHtml(site.custom_css||'')+'</textarea>'+
-    '<small>Este campo altera qualquer parte visual do AVESSO. Sem JavaScript e sem HTML injetável.</small></label>'+
-    '<button id="admin-site-save" class="admin-primary" type="button">salvar aparência global</button></section>'+
-
-    '<div class="admin-grid"><section class="admin-panel"><div class="admin-panel-head"><div><span class="section-code">CONTAS // GERÊNCIA</span><h3>Habitantes</h3></div>'+
-    '<small>'+users.length+' carregados</small></div><div class="admin-user-list">'+usersHtml+'</div></section>'+
-    '<section class="admin-panel admin-world-panel"><div class="admin-panel-head"><div><span class="section-code">MUNDO // CONTROLES</span><h3>Estado global</h3></div>'+
-    '<strong>'+(world.world_events_enabled?'ONLINE':'PAUSADO')+'</strong></div>'+
-    '<label class="admin-switch"><input id="admin-world-events" type="checkbox" '+(world.world_events_enabled?'checked':'')+'><span><b>eventos do mundo</b><small>habilita acontecimentos gerais</small></span></label>'+
-    '<label class="admin-switch"><input id="admin-world-interventions" type="checkbox" '+(world.world_interventions_enabled?'checked':'')+'><span><b>interferências visuais</b><small>libera intervenções quando a regra permitir</small></span></label>'+
-    '<label class="admin-world-message">mensagem do sistema<textarea id="admin-world-message" maxlength="240">'+escapeHtml(world.message||'')+'</textarea></label>'+
-    '<button id="admin-world-save" type="button">salvar controles</button></section></div>'+
-
-    '<section class="admin-panel admin-content-moderation"><div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // CONTEÚDO PÚBLICO</span>'+
-    '<h3>Remoção direta</h3></div><small>ações registradas</small></div><div class="admin-content-grid">'+moderationContent+'</div></section>'+
-
-    '<section class="admin-panel admin-reports-panel"><div class="admin-panel-head"><div><span class="section-code">MODERAÇÃO // DENÚNCIAS</span><h3>Fila de revisão</h3></div>'+
-    '<small>'+reports.length+' carregadas</small></div><div class="admin-report-list">'+reportsHtml+'</div></section>'+
-
-    '<section class="admin-panel admin-audit-panel"><div class="admin-panel-head"><div><span class="section-code">AUDITORIA // QUEM FEZ O QUÊ</span><h3>Registro administrativo</h3></div>'+
-    '<small>'+audit.length+' eventos</small></div><div class="admin-audit-list">'+(audit.map(adminAuditRow).join('')||'<p class="admin-empty">Nenhuma ação administrativa registrada ainda.</p>')+'</div></section>'+
-  '</section>';
-
-  $('#admin-refresh')?.addEventListener('click',renderAdminDashboard);
-  $('#admin-world-save')?.addEventListener('click',saveAdminWorldControls);
-  $('#admin-site-save')?.addEventListener('click',saveAdminSiteSettings);
-  host.querySelectorAll('[data-admin-preset]').forEach(b=>b.onclick=()=>adminApplyPreset(b.dataset.adminPreset));
-  host.querySelectorAll('[data-admin-color-var]').forEach(input=>input.oninput=()=>document.documentElement.style.setProperty(input.dataset.adminColorVar,input.value));
-  host.querySelectorAll('[data-admin-report-status]').forEach(select=>select.onchange=()=>setAdminReportStatus(select.dataset.adminReportStatus,select.value));
-  host.querySelectorAll('[data-admin-suspend-user]').forEach(b=>b.onclick=()=>adminToggleSuspension(b.dataset.adminSuspendUser,b.dataset.adminSuspendValue==='1'));
-  host.querySelectorAll('[data-admin-role-user]').forEach(select=>select.onchange=()=>adminSetRole(select.dataset.adminRoleUser,select.value));
-  host.querySelectorAll('[data-admin-delete-kind]').forEach(b=>b.onclick=()=>adminDeleteContent(b.dataset.adminDeleteKind,b.dataset.adminDeleteId));
+  if(state.staffRole==='owner'){
+    $('#admin-site-save')?.addEventListener('click',saveAdminSiteSettings);
+    host.querySelectorAll('[data-admin-preset]').forEach(b=>b.onclick=()=>adminApplyPreset(b.dataset.adminPreset));
+    host.querySelectorAll('[data-admin-color-var]').forEach(input=>input.oninput=()=>document.documentElement.style.setProperty(input.dataset.adminColorVar,input.value));
+    $('#owner-experience-form')?.addEventListener('submit',saveOwnerExperience);
+    host.querySelectorAll('[data-cms-save]').forEach(b=>b.onclick=()=>{const row=b.closest('[data-cms-row]');saveCmsBlock(b.dataset.page,b.dataset.key,b.dataset.kind,row?.querySelector('[data-cms-value]')?.value||'');});
+    $('#cms-new-form')?.addEventListener('submit',e=>{e.preventDefault();saveCmsBlock($('#cms-new-page').value,$('#cms-new-key').value,$('#cms-new-kind').value,$('#cms-new-value').value);});
+    $('#owner-asset-form')?.addEventListener('submit',submitOwnerAsset);
+    $('#owner-badge-form')?.addEventListener('submit',submitOwnerBadge);
+    $('#owner-badge-grant-form')?.addEventListener('submit',e=>{e.preventDefault();ownerToggleBadge(true);});
+    $('#owner-badge-revoke')?.addEventListener('click',()=>ownerToggleBadge(false));
+    host.querySelectorAll('[data-char-save]').forEach(b=>b.onclick=()=>ownerSaveCharacter(b.dataset.charSave));
+    host.querySelectorAll('[data-ai-save]').forEach(b=>b.onclick=()=>ownerSaveCharacterAi(b.dataset.aiSave));
+    host.querySelectorAll('[data-dialogue-form]').forEach(form=>form.onsubmit=ownerAddDialogue);
+    $('#owner-character-create')?.addEventListener('submit',ownerCreateCharacter);
+    $('#owner-db-load')?.addEventListener('click',ownerLoadDb);
+    $('#admin-world-save')?.addEventListener('click',saveAdminWorldControls);
+  }
   bindProfileLinks();
+  decorateIdentityNodes(host);
+  if(state.staffSection==='chat'){
+    startStaffChatRealtime();
+    loadStaffChat(state.staffChatScope||'all');
+  }
 }
 
 function applyAppTabLayout(){
