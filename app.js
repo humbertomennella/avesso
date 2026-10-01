@@ -882,13 +882,41 @@ $('#post-media').addEventListener('change',e=>{
   if(!kind){e.target.value='';state.postMediaFile=null;return toast('Use um arquivo de áudio ou vídeo compatível. GIF continua sendo imagem, por mais que tente.');}
   if(file.size>mediaSizeLimit(kind)){e.target.value='';state.postMediaFile=null;return toast(`${kind==='video'?'Vídeo':'Áudio'} acima de ${mediaSizeLabel(kind)}. O servidor também tem limites emocionais.`);}
   state.postMediaFile=file;
+  const mediaLink=$('#post-media-link');if(mediaLink)mediaLink.value='';
+  const mediaLinkStatus=$('#post-media-link-status');if(mediaLinkStatus)mediaLinkStatus.textContent='arquivo local selecionado';
   $('#media-preview-icon').textContent=kind==='video'?'▶':'♫';
   $('#media-preview-name').textContent=file.name;
   $('#media-preview-kind').textContent=`${kind==='video'?'vídeo':'música/áudio'} · ${Math.max(.1,file.size/1024/1024).toFixed(1)} MB`;
   preview.classList.remove('hidden');
   trackAction('media_selected','composer',{type:file.type,size:file.size,kind});
 });
-$('#remove-media').onclick=()=>{state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');};
+$('#remove-media').onclick=()=>{state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');const s=$('#post-media-link-status');if(s)s.textContent='link reconhecido vira player, não caça-clique';};
+function parseExternalMediaLink(raw){
+  const value=String(raw||'').trim();
+  if(!value)return null;
+  let url;
+  try{url=new URL(value);}catch{return null;}
+  if(url.protocol!=='https:'&&url.protocol!=='http:')return null;
+  const host=url.hostname.toLowerCase().replace(/^www\./,'');
+  if(['youtube.com','m.youtube.com','music.youtube.com','youtu.be'].includes(host)){
+    let id='';
+    if(host==='youtu.be')id=url.pathname.split('/').filter(Boolean)[0]||'';
+    else if(url.pathname==='/watch')id=url.searchParams.get('v')||'';
+    else{
+      const parts=url.pathname.split('/').filter(Boolean);
+      if(['shorts','embed','live'].includes(parts[0]))id=parts[1]||'';
+    }
+    if(!/^[A-Za-z0-9_-]{6,20}$/.test(id))return null;
+    return {kind:'youtube',provider:'YouTube',url:`https://www.youtube-nocookie.com/embed/${id}`,canonical:`https://www.youtube.com/watch?v=${id}`};
+  }
+  if(host==='open.spotify.com'){
+    const parts=url.pathname.split('/').filter(Boolean);
+    const type=parts[0],id=parts[1];
+    if(!['track','album','playlist','episode','show','artist'].includes(type)||!/^[A-Za-z0-9]+$/.test(id||''))return null;
+    return {kind:'spotify',provider:'Spotify',url:`https://open.spotify.com/embed/${type}/${id}`,canonical:`https://open.spotify.com/${type}/${id}`,spotifyType:type};
+  }
+  return null;
+}
 function mediaKindFromFile(file){
   if(!file?.type)return null;
   if(file.type.startsWith('audio/'))return'audio';
@@ -899,9 +927,12 @@ function mediaSizeLimit(kind){return kind==='video'?50*1024*1024:20*1024*1024;}
 function mediaSizeLabel(kind){return kind==='video'?'50 MB':'20 MB';}
 function publicMediaUrl(path){return supabase.storage.from('avesso-media').getPublicUrl(path).data.publicUrl;}
 function feedMediaHtml(url,kind,{compact=false}={}){
-  if(!url||!['audio','video'].includes(kind))return'';
-  if(kind==='audio')return `<figure class="post-media post-audio ${compact?'compact':''}"><div class="post-media-label">♫ ÁUDIO // dê play por sua conta</div><audio controls preload="metadata" src="${escapeAttr(url)}"></audio></figure>`;
-  return `<figure class="post-media post-video ${compact?'compact':''}"><div class="post-media-label">▶ VÍDEO // movimento detectado</div><video controls playsinline preload="metadata" src="${escapeAttr(url)}"></video></figure>`;
+  if(!url||!['audio','video','youtube','spotify'].includes(kind))return'';
+  const cls=`post-media ${compact?'compact':''}`;
+  if(kind==='audio')return `<figure class="${cls} post-audio"><div class="post-media-label">♫ ÁUDIO // dê play por sua conta</div><audio controls preload="metadata" src="${escapeAttr(url)}"></audio></figure>`;
+  if(kind==='video')return `<figure class="${cls} post-video"><div class="post-media-label">▶ VÍDEO // movimento detectado</div><video controls playsinline preload="metadata" src="${escapeAttr(url)}"></video></figure>`;
+  if(kind==='youtube')return `<figure class="${cls} post-embed post-youtube"><div class="post-media-label">▶ YOUTUBE // janela para outro pedaço da internet</div><div class="embed-frame"><iframe src="${escapeAttr(url)}" title="Vídeo do YouTube" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div></figure>`;
+  return `<figure class="${cls} post-embed post-spotify"><div class="post-media-label">♫ SPOTIFY // aperte play conscientemente</div><iframe src="${escapeAttr(url)}" title="Conteúdo do Spotify" loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe></figure>`;
 }
 async function uploadPostMedia(){
   const file=state.postMediaFile;if(!file)return{url:null,kind:null};
@@ -923,18 +954,31 @@ async function uploadPostImage(){
   if(error)throw error;
   return supabase.storage.from('post-images').getPublicUrl(path).data.publicUrl;
 }
+$('#post-media-link').addEventListener('input',e=>{
+  const parsed=parseExternalMediaLink(e.target.value);
+  const status=$('#post-media-link-status');
+  if(!e.target.value.trim()){if(status)status.textContent='link reconhecido vira player, não caça-clique';return;}
+  if(parsed){
+    if(status)status.textContent=`${parsed.provider} reconhecido · player será incorporado`;
+    state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');
+  }else if(status)status.textContent='use um link válido do YouTube ou Spotify';
+});
 $('#publish-post').onclick=async()=>{
   const body=$('#post-body').value.trim();
   const directed=$('#post-target').value==='person';
+  const external=parseExternalMediaLink($('#post-media-link')?.value||'');
+  if($('#post-media-link')?.value.trim()&&!external)return toast('Esse link não é um YouTube ou Spotify reconhecível.');
   if(directed&&!state.recipient)return toast('Escolha alguém na busca para direcionar sua mensagem.');
-  if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||state.postMediaFile))return toast('Imagem, música e vídeo privados ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
-  if(body.length<3&&!state.postImageFile&&!state.postMediaFile)return toast('Dê ao menos uma frase, imagem, música ou vídeo. Telepatia ainda não foi integrada.');
+  if(directed&&$('#post-visibility').value==='privado'&&(state.postImageFile||state.postMediaFile||external))return toast('Imagem, música e vídeo privados ainda não entram aqui. Bucket público e intimidade são uma dupla ruim.');
+  if(body.length<3&&!state.postImageFile&&!state.postMediaFile&&!external)return toast('Dê ao menos uma frase, imagem, música, vídeo ou link. Telepatia ainda não foi integrada.');
   $('#publish-post').disabled=true;
-  let image_url=null,media_url=null,media_kind=null;
+  let image_url=null,media_url=external?.url||null,media_kind=external?.kind||null;
   try{
     image_url=await uploadPostImage();
-    const media=await uploadPostMedia();
-    media_url=media.url;media_kind=media.kind;
+    if(!external){
+      const media=await uploadPostMedia();
+      media_url=media.url;media_kind=media.kind;
+    }
   }catch(e){
     $('#publish-post').disabled=false;
     console.error('media upload failed',e);
@@ -954,7 +998,9 @@ $('#publish-post').onclick=async()=>{
   $('#post-body').value='';$('#recipient-search').value='';$('#char-count').textContent='420';state.recipient=null;
   state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');
   state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');
-  const mediaLabel=media_kind==='video'?'Vídeo entregue ao feed.':media_kind==='audio'?'Áudio entregue ao feed.':image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
+  if($('#post-media-link'))$('#post-media-link').value='';
+  if($('#post-media-link-status'))$('#post-media-link-status').textContent='link reconhecido vira player, não caça-clique';
+  const mediaLabel=media_kind==='youtube'?'Vídeo do YouTube incorporado ao feed.':media_kind==='spotify'?'Spotify incorporado ao feed.':media_kind==='video'?'Vídeo entregue ao feed.':media_kind==='audio'?'Áudio entregue ao feed.':image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
   toast(mediaLabel);
   trackAction(media_kind?`${media_kind}_posted`:image_url?'image_posted':'post_created','composer',{directed,media_kind});
   if(isFeedTab())loadFeed();
