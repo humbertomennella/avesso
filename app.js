@@ -5,7 +5,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -32,14 +32,16 @@ const WALLPAPER_OPTIONS=[
   ['humano-nao-encontrado','Humano Não Encontrado','http 418 // continue tentando']
 ];
 const ACID_REACTIONS=[
+  ['infelizmente_gostei','♥','infelizmente gostei'],
+  ['isso_prestou','✓','isso prestou'],
+  ['salvaria_disquete','▣','salvaria em disquete'],
+  ['modem_aprovou','⌁','meu modem aprovou'],
+  ['humano_detectado','◉','humano detectado'],
   ['li_me_arrependi','↩','li e me arrependi'],
   ['infelizmente_concordo','≋','infelizmente eu concordo'],
-  ['modem_julgou','⌁','meu modem julgou'],
-  ['melhor_offline','□','era melhor ter ficado offline'],
-  ['fingir_nao_vi','◌','vou fingir que não vi'],
-  ['argumento_carregando','…','argumento carregando...'],
-  ['virou_reuniao','▦','isso virou reunião']
+  ['pane_mas_gostei','⚡','deu pane, mas gostei']
 ];
+const DM_REACTIONS=['♥','☻','⌁','⚡','◉','▣'];
 const AVESSO_EMOTICONS=[
   '☻','☺','ಠ_ಠ','¬_¬','(ง •̀_•́)ง','¯\\_(ツ)_/¯','(╯°□°）╯︵ ┻━┻','┬─┬ ノ( ゜-゜ノ)',
   '[404]','[56K]','[AFK]','[PING?]','[ERRO HUMANO]','<3.exe','...','?!','⚡','⌁','◉','◌','▣','✦',
@@ -570,12 +572,29 @@ window.addEventListener('message',event=>{
   pushNowPlaying(event.data.payload||null);
 });
 
+function awayThresholdMs(profile){
+  const minutes=Number(profile?.away_after_minutes);
+  if(minutes===0)return Infinity;
+  return (Number.isFinite(minutes)&&[5,10,15,20,30].includes(minutes)?minutes:10)*60*1000;
+}
 function presenceView(profile){
   if(!profile)return{mode:'offline',label:'offline'};
   if(profile.presence_mode==='invisible')return{mode:'offline',label:'offline'};
   if(profile.presence_mode==='away')return{mode:'away',label:'ausente'};
-  const fresh=profile.last_seen&&Date.now()-new Date(profile.last_seen).getTime()<120000;
-  return fresh?{mode:'online',label:'online'}:{mode:'away',label:'ausente'};
+  const seen=profile.last_seen?new Date(profile.last_seen).getTime():0;
+  const age=seen?Date.now()-seen:Infinity;
+  if(age>45*60*1000)return{mode:'offline',label:'offline'};
+  if(Number(profile.away_after_minutes)===0)return{mode:'online',label:'online'};
+  return age<awayThresholdMs(profile)?{mode:'online',label:'online'}:{mode:'away',label:'ausente'};
+}
+async function saveAwayAfterMinutes(value){
+  const away_after_minutes=Number(value);
+  if(![0,5,10,15,20,30].includes(away_after_minutes)||!state.profile?.id)return;
+  const {data,error}=await supabase.from('profiles').update({away_after_minutes,updated_at:new Date().toISOString()}).eq('id',state.profile.id).select().single();
+  if(error)return toast('A ausência automática se perdeu no caminho.');
+  state.profile=data;
+  renderOnlineFriendsDock();
+  toast(away_after_minutes===0?'Ausência automática desligada. Você escolheu o modo fantasma persistente.':`Ausente após ${away_after_minutes} minutos sem atividade.`);
 }
 async function setPresenceMode(mode){
   if(!['online','away','invisible'].includes(mode)||!state.profile)return;
@@ -856,7 +875,7 @@ function scheduleIdleWorld(){
   if(!state.session)return;
   const delay=(6+Math.random()*6)*60*1000;
   state.world.idleTimer=setTimeout(async()=>{
-    if(state.tab==='tower') await askWorldCharacter('tower_pulse',{character:'rei_engajamento',action_type:'idle_tower',surface:'tower'});
+    if(state.tab==='tower') { /* O Rei publica na Torre; não invade a tela do usuário. */ }
     else if(state.tab==='plaza') { /* a Praça fala dentro do chat, não por cima dele */ }
     else await askWorldCharacter('idle');
     scheduleIdleWorld();
@@ -1531,6 +1550,8 @@ async function sendReply(post_id){
 async function loadImpact(){const {count}=await supabase.from('posts').select('*',{count:'exact',head:true}).eq('author_id',state.profile.id);$('#impact-number').textContent=count||0;}
 function applyAppTabLayout(){
   const worldOpen=['residents','plaza','tower','profile','public_profile','messages'].includes(state.tab);
+  document.body.classList.toggle('avesso-feed-home',state.tab==='feed');
+  document.body.classList.toggle('avesso-own-corner',state.tab==='profile');
   $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
   $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
   $('#stories-zone')?.classList.toggle('hidden',state.tab!=='feed');
@@ -1704,40 +1725,62 @@ async function renderPlaza(){
     await sendPlazaMessage(prompt,true);
   });
 }
-function towerFallback(){
-  const lines=['CAMPANHA // VIDA REAL É BETA. O produto final segue sem previsão.','OPORTUNIDADE // monetize o silêncio antes que alguém crie um plano Pro.','EM ALTA // pessoas conversando sem intermediário. Mercado em pânico.','AVISO // respirar sem publicar reduz impressões. Faça por sua conta e risco.','PESQUISA INTERNA // 100% do Rei concorda com o Rei.'];
-  return lines[Math.floor(Math.random()*lines.length)];
+function towerFallbackEvent(){
+  return {title:'VIDA REAL É BETA',description:'O produto final segue sem previsão. O Rei recomenda conversar com alguém antes que isso vire feature paga.',config:{kind:'campanha',cta:'subir na torre',importance:'normal'}};
 }
-function renderTowerCard(text=towerFallback()){
+function kingEventKind(event){return String(event?.config?.kind||'campanha').toUpperCase();}
+function renderTowerEventCard(event=towerFallbackEvent()){
   const box=$('#tower-live');if(!box)return;
-  box.innerHTML=`<div class="tower-crown">♛</div><span class="section-code">TORRE DO ENGAJAMENTO // AO VIVO</span><h3>Mensagem do Rei</h3><p>${escapeHtml(text)}</p><button id="open-tower">subir na torre →</button>`;
+  const safeEvent=event||towerFallbackEvent();
+  box.innerHTML=`<div class="tower-crown">♛</div><span class="section-code">TORRE DO ENGAJAMENTO // ${escapeHtml(kingEventKind(safeEvent))}</span><h3>${escapeHtml(safeEvent.title||'Mensagem do Rei')}</h3><p>${escapeHtml(safeEvent.description||'O Rei está preparando uma campanha desnecessariamente estratégica.')}</p><small class="tower-event-cta">→ ${escapeHtml(safeEvent.config?.cta||'subir na torre')}</small><button id="open-tower">subir na torre →</button>`;
   $('#open-tower').onclick=()=>document.querySelector('[data-app-tab="tower"]')?.click();
 }
-async function updateTowerAI(trigger='tower_pulse'){
-  if(!state.session||!state.profile)return;
-  const result=await askWorldCharacter(trigger,{character:'rei_engajamento',silent:true,action_type:trigger,surface:'tower'});
-  renderTowerCard(result?.interaction?.body||towerFallback());
+async function latestKingEvents(limit=6){
+  const {data}=await supabase.from('world_events').select('*')
+    .eq('status','active')
+    .contains('config',{creator:'rei_engajamento'})
+    .order('created_at',{ascending:false})
+    .limit(limit);
+  return data||[];
+}
+async function refreshKingBroadcast({ensure=false}={}){
+  if(!state.session||!state.profile)return null;
+  let event=null;
+  if(ensure){
+    try{
+      const {data,error}=await supabase.functions.invoke('king-broadcast',{body:{}});
+      if(!error)event=data?.event||null;
+    }catch{}
+  }
+  if(!event)event=(await latestKingEvents(1))[0]||null;
+  renderTowerEventCard(event||towerFallbackEvent());
+  return event;
 }
 function scheduleTowerPulse(){
   clearTimeout(state.world.towerTimer);
   if(!state.session)return;
-  state.world.towerTimer=setTimeout(async()=>{if(isFeedTab())await updateTowerAI('tower_pulse');scheduleTowerPulse();},(150+Math.random()*120)*1000);
-  setTimeout(()=>{if(isFeedTab())updateTowerAI('tower_opened')},2200);
+  const run=async()=>{
+    await refreshKingBroadcast({ensure:true});
+    state.world.towerTimer=setTimeout(run,(9+Math.random()*3)*60*1000);
+  };
+  state.world.towerTimer=setTimeout(run,3500);
 }
 async function renderTowerPage(){
   if(state.tab!=='tower')return;
   const king=state.world.characters.rei_engajamento;
   $('#feed-status').classList.add('hidden');
+  const events=await latestKingEvents(6);
+  const featured=events[0]||towerFallbackEvent();
+  const cards=events.length?events.map(event=>`<article class="tower-event-card"><b>${escapeHtml(kingEventKind(event))}</b><h3>${escapeHtml(event.title)}</h3><p>${escapeHtml(event.description)}</p><small>→ ${escapeHtml(event.config?.cta||'participar sem formulário')}</small></article>`).join(''):`<article class="tower-event-card"><b>CAMPANHA</b><h3>${escapeHtml(featured.title)}</h3><p>${escapeHtml(featured.description)}</p><small>→ ${escapeHtml(featured.config?.cta||'subir na torre')}</small></article>`;
   $('#feed-list').innerHTML=`<section class="tower-world">
-    <div class="tower-header"><span>♛ TORRE DO ENGAJAMENTO</span><h2>PROPAGANDA, CAOS E OPORTUNIDADES™</h2><p>Um monumento vertical à ideia de que tudo fica melhor quando alguém coloca um KPI em cima.</p></div>
-    <div class="tower-king">${characterVisual(king,'tower-king-hq')}<div id="tower-page-message">O Rei está preparando um PowerPoint que ninguém solicitou.</div></div>
-    <div class="tower-grid"><article><b>CAMPANHA OFICIAL</b><h3>VIDA REAL É BETA</h3><p>Aproveite enquanto ainda não tem assinatura mensal.</p></article><article><b>EM ALTA</b><ol><li>Humanos falando com humanos</li><li>Não monetizar tudo</li><li>Silêncio sem anúncios</li></ol></article><article><b>OPORTUNIDADE DO REI</b><p>Teste um recurso inexistente. Ganhe um badge invisível e absolutamente nenhum benefício.</p></article></div>
-    <button id="tower-refresh" class="tower-refresh">pedir outra ideia péssima ao Rei</button>
+    <div class="tower-header"><span>♛ TORRE DO ENGAJAMENTO</span><h2>PROPAGANDA, CAOS E OPORTUNIDADES™</h2><p>O Rei publica campanhas e eventos aqui. A boa notícia: ele perdeu o direito de aparecer a cada três minutos na sua tela.</p></div>
+    <div class="tower-king">${characterVisual(king,'tower-king-hq')}<div><span class="section-code">${escapeHtml(kingEventKind(featured))} // AGORA</span><h3>${escapeHtml(featured.title)}</h3><p>${escapeHtml(featured.description)}</p></div></div>
+    <div class="tower-event-feed">${cards}</div>
+    <button id="tower-refresh" class="tower-refresh">atualizar boletim da torre</button>
   </section>`;
+  renderTowerEventCard(featured);
   trackAction('tower_opened','tower');
-  const result=await askWorldCharacter('tower_opened',{character:'rei_engajamento',silent:true,action_type:'tower_opened',surface:'tower'});
-  if(state.tab==='tower'&&result?.interaction?.body)$('#tower-page-message').textContent=result.interaction.body;
-  $('#tower-refresh').onclick=async()=>{trackAction('tower_pulse','tower');const r=await askWorldCharacter('tower_pulse',{character:'rei_engajamento',silent:true,action_type:'manual_campaign',surface:'tower'});if(r?.interaction?.body)$('#tower-page-message').textContent=r.interaction.body;};
+  $('#tower-refresh').onclick=async()=>{await refreshKingBroadcast({ensure:true});if(state.tab==='tower')renderTowerPage();};
 }
 
 async function acceptedFriendProfiles(){
@@ -1745,11 +1788,11 @@ async function acceptedFriendProfiles(){
     .or(`requester_id.eq.${state.profile.id},addressee_id.eq.${state.profile.id}`);
   const ids=[...new Set((rels||[]).map(r=>r.requester_id===state.profile.id?r.addressee_id:r.requester_id))];
   if(!ids.length)return[];
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual').in('id',ids);
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').in('id',ids);
   return data||[];
 }
 async function profileById(id){
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual').eq('id',id).maybeSingle();
+  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').eq('id',id).maybeSingle();
   return data||null;
 }
 function cachedPresenceEntry(profile){
@@ -1759,16 +1802,23 @@ function renderOnlineFriendsDock(){
   const dock=$('#online-friends-dock'),list=$('#online-friends-list'),count=$('#online-friends-count');
   if(!dock||!list||!count||!state.profile)return;
   ageFriendPresenceCache(false);
-  const online=Object.values(state.friendPresence||{})
-    .filter(entry=>entry?.mode==='online'&&entry.profile&&!isPeerBlocked(entry.profile.id))
-    .map(entry=>entry.profile)
-    .sort((a,b)=>String(a.display_name||'').localeCompare(String(b.display_name||''),'pt-BR'));
-  count.textContent=online.length;
-  list.innerHTML=online.map(friend=>`<button class="online-friend-item" data-online-friend="${friend.id}" type="button">
-    <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
-    <span><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small>${nowPlayingView(friend)?`<em>♫ ${escapeHtml(nowPlayingView(friend).title)}</em>`:''}</span>
-    <i class="presence-dot online"></i>
-  </button>`).join('')||'<div class="online-friends-empty">0 humanos online. o modem respira em paz.</div>';
+  const entries=Object.values(state.friendPresence||{})
+    .filter(entry=>entry?.profile&&!isPeerBlocked(entry.profile.id)&&entry.mode!=='offline')
+    .sort((a,b)=>{
+      const rank={online:0,away:1};
+      const d=(rank[a.mode]??9)-(rank[b.mode]??9);
+      return d||String(a.profile.display_name||'').localeCompare(String(b.profile.display_name||''),'pt-BR');
+    });
+  const onlineCount=entries.filter(entry=>entry.mode==='online').length;
+  count.textContent=onlineCount;
+  list.innerHTML=entries.map(entry=>{
+    const friend=entry.profile;
+    const np=nowPlayingView(friend);
+    return `<button class="online-friend-item ${entry.mode}" data-online-friend="${friend.id}" type="button">
+      <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
+      <span class="online-friend-copy"><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${entry.mode==='online'?'online':'ausente'}</strong><em>${np?`♫ ${escapeHtml(np.title)}`:'♫ silêncio detectado'}</em></span>
+    </button>`;
+  }).join('')||'<div class="online-friends-empty">Nenhum amigo disponível. O modem ganhou alguns minutos de paz.</div>';
   list.querySelectorAll('[data-online-friend]').forEach(b=>b.onclick=()=>openQuickFriendChat(b.dataset.onlineFriend));
   dock.classList.remove('hidden');
   dock.classList.toggle('collapsed',state.onlineDockCollapsed);
@@ -1789,9 +1839,8 @@ async function primeFriendPresenceCache(){
   renderOnlineFriendsDock();
 }
 function ageFriendPresenceCache(render=true){
-  const now=Date.now();
   Object.values(state.friendPresence||{}).forEach(entry=>{
-    if(entry?.mode==='online'&&entry.lastSeen&&now-entry.lastSeen>120000)entry.mode='away';
+    if(entry?.profile)entry.mode=presenceView(entry.profile).mode;
   });
   if(render)renderOnlineFriendsDock();
 }
@@ -1799,6 +1848,14 @@ function startFriendPresenceWatch(){
   clearInterval(state.presenceWatchTimer);
   ageFriendPresenceCache();
   state.presenceWatchTimer=setInterval(()=>ageFriendPresenceCache(true),30000);
+}
+function onlineNoticeAllowed(profileId){
+  const key=`avesso.online.notice.${profileId}`;
+  const last=Number(state.onlineNoticeAt?.[profileId]||localStorage.getItem(key)||0);
+  if(Date.now()-last<6*60*60*1000)return false;
+  state.onlineNoticeAt[profileId]=Date.now();
+  try{localStorage.setItem(key,String(Date.now()));}catch{}
+  return true;
 }
 function noteFriendPresence(profile){
   if(!profile?.id||!Object.prototype.hasOwnProperty.call(state.friendPresence,profile.id))return;
@@ -1808,13 +1865,13 @@ function noteFriendPresence(profile){
   state.friendPresence[profile.id]=next;
   renderOnlineFriendsDock();
   if(state.chatWindowOpen&&state.directPeerId===profile.id)updateChatPeerHeader(profile);
-  if(prev?.mode!=='online'&&next.mode==='online'&&!isPeerMuted(profile.id)){
+  if(prev?.mode!=='online'&&next.mode==='online'&&!isPeerMuted(profile.id)&&onlineNoticeAllowed(profile.id)){
     socialNotify({
       title:`${profile.display_name||'Um amigo'} entrou no AVESSO`,
-      body:'Online agora. A bolinha verde ressuscitou sem pedir licença.',
+      body:'Online agora. Uma notificação basta. A internet sobreviverá.',
       avatar:profile.avatar_url||'',
       kind:'online',
-      action:()=>openFriendChat(profile.id)
+      action:()=>openQuickFriendChat(profile.id)
     });
   }
 }
@@ -1975,6 +2032,9 @@ function startDirectRealtime(){
   startDirectFallbackPoll();
   const channel=supabase.channel(`avesso-social-${me}-${Date.now()}`)
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>receiveIncomingDirectMessage(payload.new||{}, {source:'realtime'}))
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`sender_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
+    .on('postgres_changes',{event:'*',schema:'public',table:'direct_message_reactions'},payload=>handleDirectReactionMutation(payload))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'friendships'},async payload=>{
       const f=payload.new||{};
       if(f.addressee_id!==me||f.status!=='pending')return;
@@ -2002,7 +2062,7 @@ function startDirectRealtime(){
         updateOwnListeningInChat();
       }
       if(state.tab==='messages')renderMessagesPage();
-      if(state.chatWindowOpen&&state.directPeerId===p.id&&!state.chatWindowMinimized)updateChatPeerHeader(p);
+      if(state.chatWindowOpen&&state.directPeerId===p.id)updateChatPeerHeader(p);
       if(state.tab==='public_profile'&&state.publicProfileId===p.id){
         const host=$('#public-now-playing');
         if(host)host.innerHTML=nowPlayingHtml(p);
@@ -2043,21 +2103,162 @@ async function loadDirectConversation(peerId,{markRead=true}={}){
   }
   const rows=data||[];
   rows.forEach(m=>{if(m.recipient_id===me)rememberDirectMessage(m.id);});
-  return Promise.all(rows.map(hydrateDirectMessage));
+  const ids=rows.map(m=>m.id).filter(Boolean);
+  const grouped={};
+  if(ids.length){
+    const {data:reactionRows}=await supabase.from('direct_message_reactions').select('message_id,user_id,reaction').in('message_id',ids);
+    (reactionRows||[]).forEach(r=>{(grouped[r.message_id]??=[]).push(r);});
+  }
+  return Promise.all(rows.map(async m=>({...await hydrateDirectMessage(m),_reactions:grouped[m.id]||[]})));
+}
+async function directMessageWithReactions(messageId){
+  const {data,error}=await supabase.from('direct_messages').select('*').eq('id',messageId).maybeSingle();
+  if(error||!data)return null;
+  const {data:reactions}=await supabase.from('direct_message_reactions').select('message_id,user_id,reaction').eq('message_id',messageId);
+  return {...await hydrateDirectMessage(data),_reactions:reactions||[]};
+}
+async function refreshDirectMessageBubble(messageId){
+  if(!messageId||!state.chatWindowOpen)return;
+  const log=$('#dm-log');if(!log)return;
+  const row=await directMessageWithReactions(messageId);
+  const old=log.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
+  if(!row){old?.remove();return;}
+  if(old){
+    old.outerHTML=dmMessageHtml(row);
+    repairLegacyVoicePlayers(log);
+  }
+}
+function dmReactionSummary(m){
+  const rows=Array.isArray(m?._reactions)?m._reactions:[];
+  return DM_REACTIONS.map(icon=>{
+    const hit=rows.filter(r=>r.reaction===icon);
+    if(!hit.length)return'';
+    const active=hit.some(r=>r.user_id===state.profile.id);
+    return `<button type="button" class="dm-reaction-chip ${active?'active':''}" data-dm-react="${escapeAttr(icon)}" data-message-id="${escapeAttr(m.id)}" aria-pressed="${active}"><span>${escapeHtml(icon)}</span>${hit.length>1?`<b>${hit.length}</b>`:''}</button>`;
+  }).join('');
 }
 function dmMessageHtml(m){
   const mine=m.sender_id===state.profile.id;
   const messageId=escapeAttr(String(m.id||`local-${Date.now()}`));
   if(m.message_kind==='attention')return `<article class="dm-attention-event" data-dm-id="${messageId}">⚡ ${escapeHtml(m.body||'CHAMAR ATENÇÃO')} <small>${ago(m.created_at)}</small></article>`;
+  if(m.message_kind==='deleted'||m.deleted_at)return `<article class="dm-bubble ${mine?'mine':'theirs'} deleted" data-dm-id="${messageId}"><p class="dm-message-deleted">◌ mensagem apagada</p><small class="dm-message-time">${ago(m.created_at)}</small></article>`;
   const voiceDuration=m.message_kind==='audio'?String(m.body||'').match(/(\d+)s/)?.[1]:null;
   const attachment=m.attachment_url?(m.message_kind==='image'
     ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}" loading="eager" decoding="async"></a>`
     :m.message_kind==='audio'
       ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio class="dm-voice-audio" data-voice-type="${escapeAttr(m.attachment_type||'')}" controls preload="metadata"><source src="${escapeAttr(m.attachment_url)}" type="${escapeAttr(m.attachment_type||'audio/wav')}">Seu navegador recusou este áudio.</audio><a class="dm-audio-open" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener">abrir áudio</a></div>`
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
-  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p>${escapeHtml(m.body)}</p>`:'');
-  return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}${mine&&m.read_at?' · lida':''}</small></article>`;
+  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${escapeHtml(m.body)}</p>`:'');
+  const canEdit=mine&&m.message_kind==='text'&&!m.attachment_path;
+  const menu=`<button type="button" class="dm-message-kebab" data-dm-menu-toggle="${messageId}" aria-label="Opções da mensagem">•••</button><div class="dm-message-menu hidden" data-dm-message-menu="${messageId}"><div class="dm-message-menu-actions">${canEdit?`<button type="button" data-dm-edit="${messageId}">editar</button>`:''}${mine?`<button type="button" class="danger" data-dm-delete="${messageId}">apagar</button>`:''}<span>reagir</span></div><div class="dm-message-react-choices">${DM_REACTIONS.map(icon=>`<button type="button" data-dm-react="${escapeAttr(icon)}" data-message-id="${messageId}">${escapeHtml(icon)}</button>`).join('')}</div></div>`;
+  const reactions=dmReactionSummary(m);
+  return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}">${menu}${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}${m.edited_at?' · editada':''}${mine&&m.read_at?' · lida':''}</small>${reactions?`<div class="dm-message-reactions">${reactions}</div>`:''}</article>`;
 }
+function closeDmMessageMenus(exceptId=null){
+  document.querySelectorAll('[data-dm-message-menu]').forEach(menu=>{
+    if(exceptId&&menu.dataset.dmMessageMenu===String(exceptId))return;
+    menu.classList.add('hidden');
+  });
+}
+function openDmMessageMenu(messageId){
+  const menu=document.querySelector(`[data-dm-message-menu="${CSS.escape(String(messageId))}"]`);
+  if(!menu)return;
+  const opening=menu.classList.contains('hidden');
+  closeDmMessageMenus(opening?messageId:null);
+  menu.classList.toggle('hidden',!opening);
+}
+async function startEditDirectMessage(messageId){
+  const {data,error}=await supabase.from('direct_messages').select('id,body,sender_id,message_kind,deleted_at').eq('id',messageId).maybeSingle();
+  if(error||!data||data.sender_id!==state.profile.id||data.message_kind!=='text'||data.deleted_at)return toast('Essa mensagem não pode ser editada.');
+  const bubble=document.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
+  const body=bubble?.querySelector('.dm-message-body');
+  if(!bubble||!body)return;
+  closeDmMessageMenus();
+  const wrapper=document.createElement('div');
+  wrapper.className='dm-inline-edit';
+  wrapper.innerHTML=`<textarea maxlength="1000">${escapeHtml(data.body||'')}</textarea><div><button type="button" data-dm-edit-save="${escapeAttr(messageId)}">salvar</button><button type="button" data-dm-edit-cancel="${escapeAttr(messageId)}">cancelar</button></div>`;
+  body.replaceWith(wrapper);
+  wrapper.querySelector('textarea')?.focus();
+}
+async function saveEditDirectMessage(messageId){
+  const bubble=document.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
+  const input=bubble?.querySelector('.dm-inline-edit textarea');
+  const body=String(input?.value||'').trim();
+  if(!body)return toast('Mensagem vazia continua sendo silêncio.');
+  if(body.length>1000)return toast('Até 1000 caracteres. Nem o MSN aguentava um tratado.');
+  const {error}=await supabase.rpc('edit_direct_message',{p_message_id:messageId,p_body:body});
+  if(error)return toast('A edição tropeçou no cabo.');
+  await refreshDirectMessageBubble(messageId);
+}
+async function deleteDirectMessage(messageId){
+  if(!messageId||!confirm('Apagar esta mensagem? Ela ficará marcada como apagada para manter a conversa sincronizada.'))return;
+  const {data:attachmentPath,error}=await supabase.rpc('delete_direct_message',{p_message_id:messageId});
+  if(error)return toast('A mensagem se recusou a desaparecer.');
+  if(attachmentPath)await supabase.storage.from('avesso-chat').remove([attachmentPath]).catch(()=>{});
+  await refreshDirectMessageBubble(messageId);
+}
+async function toggleDirectMessageReaction(messageId,reaction){
+  if(!messageId||!DM_REACTIONS.includes(reaction))return;
+  const {data:existing}=await supabase.from('direct_message_reactions').select('reaction').eq('message_id',messageId).eq('user_id',state.profile.id).maybeSingle();
+  let error=null;
+  if(existing?.reaction===reaction){
+    ({error}=await supabase.from('direct_message_reactions').delete().eq('message_id',messageId).eq('user_id',state.profile.id));
+  }else{
+    ({error}=await supabase.from('direct_message_reactions').upsert({message_id:messageId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'message_id,user_id'}));
+  }
+  if(error)return toast('A reação teve uma reação adversa.');
+  closeDmMessageMenus();
+  await refreshDirectMessageBubble(messageId);
+}
+async function handleDirectMessageMutation(row){
+  if(!row?.id||!state.chatWindowOpen||!state.directPeerId)return;
+  const belongs=(row.sender_id===state.profile.id&&row.recipient_id===state.directPeerId)||(row.sender_id===state.directPeerId&&row.recipient_id===state.profile.id);
+  if(belongs)await refreshDirectMessageBubble(row.id);
+}
+async function handleDirectReactionMutation(payload){
+  const messageId=payload?.new?.message_id||payload?.old?.message_id;
+  if(!messageId||!state.chatWindowOpen)return;
+  const bubble=$('#dm-log')?.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
+  if(bubble)await refreshDirectMessageBubble(messageId);
+}
+let dmLongPressOrigin=null;
+document.addEventListener('click',e=>{
+  const menuButton=e.target.closest('[data-dm-menu-toggle]');
+  if(menuButton){e.stopPropagation();openDmMessageMenu(menuButton.dataset.dmMenuToggle);return;}
+  const react=e.target.closest('[data-dm-react]');
+  if(react){e.stopPropagation();toggleDirectMessageReaction(react.dataset.messageId,react.dataset.dmReact);return;}
+  const edit=e.target.closest('[data-dm-edit]');
+  if(edit){e.stopPropagation();startEditDirectMessage(edit.dataset.dmEdit);return;}
+  const del=e.target.closest('[data-dm-delete]');
+  if(del){e.stopPropagation();deleteDirectMessage(del.dataset.dmDelete);return;}
+  const save=e.target.closest('[data-dm-edit-save]');
+  if(save){e.stopPropagation();saveEditDirectMessage(save.dataset.dmEditSave);return;}
+  const cancel=e.target.closest('[data-dm-edit-cancel]');
+  if(cancel){e.stopPropagation();refreshDirectMessageBubble(cancel.dataset.dmEditCancel);return;}
+});
+document.addEventListener('pointerdown',e=>{
+  if(!window.matchMedia('(max-width:760px), (pointer:coarse)').matches)return;
+  if(e.target.closest('button,a,input,textarea,audio'))return;
+  const bubble=e.target.closest('.dm-bubble:not(.deleted)');
+  if(!bubble?.dataset.dmId)return;
+  clearTimeout(state.dmLongPressTimer);
+  dmLongPressOrigin={x:e.clientX,y:e.clientY,id:bubble.dataset.dmId};
+  state.dmLongPressTimer=setTimeout(()=>{
+    openDmMessageMenu(bubble.dataset.dmId);
+    try{navigator.vibrate?.(16);}catch{}
+    state.dmLongPressTimer=null;
+  },560);
+});
+document.addEventListener('pointermove',e=>{
+  if(!dmLongPressOrigin||!state.dmLongPressTimer)return;
+  if(Math.hypot(e.clientX-dmLongPressOrigin.x,e.clientY-dmLongPressOrigin.y)>12){
+    clearTimeout(state.dmLongPressTimer);state.dmLongPressTimer=null;dmLongPressOrigin=null;
+  }
+});
+['pointerup','pointercancel'].forEach(type=>document.addEventListener(type,()=>{
+  if(state.dmLongPressTimer){clearTimeout(state.dmLongPressTimer);state.dmLongPressTimer=null;}
+  dmLongPressOrigin=null;
+}));
 async function repairLegacyVoicePlayers(root=document){
   const players=[...root.querySelectorAll?.('.dm-voice-audio')||[]].filter(audio=>!audio.dataset.voiceRepaired&&audio.dataset.voiceType&&audio.dataset.voiceType!=='audio/wav').slice(0,30);
   for(const audio of players){
@@ -2124,6 +2325,7 @@ document.addEventListener('pointerdown',e=>{
   if(emoji&&!emoji.classList.contains('hidden')&&!e.target.closest('#dm-emoticon-palette,#dm-emoticons'))emoji.classList.add('hidden');
   const postEmoji=$('#post-emoticon-palette');
   if(postEmoji&&!postEmoji.classList.contains('hidden')&&!e.target.closest('#post-emoticon-palette,#post-emoticons'))postEmoji.classList.add('hidden');
+  if(!e.target.closest('[data-dm-message-menu],[data-dm-menu-toggle]'))closeDmMessageMenus();
 });
 
 function preferredVoiceMime(){
@@ -2518,6 +2720,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
         <button id="dm-visit-profile">↗ visitar o Canto</button>
         <button id="dm-mute-peer">${muted?'🔊 desmutar':'🔇 mutar'} notificações</button>
         <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
+        <label class="dm-away-setting"><span>MINHA AUSÊNCIA AUTOMÁTICA</span><select id="dm-away-after"><option value="5">5 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option><option value="20">20 minutos</option><option value="30">30 minutos</option><option value="0">nunca</option></select></label>
         <div class="dm-theme-section"><span>TEMA // PIXEL 199X → 2026</span><div class="dm-theme-grid">${CHAT_THEMES.map(([id,label,color])=>`<button type="button" class="chat-theme-choice ${theme===id?'active':''}" data-chat-theme="${id}" title="${escapeAttr(label)}"><i style="--theme-color:${color}"></i><b>${escapeHtml(label)}</b></button>`).join('')}</div></div>
         <div class="dm-wallpaper-section"><span>FUNDO // CONVERSA</span><div class="dm-chat-wallpaper-grid">${CHAT_WALLPAPERS.map(([slug,name])=>`<button type="button" class="dm-chat-wallpaper ${chatWallpaper===slug?'active':''}" data-chat-wallpaper="${escapeAttr(slug)}" title="${escapeAttr(name)}" style="${slug==='none'?'':'--chat-thumb:url(\''+wallpaperUrl(slug)+'\')'}"><i></i><b>${escapeHtml(name)}</b></button>`).join('')}</div></div>
       </div>
@@ -2564,7 +2767,8 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('#dm-visit-profile').onclick=()=>{openPublicProfile(peerId);$('#dm-options-menu')?.classList.add('hidden');};
   $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
   $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
-  $$('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
+  const awaySelect=$('#dm-away-after');if(awaySelect){awaySelect.value=String(state.profile.away_after_minutes??10);awaySelect.onchange=e=>saveAwayAfterMinutes(e.target.value);}
+  $('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
   $$('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
   installChatDesktopWindowing();
   syncVoiceRecordingUI();
@@ -2592,6 +2796,7 @@ function toggleChatMinimize(){
     if(state.directPeerId){
       supabase.from('direct_messages').update({read_at:new Date().toISOString()})
         .eq('sender_id',state.directPeerId).eq('recipient_id',state.profile.id).is('read_at',null).then(()=>{});
+      profileById(state.directPeerId).then(updateChatPeerHeader);
     }
   }
   applyChatGeometry();
@@ -3228,7 +3433,17 @@ function subscribeRealtime(){
       toast(state.world.settings?.world_interventions_enabled?'AVESSO.SYS: interferências liberadas. Péssima hora para perder o 404 de vista.':'AVESSO.SYS: interferências visuais suspensas.');
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'world_events'},payload=>{
-      if(payload.new?.status==='active')toast(`EVENTO DO MUNDO // ${payload.new.title}`);
+      const event=payload.new||{};
+      if(event.status!=='active')return;
+      if(event.config?.creator==='rei_engajamento'){
+        renderTowerEventCard(event);
+        if(state.tab==='tower')renderTowerPage();
+        if(event.config?.importance==='important'){
+          socialNotify({title:'♛ Torre do Engajamento',body:event.title||'O Rei publicou algo que, contra as probabilidades, merece atenção.',kind:'world'});
+        }
+        return;
+      }
+      if(event.config?.importance==='important')toast(`EVENTO DO MUNDO // ${event.title}`);
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'post_reactions'},()=>{if(isFeedTab())loadFeed();})
     .on('postgres_changes',{event:'*',schema:'public',table:'profile_media'},payload=>{
@@ -3248,6 +3463,7 @@ function subscribeRealtime(){
       const c=state.world.charactersById[row.character_id];
       if(state.tab==='plaza'&&c?.slug!=='npc')return;
       if(state.tab==='tower'&&c?.slug!=='rei_engajamento')return;
+      if(c?.slug==='rei_engajamento'&&row.trigger_type==='king_broadcast')return;
       if(c)showEncounter({character:c,interaction:{id:row.id,body:row.body,source:row.source}});
     })
     .subscribe();
