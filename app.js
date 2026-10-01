@@ -3548,6 +3548,24 @@ async function hydrateDirectMessage(m){
   if(!m?.attachment_path)return m;
   return {...m,attachment_url:await directAttachmentUrl(m.attachment_path)};
 }
+async function hydrateDirectMessages(rows=[]){
+  const safe=rows.filter(Boolean);
+  if(!safe.length)return[];
+  const ids=safe.map(x=>x.id).filter(Boolean);
+  const replyIds=[...new Set(safe.map(x=>x.reply_to_id).filter(Boolean))];
+  const [reactionRes,replyRes]=await Promise.all([
+    ids.length?supabase.from('direct_message_reactions').select('message_id,user_id,reaction,created_at,updated_at').in('message_id',ids):Promise.resolve({data:[]}),
+    replyIds.length?supabase.from('direct_messages').select('id,sender_id,body,message_kind,deleted_at').in('id',replyIds):Promise.resolve({data:[]})
+  ]);
+  const reactionsBy={};
+  (reactionRes.data||[]).forEach(r=>(reactionsBy[r.message_id]??=[]).push(r));
+  const replies=Object.fromEntries((replyRes.data||[]).map(r=>[r.id,r]));
+  return Promise.all(safe.map(async row=>({
+    ...(await hydrateDirectMessage(row)),
+    reactions:reactionsBy[row.id]||[],
+    reply_to:row.reply_to_id?(replies[row.reply_to_id]||null):null
+  })));
+}
 function appendDirectMessage(m,{replaceId=null}={}){
   const log=$('#dm-log');if(!log||!m)return;
   if(m.id&&log.querySelector(`[data-dm-id="${CSS.escape(String(m.id))}"]`))return;
@@ -3797,23 +3815,54 @@ function startDirectRealtime(){
 async function loadDirectConversation(peerId,{markRead=true}={}){
   if(!peerId)return[];
   const me=state.profile.id;
+  const pageSize=80;
   const {data,error}=await supabase.from('direct_messages').select('*')
     .or(`and(sender_id.eq.${me},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${me})`)
-    .order('created_at',{ascending:false}).limit(250);
+    .order('created_at',{ascending:false}).limit(pageSize+1);
   if(error)return[];
   if(markRead){
     await supabase.from('direct_messages').update({read_at:new Date().toISOString()})
       .eq('sender_id',peerId).eq('recipient_id',me).is('read_at',null);
   }
-  const rows=(data||[]).slice().reverse();
+  const raw=(data||[]);
+  state.directHistoryHasMore=raw.length>pageSize;
+  const page=raw.slice(0,pageSize);
+  state.directHistoryCursor=page.length?page[page.length-1].created_at:null;
+  const rows=page.slice().reverse();
   rows.forEach(m=>{if(m.recipient_id===me)rememberDirectMessage(m.id);});
-  return Promise.all(rows.map(m=>hydrateDirectMessage(m)));
+  return hydrateDirectMessages(rows);
+}
+async function loadMoreDirectHistory(){
+  if(!state.directPeerId||!state.directHistoryHasMore||!state.directHistoryCursor)return;
+  const button=$('#dm-load-older');if(button){button.disabled=true;button.textContent='buscando...';}
+  const me=state.profile.id,peerId=state.directPeerId,pageSize=80;
+  const {data,error}=await supabase.from('direct_messages').select('*')
+    .or(`and(sender_id.eq.${me},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${me})`)
+    .lt('created_at',state.directHistoryCursor)
+    .order('created_at',{ascending:false}).limit(pageSize+1);
+  if(error){if(button){button.disabled=false;button.textContent='carregar antigas';}return toast('O arquivo morto não abriu.');}
+  const raw=data||[];
+  state.directHistoryHasMore=raw.length>pageSize;
+  const page=raw.slice(0,pageSize);
+  if(page.length)state.directHistoryCursor=page[page.length-1].created_at;
+  const hydrated=await hydrateDirectMessages(page.slice().reverse());
+  const log=$('#dm-log');if(!log)return;
+  const previousHeight=log.scrollHeight;
+  const anchor=log.querySelector('#dm-load-older');
+  if(anchor)anchor.remove();
+  log.insertAdjacentHTML('afterbegin',hydrated.map(dmMessageHtml).join(''));
+  if(state.directHistoryHasMore){
+    log.insertAdjacentHTML('afterbegin','<button id="dm-load-older" class="dm-load-older" type="button">carregar antigas</button>');
+    $('#dm-load-older').onclick=loadMoreDirectHistory;
+  }
+  log.scrollTop=log.scrollHeight-previousHeight;
+  bindDirectMessageActions(log);
 }
 
 async function directMessageForRefresh(messageId){
   const {data,error}=await supabase.from('direct_messages').select('*').eq('id',messageId).maybeSingle();
   if(error||!data)return null;
-  return hydrateDirectMessage(data);
+  return (await hydrateDirectMessages([data]))[0]||null;
 }
 async function refreshDirectMessageBubble(messageId){
   if(!messageId||!state.chatWindowOpen)return;
