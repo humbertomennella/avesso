@@ -675,6 +675,14 @@ async function requestBrowserNotifications({quiet=false}={}){
     return result==='granted';
   }catch{return false;}
 }
+window.addEventListener('avesso:request-notifications',async()=>{
+  const granted=await requestBrowserNotifications();
+  window.dispatchEvent(new CustomEvent('avesso:notification-permission',{detail:{
+    permission:('Notification' in window)?Notification.permission:'unsupported',
+    granted
+  }}));
+});
+
 function armBrowserNotifications(){
   if(state.notificationPermissionArmed||!('Notification' in window)||Notification.permission!=='default')return;
   state.notificationPermissionArmed=true;
@@ -699,6 +707,8 @@ async function browserNotify({title='AVESSO',body='',avatar='',kind='message',ac
     tag:`avesso-${kind}-${title}`,
     renotify:true,
     silent:false,
+    vibrate:[90,45,90],
+    timestamp:Date.now(),
     data:{url:SITE_URL,kind}
   };
   try{
@@ -713,6 +723,10 @@ function socialNotify({title='AVESSO',body='',avatar='',kind='message',action=nu
   const item={title,body,avatar,kind,action,sound};
   state.socialNotificationQueue.push(item);
   if(state.socialNotificationQueue.length>6)state.socialNotificationQueue.shift();
+  try{
+    window.dispatchEvent(new CustomEvent('avesso:notification',{detail:{kind,title,body}}));
+    if(typeof navigator.setAppBadge==='function')navigator.setAppBadge(1).catch(()=>{});
+  }catch{}
   browserNotify(item);
   runSocialNotificationQueue();
 }
@@ -1605,6 +1619,10 @@ async function loadAdminAccess(){
   if(nav)nav.classList.toggle('hidden',!state.isAdmin);
   return state.isAdmin;
 }
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&typeof navigator.clearAppBadge==='function')navigator.clearAppBadge().catch(()=>{});
+});
+
 async function enterApp(){
   $('#marketing-view').classList.add('hidden');
   $('.site-header').classList.add('hidden');
@@ -3455,6 +3473,46 @@ async function notifyPendingFriendRequests(){
     action:()=>openPublicProfile(newest.requester_id)
   });
 }
+async function openFeedPostFromNotification(postId){
+  document.querySelector('[data-app-tab="feed"]')?.click();
+  setTimeout(()=>document.querySelector(`[data-post-card="${CSS.escape(String(postId))}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),520);
+}
+async function notifyPostInteraction(row,kind){
+  if(!row||!state.profile?.id)return;
+  const actorId=kind==='reaction'?row.user_id:row.author_id;
+  const postId=row.post_id;
+  if(!actorId||actorId===state.profile.id||!postId)return;
+  const {data:post}=await supabase.from('posts').select('id,author_id').eq('id',postId).maybeSingle();
+  if(!post||post.author_id!==state.profile.id)return;
+  const actor=await profileById(actorId);
+  const title=kind==='reaction'?'Reação na sua publicação':'Resposta na sua publicação';
+  const body=kind==='reaction'
+    ?`${actor?.display_name||'Alguém'} reagiu ao que você publicou.`
+    :`${actor?.display_name||'Alguém'} respondeu: ${String(row.body||'').slice(0,90)}`;
+  socialNotify({
+    title,body,avatar:actor?.avatar_url||'',kind:'interaction',
+    action:()=>openFeedPostFromNotification(postId)
+  });
+}
+async function notifyPhotoInteraction(row,kind){
+  if(!row||!state.profile?.id)return;
+  const actorId=row.user_id;
+  const photoId=row.photo_id;
+  if(!actorId||actorId===state.profile.id||!photoId)return;
+  const {data:photo}=await supabase.from('profile_photos').select('id,user_id').eq('id',photoId).maybeSingle();
+  if(!photo||photo.user_id!==state.profile.id)return;
+  const actor=await profileById(actorId);
+  socialNotify({
+    title:kind==='reaction'?'Reação no seu álbum':'Comentário no seu álbum',
+    body:kind==='reaction'
+      ?`${actor?.display_name||'Alguém'} reagiu a uma foto do seu Canto.`
+      :`${actor?.display_name||'Alguém'} comentou: ${String(row.body||'').slice(0,90)}`,
+    avatar:actor?.avatar_url||'',
+    kind:'interaction',
+    action:()=>openAlbumPhotoViewer(photoId)
+  });
+}
+
 function startDirectRealtime(){
   if(state.directChannel||!state.profile?.id)return;
   const me=state.profile.id;
@@ -3497,6 +3555,10 @@ function startDirectRealtime(){
         if(host)host.innerHTML=nowPlayingHtml(p);
       }
     })
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'post_reactions'},payload=>notifyPostInteraction(payload.new||{},'reaction'))
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'responses'},payload=>notifyPostInteraction(payload.new||{},'reply'))
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'photo_reactions'},payload=>notifyPhotoInteraction(payload.new||{},'reaction'))
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'photo_comments'},payload=>notifyPhotoInteraction(payload.new||{},'comment'))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'guestbook_entries'},async payload=>{
       const row=payload.new||{};
       if(row.profile_id!==me||row.author_id===me)return;
