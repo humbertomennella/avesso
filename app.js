@@ -127,10 +127,10 @@ function badgeHtmlForUser(userId){
 function decorateIdentityNodes(root=document){
   if(!root?.querySelectorAll)return;
   const nodes=[];
-  if(root.matches?.('[data-profile-id]'))nodes.push(root);
-  nodes.push(...root.querySelectorAll('[data-profile-id]'));
+  if(root.matches?.('[data-profile-id],[data-identity-profile-id]'))nodes.push(root);
+  nodes.push(...root.querySelectorAll('[data-profile-id],[data-identity-profile-id]'));
   nodes.forEach(el=>{
-    const id=el.dataset.profileId;
+    const id=el.dataset.profileId||el.dataset.identityProfileId;
     if(!id)return;
     const role=state.staffRoles?.[id]||'';
     el.dataset.staffRole=role;
@@ -272,7 +272,7 @@ function storyCardHtml(story,{compact=false}={}){
   return '<button class="story-card '+(compact?'compact ':'')+(isVideo?'has-video':'')+'" data-story-open="'+escapeAttr(story.id)+'" style="'+style+'">'+
     '<span class="story-ring"><i>'+avatarHtml(a.avatar_url,a.display_name||'?')+'</i></span>'+
     (isVideo?'<em class="story-card-media">▶ vídeo</em>':'')+
-    '<span class="story-card-copy"><b>'+escapeHtml(a.display_name||'humano')+'</b><small>'+(story.visibility==='amigos'?'amigos':'público')+' · '+storyTimeLeft(story.expires_at)+'</small></span>'+
+    '<span class="story-card-copy"><b class="identity-name" data-identity-profile-id="'+escapeAttr(story.author_id)+'">'+escapeHtml(a.display_name||'humano')+'</b><small>'+(story.visibility==='amigos'?'amigos':'público')+' · '+storyTimeLeft(story.expires_at)+'</small></span>'+
   '</button>';
 }
 
@@ -3256,7 +3256,7 @@ async function renderMessagesPage(){
   $('#feed-list').innerHTML=`<section class="messages-hub">
     <header class="messages-hub-head"><div><span class="section-code">MSN.EXE // AMIZADES HUMANAS</span><h2>Amigos & cúmplices</h2><p>Sua lista de gente que você aceitou voluntariamente. Clique em alguém e a janela aparece, porque 2006 ainda tinha algumas ideias úteis.</p></div>
     <div class="messages-head-controls"><label class="presence-picker">aparecer como <select id="presence-mode-select"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><button id="notification-permission-button" class="notification-permission-button">${notificationPermissionLabel()}</button></div></header>
-    <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f),muted=isPeerMuted(f.id);return `<button class="compact-friend" data-open-chat="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${escapeHtml(f.display_name)}${muted?' <i class="muted-mark">🔇</i>':''}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}${muted?' · mutado':''}</em></button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
+    <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f),muted=isPeerMuted(f.id);return `<button class="compact-friend" data-open-chat="${f.id}" data-identity-profile-id="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${escapeHtml(f.display_name)}${muted?' <i class="muted-mark">🔇</i>':''}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}${muted?' · mutado':''}</em></button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
   </section>`;
   $('#presence-mode-select').value=state.profile.presence_mode||'online';
   $('#presence-mode-select').onchange=e=>setPresenceMode(e.target.value);
@@ -3655,19 +3655,20 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   win.dataset.chatWallpaper=chatWallpaper;
   win.innerHTML=`<div class="dm-msn-titlebar" id="dm-floating-head">
       <span class="dm-msn-appmark">▓ AVESSO.MSG</span>
-      <button id="dm-restore-name" class="dm-title-peer" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}</button>
+      <button id="dm-restore-name" class="dm-title-peer" data-profile-id="${peer.id}" title="Abrir conversa com ${escapeAttr(peer.display_name)}"><i class="presence-dot ${p.mode}"></i>${escapeHtml(peer.display_name)}${muted?' · 🔇':''}</button>
       <span class="dm-msn-era">56K // 2026</span>
       <div class="dm-window-controls"><button id="dm-minimize" title="${state.chatWindowMinimized?'Restaurar':'Minimizar'}">${state.chatWindowMinimized?'↥':'_'}</button><button id="dm-maximize" title="${state.chatMaximized?'Restaurar tamanho':'Maximizar'}">${state.chatMaximized?'❐':'□'}</button><button id="dm-close" title="Fechar">×</button></div>
     </div>
     <header class="dm-floating-head">
       <button class="mini-avatar profile-avatar-button" id="dm-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</button>
-      <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><div class="dm-peer-identity-row"><button class="dm-peer-name" id="dm-peer-profile-name">${escapeHtml(peer.display_name)}</button><span id="dm-peer-status" class="dm-user-status ${peer.status_message?'':'hidden'}" title="${escapeAttr(peer.status_message||'')}">${escapeHtml(peer.status_message||'')}</span><div id="dm-peer-listening" class="dm-listening-inline">${chatNowPlayingHtml(peer,{compact:true})}</div></div><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
+      <div class="dm-peer-heading"><span class="dm-conversation-label">CONVERSANDO COM</span><div class="dm-peer-identity-row"><button class="dm-peer-name" id="dm-peer-profile-name" data-profile-id="${peer.id}">${escapeHtml(peer.display_name)}</button><span id="dm-peer-status" class="dm-user-status ${peer.status_message?'':'hidden'}" title="${escapeAttr(peer.status_message||'')}">${escapeHtml(peer.status_message||'')}</span><div id="dm-peer-listening" class="dm-listening-inline">${chatNowPlayingHtml(peer,{compact:true})}</div></div><small><i class="presence-dot ${p.mode}"></i> ${p.label} · @${escapeHtml(peer.handle)}${muted?' · mutado':''}</small></div>
       <div class="dm-head-actions"><span class="dm-msn-status-orb ${p.mode}" title="${p.label}"></span><button id="dm-options" class="dm-kebab" aria-label="Opções da conversa" title="Opções da conversa">•••</button></div>
       <div id="dm-options-menu" class="dm-options-menu dm-options-menu-head hidden">
-        <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b>${escapeHtml(peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
+        <div class="dm-options-user"><span class="mini-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</span><div><b class="identity-name" data-identity-profile-id="${peer.id}">${escapeHtml(peer.display_name)}</b><small>@${escapeHtml(peer.handle)}</small></div></div>
         <button id="dm-visit-profile">↗ visitar o Canto</button>
         <button id="dm-mute-peer">${muted?'🔊 desmutar':'🔇 mutar'} notificações</button>
         <button id="dm-block-peer" class="danger">⊘ bloquear usuário</button>
+        <button id="dm-report-peer" class="report-user-button">⚑ denunciar usuário</button>
         <label class="dm-away-setting"><span>MINHA AUSÊNCIA AUTOMÁTICA</span><select id="dm-away-after"><option value="5">5 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option><option value="20">20 minutos</option><option value="30">30 minutos</option><option value="0">nunca</option></select></label><label class="dm-chat-listening-setting"><input id="dm-show-listening" type="checkbox" ${state.profile.chat_listening_visible!==false?'checked':''}><span><b>mostrar minha música nas conversas</b><small>o Canto pode continuar mostrando mesmo se você esconder daqui</small></span></label><div class="dm-status-setting"><span>MEU STATUS</span><div><input id="dm-status-message" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"><button id="dm-save-status" type="button">salvar</button></div></div>
         <div class="dm-theme-section"><span>TEMA // PIXEL 199X → 2026</span><div class="dm-theme-grid">${CHAT_THEMES.map(([id,label,color])=>`<button type="button" class="chat-theme-choice ${theme===id?'active':''}" data-chat-theme="${id}" title="${escapeAttr(label)}"><i style="--theme-color:${color}"></i><b>${escapeHtml(label)}</b></button>`).join('')}</div></div>
         <div class="dm-wallpaper-section"><span>FUNDO // CONVERSA</span><div class="dm-chat-wallpaper-grid">${allChatWallpapers().map(([slug,name])=>`<button type="button" class="dm-chat-wallpaper ${chatWallpaper===slug?'active':''}" data-chat-wallpaper="${escapeAttr(slug)}" title="${escapeAttr(name)}" style="${slug==='none'?'':'--chat-thumb:url(\''+wallpaperUrl(slug)+'\')'}"><i></i><b>${escapeHtml(name)}</b></button>`).join('')}</div></div>
@@ -3677,14 +3678,14 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
       <div class="dm-msn-conversation">
         <aside class="dm-msn-peer">
           <div class="dm-msn-peer-avatar">${avatarHtml(peer.avatar_url,peer.display_name)}</div>
-          <b>${escapeHtml(peer.display_name)}</b>
+          <b class="identity-name" data-identity-profile-id="${peer.id}">${escapeHtml(peer.display_name)}</b>
           <small>@${escapeHtml(peer.handle)}</small>
           <span class="dm-msn-presence"><i class="presence-dot ${p.mode}"></i> ${p.label}${muted?' · 🔇 mutado':''}</span>
         </aside>
         <div class="dm-log" id="dm-log">${messages.map(dmMessageHtml).join('')||'<div class="dm-empty">Nenhuma mensagem ainda. O silêncio foi entregue com sucesso.</div>'}</div>
         <aside class="dm-msn-self" title="Seu perfil nesta conversa">
           <div class="dm-msn-self-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
-          <b>VOCÊ</b>
+          <b class="identity-name" data-identity-profile-id="${state.profile.id}">${escapeHtml(state.profile.display_name)}</b>
           <small>@${escapeHtml(state.profile.handle)}</small>
           <span class="dm-msn-presence"><i class="presence-dot ${mePresence.mode}"></i> ${mePresence.label}</span>
         </aside>
@@ -3722,6 +3723,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('#dm-visit-profile').onclick=()=>{openPublicProfile(peerId);$('#dm-options-menu')?.classList.add('hidden');};
   $('#dm-mute-peer').onclick=()=>toggleMutePeer(peerId);
   $('#dm-block-peer').onclick=()=>blockChatPeer(peerId);
+  $('#dm-report-peer').onclick=()=>openReportUser(peerId);
   const awaySelect=$('#dm-away-after');if(awaySelect){awaySelect.value=String(state.profile.away_after_minutes??10);awaySelect.onchange=e=>saveAwayAfterMinutes(e.target.value);}
   const showListening=$('#dm-show-listening');if(showListening)showListening.onchange=e=>saveChatListeningVisibility(e.target.checked);
   const saveStatus=$('#dm-save-status');if(saveStatus)saveStatus.onclick=saveQuickChatStatus;
@@ -4565,7 +4567,7 @@ async function openPublicProfile(userId){
     : '<div class="guestbook-locked">Recados são para amigos. Civilização mínima, aparentemente.</div>';
   $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
-    <header class="public-profile-hero"><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div class="public-profile-identity"><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><div class="public-profile-name-row"><h1>${escapeHtml(p.display_name)}</h1><span class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</span></div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><div class="public-profile-sound-row"><div id="public-now-playing">${nowPlayingHtml(p)}</div><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div></div><p class="public-profile-bio">${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <header class="public-profile-hero"><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div class="public-profile-identity"><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><div class="public-profile-name-row"><h1 class="identity-name" data-identity-profile-id="${p.id}">${escapeHtml(p.display_name)}</h1><span class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</span></div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><div class="public-profile-sound-row"><div id="public-now-playing">${nowPlayingHtml(p)}</div><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div></div><p class="public-profile-bio">${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}<button class="report-user-button" data-report-user="${p.id}">⚑ denunciar usuário</button></div></div></header>
     <section class="public-story-section">
       <span class="section-code">STORIES // AINDA NÃO EXPIRARAM</span>
       <h2>Stories de ${escapeHtml(p.display_name)}</h2>
@@ -4586,6 +4588,7 @@ async function openPublicProfile(userId){
   $('[data-accept-public]')?.addEventListener('click',async e=>{await answerFriendRequest(e.currentTarget.dataset.acceptPublic,true);openPublicProfile(userId);});
   $('[data-message-friend]')?.addEventListener('click',e=>openFriendChat(e.currentTarget.dataset.messageFriend));
   $('[data-unfriend-public]')?.addEventListener('click',async e=>{if(confirm('Desfazer amizade? Sem textão de despedida.')){await supabase.from('friendships').delete().eq('id',e.currentTarget.dataset.unfriendPublic);openPublicProfile(userId);}});
+  $('[data-report-user]')?.addEventListener('click',e=>openReportUser(e.currentTarget.dataset.reportUser));
   $('#guestbook-submit')?.addEventListener('click',()=>sendGuestbookEntry(userId));
   loadGuestbook(userId,'#public-guestbook-list');
   loadAlbum(userId,false);
