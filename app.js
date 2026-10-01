@@ -2641,18 +2641,57 @@ async function toggleReaction(postId,reaction,active){
   if(!active)dispatchPush('post_reaction',postId);
   trackAction('acid_reaction','feed',{post_id:postId,reaction:active?'remove':reaction});
 }
+function optimisticReplyNode(postId,body,localId){
+  const card=document.querySelector(`[data-post-card="${CSS.escape(String(postId))}"]`);
+  if(!card)return null;
+  let thread=card.querySelector('.conversation-thread');
+  if(!thread){
+    thread=document.createElement('section');
+    thread.className='conversation-thread';
+    thread.innerHTML='<header><span>CONVERSA // 1 RESPOSTA</span><small>sem hierarquia. conceito quase ofensivo.</small></header><div class="conversation-list"></div>';
+    card.querySelector('.post-actions')?.before(thread);
+  }
+  const list=thread.querySelector('.conversation-list');
+  const item=document.createElement('article');
+  item.className='conversation-item optimistic';
+  item.dataset.optimisticReply=localId;
+  item.innerHTML=`<span class="mini-avatar">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</span><div><div class="conversation-author"><b>${identityNameHtml(state.profile.id,state.profile.display_name)}</b><span>@${escapeHtml(state.profile.handle)} · enviando...</span></div><p>${escapeHtml(body)}</p></div>`;
+  list?.appendChild(item);
+  const meta=card.querySelector('.post-meta');
+  if(meta){
+    const match=String(meta.textContent||'').match(/(\d+)\s+resposta/);
+    if(match){
+      const next=Number(match[1])+1;
+      meta.textContent=meta.textContent.replace(/\d+\s+respostas?/,next+' resposta'+(next===1?'':'s'));
+    }
+  }
+  return item;
+}
 async function sendReply(post_id){
   const box=document.querySelector(`[data-reply-box="${post_id}"]`);
   const input=box?.querySelector('textarea');
   const body=input?.value.trim()||'';
   if(body.length<2)return toast('A resposta precisa de pelo menos 2 caracteres.');
-  const {data:replyRow,error}=await supabase.from('responses').insert({post_id,author_id:state.profile.id,body}).select('id').single();
-  if(error)return toast('A resposta caiu no vazio. Tente novamente.');
-  dispatchPush('post_reply',replyRow?.id);
+  const localId=crypto.randomUUID();
+  const optimistic=optimisticReplyNode(post_id,body,localId);
   input.value='';
+  box?.classList.add('hidden');
+  const {data:replyRow,error}=await supabase.from('responses').insert({post_id,author_id:state.profile.id,body}).select('id,created_at').single();
+  if(error){
+    optimistic?.remove();
+    input.value=body;
+    box?.classList.remove('hidden');
+    return toast(error.code==='P0001'?'Você está respondendo rápido demais. Espere um pouco.':'A resposta caiu no vazio. Tente novamente.');
+  }
+  if(optimistic){
+    optimistic.classList.remove('optimistic');
+    optimistic.removeAttribute('data-optimistic-reply');
+    const stamp=optimistic.querySelector('.conversation-author span');
+    if(stamp)stamp.textContent=`@${state.profile.handle} · agora`;
+  }
+  dispatchPush('post_reply',replyRow?.id);
   toast('Resposta publicada. Agora ela aparece na conversa, como seria razoável esperar.');
   trackAction('reply_created','feed',{post_id});
-  if(isFeedTab())loadFeed();
   setTimeout(()=>askAlgoFeedReview('reply_created',post_id),1100);
 }
 
