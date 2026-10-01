@@ -8966,3 +8966,37 @@ body.avesso-own-corner .profile-avatar-large img{
   .staff-team-list>article{grid-template-columns:38px 1fr}.staff-team-list button{grid-column:auto}
   .staff-chat-message{width:92%}
 }
+
+/* Chat composer: três controles reais, não dois controles e um terceiro vivendo de fé. */
+.dm-floating-window #dm-form{
+  position:relative!important;
+  display:grid!important;
+  grid-template-columns:38px minmax(0,1fr) 92px!important;
+  gap:6px!important;
+  align-items:stretch!important;
+  padding:7px!important;
+}
+.dm-emoticon-trigger{
+  width:38px!important;min-width:38px!important;
+  display:grid!important;place-items:center!important;
+  padding:0!important;font-size:1.2rem!important;
+}
+.dm-emoticon-window{
+  position:absolute!important;
+  left:7px!important;
+  bottom:calc(100% + 6px)!important;
+  width:min(340px,calc(100% - 14px))!important;
+  padding:7px!important;
+  border:2px solid var(--dm-mid,var(--cyan))!important;
+  background:#eef3f2!important;
+  color:#172a2e!important;
+  box-shadow:6px 6px 0 #0007!important;
+  z-index:170!important;
+}
+.dm-emoticon-window.hidden{display:none!important}
+.dm-emoticon-window-head{display:flex;align-items:center;justify-content:space-between;margin:-7px -7px 7px;padding:5px 7px;background:var(--dm-mid,var(--cyan));color:var(--dm-accent-2,#fff);font:700 .48rem var(--mono)}
+.dm-emoticon-window-head button{width:24px!important;min-width:24px!important;height:22px!important;padding:0!important}
+@media(max-width:760px){
+  .dm-floating-window #dm-form{grid-template-columns:38px minmax(0,1fr) 76px!important}
+  .dm-send-action{width:76px!important;min-width:76px!important}
+}
