@@ -18,6 +18,8 @@
   let currentNotificationKey='';
   let notificationFilter='all';
   let feedMoreObserver=null;
+  let observedLoadMore=null;
+  let syncQueued=false;
 
   const escapeHtml=(value='')=>String(value).replace(/[&<>"']/g,c=>({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
@@ -458,12 +460,18 @@
   function bindInfiniteFeed(){
     if(!isMobile())return;
     const button=q('#feed-load-more');
-    if(!button)return;
-    if(feedMoreObserver)feedMoreObserver.disconnect();
+    if(!button){
+      feedMoreObserver?.disconnect();
+      observedLoadMore=null;
+      return;
+    }
+    if(observedLoadMore===button)return;
+    feedMoreObserver?.disconnect();
+    observedLoadMore=button;
     feedMoreObserver=new IntersectionObserver(entries=>{
       const entry=entries[0];
       if(entry?.isIntersecting&&!button.disabled)button.click();
-    },{root:null,rootMargin:'500px 0px 500px 0px',threshold:0.01});
+    },{root:null,rootMargin:'420px 0px 420px 0px',threshold:0.01});
     feedMoreObserver.observe(button);
   }
 
@@ -545,8 +553,13 @@
     bindChatProgressiveHistory();
   }
 
+  function scheduleSync(){
+    if(syncQueued)return;
+    syncQueued=true;
+    requestAnimationFrame(()=>{syncQueued=false;syncAll();});
+  }
   function installObservers(){
-    const observer=new MutationObserver(()=>requestAnimationFrame(syncAll));
+    const observer=new MutationObserver(scheduleSync);
     observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
 
     const handle=q('#nav-handle');
