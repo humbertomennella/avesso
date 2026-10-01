@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
+import { AVESSO_GIFS } from './gif-library.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
@@ -602,6 +603,7 @@ window.addEventListener('message',event=>{
     }
     refreshOwnNowPlayingPreview();
     pushNowPlaying(event.data.payload||null);
+    if(state.chatWindowOpen)updateOwnListeningInChat();
     return;
   }
   if(event.data?.type==='AVESSO_PRESENCE_HELLO'){
@@ -1324,11 +1326,33 @@ function directGifUrl(raw){
     return gifPath||knownHost?url.href:'';
   }catch{return'';}
 }
+function renderRepoGifLibrary(){
+  const host=$('#post-gif-library');
+  if(!host||host.dataset.ready)return;
+  host.dataset.ready='1';
+  host.innerHTML=AVESSO_GIFS.map(g=>`<button type="button" class="repo-gif-choice" data-repo-gif="${escapeAttr(g.id)}" title="${escapeAttr(g.label)}"><img src="${g.src}" alt=""><span>${escapeHtml(g.label)}</span></button>`).join('');
+  host.querySelectorAll('[data-repo-gif]').forEach(button=>button.onclick=()=>{
+    const gif=AVESSO_GIFS.find(item=>item.id===button.dataset.repoGif);
+    if(!gif)return;
+    state.postGifUrl=gif.src;
+    state.postImageFile=null;
+    $('#post-gif-file').value='';
+    $('#post-gif-url').value='';
+    $('#image-preview-img').src=gif.src;
+    $('#image-preview-name').textContent=`GIF AVESSO // ${gif.label}`;
+    $('#image-preview').classList.remove('hidden');
+    $('#post-gif-status').textContent=`${gif.label} selecionado do repositório.`;
+    host.querySelectorAll('.repo-gif-choice').forEach(x=>x.classList.toggle('active',x===button));
+  });
+}
 $('#post-gif-toggle').onclick=()=>{
   const row=$('#post-gif-row');
   const open=row.classList.toggle('hidden')===false;
   $('#post-gif-toggle').classList.toggle('active',open);
-  if(open)setTimeout(()=>$('#post-gif-url')?.focus(),40);
+  if(open){
+    renderRepoGifLibrary();
+    setTimeout(()=>$('#post-gif-url')?.focus(),40);
+  }
 };
 $('#post-gif-file').onchange=e=>{
   const file=e.target.files?.[0]||null;
@@ -1344,6 +1368,7 @@ $('#post-gif-file').onchange=e=>{
   $('#image-preview-name').textContent=file.name;
   $('#image-preview').classList.remove('hidden');
   $('#post-gif-status').textContent='GIF local pronto para o feed.';
+  $('#post-gif-library')?.querySelectorAll('.repo-gif-choice').forEach(x=>x.classList.remove('active'));
 };
 $('#post-gif-url').oninput=e=>{
   const url=directGifUrl(e.target.value);
@@ -1358,6 +1383,7 @@ $('#post-gif-url').oninput=e=>{
   $('#image-preview-name').textContent='GIF por link';
   $('#image-preview').classList.remove('hidden');
   status.textContent='GIF reconhecido · pronto para se mexer inutilmente.';
+  $('#post-gif-library')?.querySelectorAll('.repo-gif-choice').forEach(x=>x.classList.remove('active'));
 };
 $('#post-gif-clear').onclick=()=>{
   state.postGifUrl='';
@@ -1367,7 +1393,8 @@ $('#post-gif-clear').onclick=()=>{
   $('#post-gif-row').classList.add('hidden');
   $('#post-gif-toggle').classList.remove('active');
   $('#image-preview').classList.add('hidden');
-  $('#post-gif-status').textContent='arquivo ou link direto. GIF não precisa virar startup.';
+  $('#post-gif-status').textContent='escolha um GIF do AVESSO, envie arquivo ou cole link direto.';
+  $('#post-gif-library')?.querySelectorAll('.repo-gif-choice').forEach(x=>x.classList.remove('active'));
 };
 $('#post-media-link-toggle').onclick=()=>{
   const row=$('#post-media-link-row');
@@ -1670,7 +1697,7 @@ $('#publish-post').onclick=async()=>{
   if($('#post-gif-url'))$('#post-gif-url').value='';
   if($('#post-gif-row'))$('#post-gif-row').classList.add('hidden');
   if($('#post-gif-toggle'))$('#post-gif-toggle').classList.remove('active');
-  if($('#post-gif-status'))$('#post-gif-status').textContent='arquivo ou link direto. GIF não precisa virar startup.';
+  if($('#post-gif-status'))$('#post-gif-status').textContent='escolha um GIF do AVESSO, envie arquivo ou cole link direto.';
   state.postMediaFile=null;
   if($('#post-media-link'))$('#post-media-link').value='';
   if($('#post-media-link-row'))$('#post-media-link-row').classList.add('hidden');
@@ -3124,6 +3151,7 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
   $$('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
   installChatDesktopWindowing();
+  window.postMessage({type:'AVESSO_PRESENCE_REQUEST'},location.origin);
   syncVoiceRecordingUI();
   installChatScrollContainment(win);
   pinChatToLatest(win);
@@ -3646,6 +3674,7 @@ async function renderProfile(){
     });
   }
   algoSay('profile');
+  window.postMessage({type:'AVESSO_PRESENCE_REQUEST'},location.origin);
   setTimeout(()=>maybeWorldCharacter('profile',{surface:'profile'},.12,180000),900);
 }
 async function saveAvatar(url){
@@ -3751,7 +3780,7 @@ async function openPublicProfile(userId){
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   applyAppTabLayout();$('#feed-status').classList.add('hidden');
   const [profileRes,friendship]=await Promise.all([
-    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen,corner_music_url,corner_music_enabled,corner_music_title,corner_music_provider,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual').eq('id',userId).maybeSingle(),
+    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen,online_until,away_after_minutes,corner_music_url,corner_music_enabled,corner_music_title,corner_music_provider,listening_visible,chat_listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual').eq('id',userId).maybeSingle(),
     getFriendshipWith(userId)
   ]);
   if(state.tab!=='public_profile'||state.publicProfileId!==userId)return;
