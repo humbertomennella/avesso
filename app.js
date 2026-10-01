@@ -480,7 +480,8 @@ function openStoryCreate(){
 async function publishStory(){
   if(state.storyBusy)return;
   const body=String($('#story-body')?.value||'').trim().slice(0,420);
-  const file=storySelectedFile();
+  let file=storySelectedFile();
+  if(file&&/^image\/(jpeg|png|webp)$/i.test(file.type||''))file=await compressImageFile(file,{maxEdge:1600,quality:.82});
   const visibility=$('#story-visibility')?.value==='amigos'?'amigos':'publico';
   const mediaType=file?(file.type.startsWith('video/')?'video':'image'):null;
   if(!body&&!file)return toast('Story vazio dura zero horas. Eficiência admirável, utilidade discutível.');
@@ -2193,9 +2194,10 @@ async function uploadPostMedia(){
 
 async function uploadPostImage(){
   if(!state.postImageFile)return null;
-  const ext=(state.postImageFile.name.split('.').pop()||'webp').replace(/[^a-z0-9]/gi,'').toLowerCase();
+  const optimized=state.postImageFile.type==='image/gif'?state.postImageFile:await compressImageFile(state.postImageFile,{maxEdge:1600,quality:.82});
+  const ext=(optimized.name.split('.').pop()||'webp').replace(/[^a-z0-9]/gi,'').toLowerCase();
   const path=`${state.profile.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-  const {error}=await supabase.storage.from('post-images').upload(path,state.postImageFile,{cacheControl:'31536000',upsert:false});
+  const {error}=await supabase.storage.from('post-images').upload(path,optimized,{cacheControl:'31536000',upsert:false,contentType:optimized.type});
   if(error)throw error;
   return supabase.storage.from('post-images').getPublicUrl(path).data.publicUrl;
 }
@@ -4532,6 +4534,7 @@ async function sendAttention(){
 }
 async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDuration=0,optimisticId=null,optimisticUrl=null}={}){
   if(!recipientId||!file)return;
+  if(/^image\/(jpeg|png|webp)$/i.test(file.type||''))file=await compressImageFile(file,{maxEdge:1600,quality:.82});
   const clearOptimistic=()=>{
     if(optimisticId)document.querySelector(`[data-dm-id="${CSS.escape(String(optimisticId))}"]`)?.remove();
     if(optimisticUrl)URL.revokeObjectURL(optimisticUrl);
@@ -4737,12 +4740,13 @@ async function loadAlbum(userId,editable=false){
   updateAlbumReactions(host,albumPhotos,reactions,userId,editable);
 }
 async function uploadAlbumPhoto(){
-  const file=$('#album-file')?.files?.[0];if(!file)return toast('Escolha uma foto primeiro. A telepatia continua em beta.');
+  let file=$('#album-file')?.files?.[0];if(!file)return toast('Escolha uma foto primeiro. A telepatia continua em beta.');
   if(file.size>8*1024*1024)return toast('A foto precisa ter até 8 MB.');
   if(!/^image\/(jpeg|png|webp|gif)$/i.test(file.type))return toast('Use JPG, PNG, WEBP ou GIF.');
+  if(file.type!=='image/gif')file=await compressImageFile(file,{maxEdge:1800,quality:.84});
   const caption=String($('#album-caption').value||'').slice(0,180);
   const path=`${state.profile.id}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
-  const btn=$('#album-upload');btn.disabled=true;btn.textContent='enviando...';
+  const btn=$('#album-upload');btn.disabled=true;btn.textContent='otimizando e enviando...';
   const {error:upErr}=await supabase.storage.from('avesso-albums').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
   if(upErr){btn.disabled=false;btn.textContent='adicionar foto';return toast('A foto não conseguiu entrar no álbum.');}
   const {error}=await supabase.from('profile_photos').insert({user_id:state.profile.id,storage_path:path,caption});
