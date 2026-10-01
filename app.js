@@ -876,12 +876,14 @@ $('#post-image').addEventListener('change',e=>{
 $('#remove-image').onclick=()=>{state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');};
 $('#post-media-link-toggle').onclick=()=>{
   const row=$('#post-media-link-row');
-  row.classList.toggle('hidden');
-  if(!row.classList.contains('hidden'))setTimeout(()=>$('#post-media-link')?.focus(),40);
+  const open=row.classList.toggle('hidden')===false;
+  $('#post-media-link-toggle').classList.toggle('active',open);
+  if(open)setTimeout(()=>$('#post-media-link')?.focus(),40);
 };
 $('#post-media-link-clear').onclick=()=>{
   $('#post-media-link').value='';
   $('#post-media-link-row').classList.add('hidden');
+  $('#post-media-link-toggle').classList.remove('active');
   $('#post-media-link-status').textContent='link reconhecido vira player, não caça-clique';
 };
 function parseExternalMediaLink(raw){
@@ -960,8 +962,7 @@ $('#post-media-link').addEventListener('input',e=>{
   const status=$('#post-media-link-status');
   if(!e.target.value.trim()){if(status)status.textContent='link reconhecido vira player, não caça-clique';return;}
   if(parsed){
-    if(status)status.textContent=`${parsed.provider} reconhecido · player será incorporado`;
-    state.postMediaFile=null;if($('#post-media-link'))$('#post-media-link').value='';if($('#post-media-link-row'))$('#post-media-link-row').classList.add('hidden');
+    if(status)status.textContent=`${parsed.provider} reconhecido · pronto para incorporar`;
   }else if(status)status.textContent='use um link válido do YouTube ou Spotify';
 });
 $('#publish-post').onclick=async()=>{
@@ -994,8 +995,10 @@ $('#publish-post').onclick=async()=>{
   if(error)return toast('Não foi possível publicar. Tente novamente.');
   $('#post-body').value='';$('#recipient-search').value='';$('#char-count').textContent='420';state.recipient=null;
   state.postImageFile=null;$('#post-image').value='';$('#image-preview').classList.add('hidden');
-  state.postMediaFile=null;$('#post-media').value='';$('#media-preview').classList.add('hidden');
+  state.postMediaFile=null;
   if($('#post-media-link'))$('#post-media-link').value='';
+  if($('#post-media-link-row'))$('#post-media-link-row').classList.add('hidden');
+  if($('#post-media-link-toggle'))$('#post-media-link-toggle').classList.remove('active');
   if($('#post-media-link-status'))$('#post-media-link-status').textContent='link reconhecido vira player, não caça-clique';
   const mediaLabel=media_kind==='youtube'?'Vídeo do YouTube incorporado ao feed.':media_kind==='spotify'?'Spotify incorporado ao feed.':media_kind==='video'?'Vídeo entregue ao feed.':media_kind==='audio'?'Áudio entregue ao feed.':image_url?'Imagem entregue ao feed. Sem moldura de influencer.':(directed?'Mensagem entregue.':'Publicado para a comunidade. Sem placar, com conversa.');
   toast(mediaLabel);
@@ -2495,7 +2498,7 @@ async function renderProfile(){
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
     <section class="profile-album-control"><span class="section-code">ÁLBUM // FOTOS QUE VOCÊ DECIDIU NÃO APAGAR</span><h2>Seu álbum</h2><p>Poste imagens no seu Canto. Reações existem, mas continuam sem virar olimpíada social.</p><div class="album-upload-row"><input id="album-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><input id="album-caption" maxlength="180" placeholder="legenda opcional. autocontrole também."><button id="album-upload">adicionar foto</button></div><div id="profile-album" class="profile-album-grid"><p>carregando memórias...</p></div></section>
-    <section class="profile-media-control"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Sua fita, seu clipe, seu problema</h2><p>Envie um arquivo ou cole um link do YouTube/Spotify. Sem autoplay, porque ainda resta alguma civilização.</p><div class="profile-media-upload link-only"><input id="profile-media-link" type="url" inputmode="url" placeholder="cole um link do YouTube ou Spotify"><input id="profile-media-caption" maxlength="420" placeholder="legenda opcional. contexto não machuca."><button id="profile-media-upload">publicar no Canto</button></div><div id="profile-media-list" class="profile-media-grid"><p>rebobinando...</p></div></section>
+    <section class="profile-media-control"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Sua fita, seu clipe, seu problema</h2><p>Cole um link do YouTube ou Spotify. Sem upload de arquivo e sem autoplay, porque ainda resta alguma civilização.</p><div class="profile-media-upload link-only"><input id="profile-media-link" type="url" inputmode="url" placeholder="cole um link do YouTube ou Spotify"><input id="profile-media-caption" maxlength="420" placeholder="legenda opcional. contexto não machuca."><button id="profile-media-upload">publicar no Canto</button></div><div id="profile-media-list" class="profile-media-grid"><p>rebobinando...</p></div></section>
     <section class="guestbook-section guestbook-own"><span class="section-code">RECADOS // DEIXARAM ISSO AQUI</span><h2>Recados no seu Canto</h2><p>Amigos podem deixar texto, links, emojis e imagens. Você continua com a sofisticada tecnologia chamada “apagar”.</p><div id="profile-guestbook" class="guestbook-list"><p>procurando bilhetes na porta...</p></div></section>
     <section class="friends-control"><span class="section-code">PESSOAS // AMIGOS</span><h2>Lista de pessoas que você aceitou voluntariamente</h2><div id="friends-panel"><p>carregando relações humanas...</p></div></section>
     <section class="blocked-control"><span class="section-code">CONTROLE // BLOQUEADOS</span><h2>Porta fechada também é interface</h2><p>Bloquear encerra amizade e impede novas mensagens. Desbloquear não cria amizade de volta, porque nem botão deveria ter esse poder.</p><div id="blocked-panel"><p>consultando bloqueios...</p></div></section>
