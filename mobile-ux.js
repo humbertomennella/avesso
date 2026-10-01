@@ -389,6 +389,28 @@
     document.body.classList.toggle('mobile-ux-feed-loading',Boolean(loading));
   }
 
+  function applyHashRoute(){
+    if(!isMobile())return;
+    const map={
+      '#para-cuidar':'feed','#feed':'feed',
+      '#praca':'plaza','#praca-central':'plaza',
+      '#amigos':'messages','#mensagens':'messages',
+      '#seu-canto':'profile','#canto':'profile'
+    };
+    const tab=map[String(location.hash||'').toLowerCase()];
+    if(!tab)return;
+    let attempts=0;
+    const timer=setInterval(()=>{
+      attempts++;
+      const app=q('#app-view');
+      const button=q('[data-app-tab="'+tab+'"]');
+      if(button&&app&&!app.classList.contains('hidden')){
+        clearInterval(timer);
+        if(!button.classList.contains('active'))button.click();
+      }else if(attempts>25)clearInterval(timer);
+    },120);
+  }
+
   function syncAll(){
     if(!isMobile()){
       closeComposer();
@@ -445,6 +467,8 @@
         syncInstallButton();
       });
       window.matchMedia?.(MQ).addEventListener?.('change',syncAll);
+      window.addEventListener('hashchange',applyHashRoute);
+      setTimeout(applyHashRoute,350);
     }catch(error){
       console.error('AVESSO mobile UX layer disabled safely:',error);
     }
