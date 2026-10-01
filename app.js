@@ -1,11 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
+import { AVESSO_GIFS } from './gif-library.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -41,7 +42,6 @@ const ACID_REACTIONS=[
   ['infelizmente_concordo','≋','infelizmente eu concordo'],
   ['pane_mas_gostei','⚡','deu pane, mas gostei']
 ];
-const DM_REACTIONS=['👍','❤️','😂','😮','😢','😡'];
 const AVESSO_EMOTICONS=[
   '☻','☺','ಠ_ಠ','¬_¬','(ง •̀_•́)ง','¯\\_(ツ)_/¯','(╯°□°）╯︵ ┻━┻','┬─┬ ノ( ゜-゜ノ)',
   '[404]','[56K]','[AFK]','[PING?]','[ERRO HUMANO]','<3.exe','...','?!','⚡','⌁','◉','◌','▣','✦',
@@ -602,6 +602,7 @@ window.addEventListener('message',event=>{
     }
     refreshOwnNowPlayingPreview();
     pushNowPlaying(event.data.payload||null);
+    if(state.chatWindowOpen)updateOwnListeningInChat();
     return;
   }
   if(event.data?.type==='AVESSO_PRESENCE_HELLO'){
@@ -637,8 +638,11 @@ async function saveAIBrowserContextVisibility(){
   syncPresenceCompanionConfig();
   const status=$('#ai-browser-context-status');
   if(status)status.textContent=enabled
-    ?'ATIVO // domínio, título visível da aba e áudio. Só isso.'
-    :'DESLIGADO // Aquele fica restrito ao que acontece dentro do AVESSO.';
+    ?'ATIVO // contexto mínimo liberado'
+    :'DESLIGADO // só enxerga o que acontece dentro do AVESSO';
+  const card=$('.ai-context-card');
+  if(card){card.classList.toggle('enabled',enabled);card.classList.toggle('disabled',!enabled);}
+  const flag=$('.ai-context-switch em');if(flag)flag.textContent=enabled?'ON':'OFF';
   toast(enabled?'Aquele pode notar trocas de aba. Não ganhou raio-X, felizmente.':'Contexto de outras abas desligado.');
 }
 
@@ -650,11 +654,14 @@ function awayThresholdMs(profile){
 function presenceView(profile){
   if(!profile)return{mode:'offline',label:'offline'};
   if(profile.presence_mode==='invisible')return{mode:'offline',label:'offline'};
-  const onlineUntil=profile.online_until?new Date(profile.online_until).getTime():0;
-  if(!Number.isFinite(onlineUntil)||onlineUntil<=Date.now())return{mode:'offline',label:'offline'};
-  if(profile.presence_mode==='away')return{mode:'away',label:'ausente'};
+  const now=Date.now();
   const seen=profile.last_seen?new Date(profile.last_seen).getTime():0;
-  const age=seen?Date.now()-seen:Infinity;
+  const age=seen?now-seen:Infinity;
+  const onlineUntil=profile.online_until?new Date(profile.online_until).getTime():0;
+  const leaseOnline=Number.isFinite(onlineUntil)&&onlineUntil>now;
+  const legacyGrace=!profile.online_until&&age<60000;
+  if(!leaseOnline&&!legacyGrace)return{mode:'offline',label:'offline'};
+  if(profile.presence_mode==='away')return{mode:'away',label:'ausente'};
   if(Number(profile.away_after_minutes)===0)return{mode:'online',label:'online'};
   return age<awayThresholdMs(profile)?{mode:'online',label:'online'}:{mode:'away',label:'ausente'};
 }
@@ -1228,8 +1235,9 @@ async function enterApp(){
   await loadBlockedPeers();
   subscribeRealtime();
   startDirectRealtime();
-  await Promise.all([loadFeed(),loadImpact(),loadStoriesStrip(),primeFriendPresenceCache(),loadMutedPeers()]);
+  await primeFriendPresenceCache();
   startFriendPresenceWatch();
+  Promise.allSettled([loadFeed(),loadImpact(),loadStoriesStrip(),loadMutedPeers()]).then(()=>{});
   registerNotificationWorker();
   armBrowserNotifications();
   startStoryRealtime();
@@ -1247,6 +1255,7 @@ function leaveApp(){
   clearInterval(state.presenceTimer);
   clearInterval(state.presenceWatchTimer);
   state.friendPresence={};
+  state.friendPresenceReady=false;
   state.mutedPeers={};
   state.blockedPeers={};
   state.pendingAttentionPeerId=null;
@@ -1317,11 +1326,33 @@ function directGifUrl(raw){
     return gifPath||knownHost?url.href:'';
   }catch{return'';}
 }
+function renderRepoGifLibrary(){
+  const host=$('#post-gif-library');
+  if(!host||host.dataset.ready)return;
+  host.dataset.ready='1';
+  host.innerHTML=AVESSO_GIFS.map(g=>`<button type="button" class="repo-gif-choice" data-repo-gif="${escapeAttr(g.id)}" title="${escapeAttr(g.label)}"><img src="${g.src}" alt=""><span>${escapeHtml(g.label)}</span></button>`).join('');
+  host.querySelectorAll('[data-repo-gif]').forEach(button=>button.onclick=()=>{
+    const gif=AVESSO_GIFS.find(item=>item.id===button.dataset.repoGif);
+    if(!gif)return;
+    state.postGifUrl=gif.src;
+    state.postImageFile=null;
+    $('#post-gif-file').value='';
+    $('#post-gif-url').value='';
+    $('#image-preview-img').src=gif.src;
+    $('#image-preview-name').textContent=`GIF AVESSO // ${gif.label}`;
+    $('#image-preview').classList.remove('hidden');
+    $('#post-gif-status').textContent=`${gif.label} selecionado do repositório.`;
+    host.querySelectorAll('.repo-gif-choice').forEach(x=>x.classList.toggle('active',x===button));
+  });
+}
 $('#post-gif-toggle').onclick=()=>{
   const row=$('#post-gif-row');
   const open=row.classList.toggle('hidden')===false;
   $('#post-gif-toggle').classList.toggle('active',open);
-  if(open)setTimeout(()=>$('#post-gif-url')?.focus(),40);
+  if(open){
+    renderRepoGifLibrary();
+    setTimeout(()=>$('#post-gif-url')?.focus(),40);
+  }
 };
 $('#post-gif-file').onchange=e=>{
   const file=e.target.files?.[0]||null;
@@ -1337,6 +1368,7 @@ $('#post-gif-file').onchange=e=>{
   $('#image-preview-name').textContent=file.name;
   $('#image-preview').classList.remove('hidden');
   $('#post-gif-status').textContent='GIF local pronto para o feed.';
+  $('#post-gif-library')?.querySelectorAll('.repo-gif-choice').forEach(x=>x.classList.remove('active'));
 };
 $('#post-gif-url').oninput=e=>{
   const url=directGifUrl(e.target.value);
@@ -1351,6 +1383,7 @@ $('#post-gif-url').oninput=e=>{
   $('#image-preview-name').textContent='GIF por link';
   $('#image-preview').classList.remove('hidden');
   status.textContent='GIF reconhecido · pronto para se mexer inutilmente.';
+  $('#post-gif-library')?.querySelectorAll('.repo-gif-choice').forEach(x=>x.classList.remove('active'));
 };
 $('#post-gif-clear').onclick=()=>{
   state.postGifUrl='';
@@ -1360,7 +1393,8 @@ $('#post-gif-clear').onclick=()=>{
   $('#post-gif-row').classList.add('hidden');
   $('#post-gif-toggle').classList.remove('active');
   $('#image-preview').classList.add('hidden');
-  $('#post-gif-status').textContent='arquivo ou link direto. GIF não precisa virar startup.';
+  $('#post-gif-status').textContent='escolha um GIF do AVESSO, envie arquivo ou cole link direto.';
+  $('#post-gif-library')?.querySelectorAll('.repo-gif-choice').forEach(x=>x.classList.remove('active'));
 };
 $('#post-media-link-toggle').onclick=()=>{
   const row=$('#post-media-link-row');
@@ -1663,7 +1697,7 @@ $('#publish-post').onclick=async()=>{
   if($('#post-gif-url'))$('#post-gif-url').value='';
   if($('#post-gif-row'))$('#post-gif-row').classList.add('hidden');
   if($('#post-gif-toggle'))$('#post-gif-toggle').classList.remove('active');
-  if($('#post-gif-status'))$('#post-gif-status').textContent='arquivo ou link direto. GIF não precisa virar startup.';
+  if($('#post-gif-status'))$('#post-gif-status').textContent='escolha um GIF do AVESSO, envie arquivo ou cole link direto.';
   state.postMediaFile=null;
   if($('#post-media-link'))$('#post-media-link').value='';
   if($('#post-media-link-row'))$('#post-media-link-row').classList.add('hidden');
@@ -2108,11 +2142,21 @@ async function renderTowerPage(){
 }
 
 async function acceptedFriendProfiles(){
-  const {data:rels}=await supabase.from('friendships').select('*').eq('status','accepted')
+  if(!state.profile?.id)return[];
+  const {data:rels,error:relError}=await supabase.from('friendships').select('requester_id,addressee_id,status')
+    .eq('status','accepted')
     .or(`requester_id.eq.${state.profile.id},addressee_id.eq.${state.profile.id}`);
-  const ids=[...new Set((rels||[]).map(r=>r.requester_id===state.profile.id?r.addressee_id:r.requester_id))];
+  if(relError){
+    console.warn('AVESSO presence friendships',relError);
+    return null;
+  }
+  const ids=[...new Set((rels||[]).map(r=>r.requester_id===state.profile.id?r.addressee_id:r.requester_id).filter(Boolean))];
   if(!ids.length)return[];
-  const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,online_until,listening_visible,chat_listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').in('id',ids);
+  const {data,error}=await supabase.from('profiles').select('*').in('id',ids);
+  if(error){
+    console.warn('AVESSO presence profiles',error);
+    return null;
+  }
   return data||[];
 }
 async function profileById(id){
@@ -2135,18 +2179,22 @@ function renderOnlineFriendsDock(){
     });
   const onlineCount=entries.filter(entry=>entry.mode==='online').length;
   count.textContent=onlineCount;
-  const zeroOnline=entries.length&&onlineCount===0
-    ?'<div class="online-friends-empty online-friends-none">◌ ninguém online agora // até o modem está descansando.</div>'
-    :'';
-  list.innerHTML=zeroOnline+(entries.map(entry=>{
-    const friend=entry.profile;
-    const np=entry.mode==='offline'?null:nowPlayingView(friend);
-    const statusLabel=entry.mode==='online'?'online':entry.mode==='away'?'ausente':'offline';
-    return `<button class="online-friend-item ${entry.mode}" data-online-friend="${friend.id}" type="button">
-      <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
-      <span class="online-friend-copy"><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${statusLabel}</strong><em>${np?`♫ ${escapeHtml(np.title)}`:entry.mode==='offline'?'◌ fora da rede':'♫ silêncio detectado'}</em></span>
-    </button>`;
-  }).join('')||'<div class="online-friends-empty">Nenhum cúmplice por aqui ainda. Estranhamente saudável.</div>');
+  if(!state.friendPresenceReady&&!entries.length){
+    list.innerHTML='<div class="online-friends-empty online-friends-sync">⌁ sincronizando cúmplices...</div>';
+  }else{
+    const zeroOnline=entries.length&&onlineCount===0
+      ?'<div class="online-friends-empty online-friends-none">◌ ninguém online agora // a rede ficou estranhamente quieta.</div>'
+      :'';
+    list.innerHTML=zeroOnline+(entries.map(entry=>{
+      const friend=entry.profile;
+      const np=entry.mode==='offline'?null:nowPlayingView(friend);
+      const statusLabel=entry.mode==='online'?'online':entry.mode==='away'?'ausente':'offline';
+      return `<button class="online-friend-item ${entry.mode}" data-online-friend="${friend.id}" type="button">
+        <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
+        <span class="online-friend-copy"><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${statusLabel}</strong><em>${np?`♫ ${escapeHtml(np.title)}`:entry.mode==='offline'?'◌ fora da rede':'♫ silêncio detectado'}</em></span>
+      </button>`;
+    }).join('')||'<div class="online-friends-empty">Nenhum cúmplice adicionado ainda. Estatisticamente tranquilo.</div>');
+  }
   list.querySelectorAll('[data-online-friend]').forEach(b=>b.onclick=()=>openQuickFriendChat(b.dataset.onlineFriend));
   dock.classList.remove('hidden');
   dock.classList.toggle('collapsed',state.onlineDockCollapsed);
@@ -2162,11 +2210,14 @@ function setupOnlineFriendsDock(){
   renderOnlineFriendsDock();
 }
 async function refreshFriendPresenceCache({notify=true}={}){
-  const friends=await acceptedFriendProfiles();
+  const friends=(await acceptedFriendProfiles())||[];
+  if(friends===null){
+    state.friendPresenceReady=Object.keys(state.friendPresence||{}).length>0;
+    renderOnlineFriendsDock();
+    return false;
+  }
   const next={};
-  const seen=new Set();
   for(const friend of friends){
-    seen.add(friend.id);
     const previous=state.friendPresence[friend.id];
     const entry=cachedPresenceEntry(friend);
     next[friend.id]=entry;
@@ -2182,11 +2233,15 @@ async function refreshFriendPresenceCache({notify=true}={}){
     if(state.chatWindowOpen&&state.directPeerId===friend.id)updateChatPeerHeader(friend);
   }
   state.friendPresence=next;
+  state.friendPresenceReady=true;
   renderOnlineFriendsDock();
+  return true;
 }
 async function primeFriendPresenceCache(){
-  state.friendPresence={};
-  await refreshFriendPresenceCache({notify:false});
+  state.friendPresenceReady=false;
+  renderOnlineFriendsDock();
+  const ok=await refreshFriendPresenceCache({notify:false});
+  if(!ok)setTimeout(()=>refreshFriendPresenceCache({notify:false}),2500);
 }
 function ageFriendPresenceCache(render=true){
   Object.values(state.friendPresence||{}).forEach(entry=>{
@@ -2197,7 +2252,8 @@ function ageFriendPresenceCache(render=true){
 function startFriendPresenceWatch(){
   clearInterval(state.presenceWatchTimer);
   ageFriendPresenceCache();
-  state.presenceWatchTimer=setInterval(()=>refreshFriendPresenceCache({notify:true}),15000);
+  refreshFriendPresenceCache({notify:false});
+  state.presenceWatchTimer=setInterval(()=>refreshFriendPresenceCache({notify:true}),8000);
 }
 function onlineNoticeAllowed(profileId){
   const key=`avesso.online.notice.${profileId}`;
@@ -2383,7 +2439,6 @@ function startDirectRealtime(){
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>receiveIncomingDirectMessage(payload.new||{}, {source:'realtime'}))
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`recipient_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'direct_messages',filter:`sender_id=eq.${me}`},payload=>handleDirectMessageMutation(payload.new||{}))
-    .on('postgres_changes',{event:'*',schema:'public',table:'direct_message_reactions'},payload=>handleDirectReactionMutation(payload))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'friendships'},async payload=>{
       const f=payload.new||{};
       if(f.addressee_id!==me||f.status!=='pending')return;
@@ -2452,39 +2507,24 @@ async function loadDirectConversation(peerId,{markRead=true}={}){
   }
   const rows=(data||[]).slice().reverse();
   rows.forEach(m=>{if(m.recipient_id===me)rememberDirectMessage(m.id);});
-  const ids=rows.map(m=>m.id).filter(Boolean);
-  const grouped={};
-  if(ids.length){
-    const {data:reactionRows}=await supabase.from('direct_message_reactions').select('message_id,user_id,reaction').in('message_id',ids);
-    (reactionRows||[]).forEach(r=>{(grouped[r.message_id]??=[]).push(r);});
-  }
-  return Promise.all(rows.map(async m=>({...await hydrateDirectMessage(m),_reactions:grouped[m.id]||[]})));
+  return Promise.all(rows.map(m=>hydrateDirectMessage(m)));
 }
-async function directMessageWithReactions(messageId){
+
+async function directMessageForRefresh(messageId){
   const {data,error}=await supabase.from('direct_messages').select('*').eq('id',messageId).maybeSingle();
   if(error||!data)return null;
-  const {data:reactions}=await supabase.from('direct_message_reactions').select('message_id,user_id,reaction').eq('message_id',messageId);
-  return {...await hydrateDirectMessage(data),_reactions:reactions||[]};
+  return hydrateDirectMessage(data);
 }
 async function refreshDirectMessageBubble(messageId){
   if(!messageId||!state.chatWindowOpen)return;
   const log=$('#dm-log');if(!log)return;
-  const row=await directMessageWithReactions(messageId);
+  const row=await directMessageForRefresh(messageId);
   const old=log.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
   if(!row){old?.remove();return;}
   if(old){
     old.outerHTML=dmMessageHtml(row);
     repairLegacyVoicePlayers(log);
   }
-}
-function dmReactionSummary(m){
-  const rows=Array.isArray(m?._reactions)?m._reactions:[];
-  return DM_REACTIONS.map(icon=>{
-    const hit=rows.filter(r=>r.reaction===icon);
-    if(!hit.length)return'';
-    const active=hit.some(r=>r.user_id===state.profile.id);
-    return `<button type="button" class="dm-reaction-chip ${active?'active':''}" data-dm-react="${escapeAttr(icon)}" data-message-id="${escapeAttr(m.id)}" aria-pressed="${active}"><span>${escapeHtml(icon)}</span>${hit.length>1?`<b>${hit.length}</b>`:''}</button>`;
-  }).join('');
 }
 function dmMessageHtml(m){
   const mine=m.sender_id===state.profile.id;
@@ -2498,125 +2538,13 @@ function dmMessageHtml(m){
       ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio class="dm-voice-audio" data-voice-type="${escapeAttr(m.attachment_type||'')}" controls preload="metadata"><source src="${escapeAttr(m.attachment_url)}" type="${escapeAttr(m.attachment_type||'audio/wav')}">Seu navegador recusou este áudio.</audio><a class="dm-audio-open" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener">abrir áudio</a></div>`
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
   const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${escapeHtml(m.body)}</p>`:'');
-  const canEdit=mine&&m.message_kind==='text'&&!m.attachment_path;
-  const menu=`<button type="button" class="dm-message-kebab" data-dm-menu-toggle="${messageId}" aria-label="Opções da mensagem" title="Editar, apagar ou reagir">•••</button><div class="dm-message-menu hidden" data-dm-message-menu="${messageId}"><div class="dm-message-menu-actions">${canEdit?`<button type="button" data-dm-edit="${messageId}">✎ editar</button>`:''}${mine?`<button type="button" class="danger" data-dm-delete="${messageId}">× apagar</button>`:''}<span>${mine?'reagir à mensagem':'reagir'}</span></div><div class="dm-message-react-choices">${DM_REACTIONS.map(icon=>`<button type="button" data-dm-react="${escapeAttr(icon)}" data-message-id="${messageId}" aria-label="Reagir com ${escapeAttr(icon)}">${escapeHtml(icon)}</button>`).join('')}</div></div>`;
-  const reactions=dmReactionSummary(m);
-  return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}">${menu}${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}${m.edited_at?' · editada':''}${mine&&m.read_at?' · lida':''}</small>${reactions?`<div class="dm-message-reactions">${reactions}</div>`:''}</article>`;
-}
-function closeDmMessageMenus(exceptId=null){
-  document.querySelectorAll('[data-dm-message-menu]').forEach(menu=>{
-    if(exceptId&&menu.dataset.dmMessageMenu===String(exceptId))return;
-    menu.classList.add('hidden');
-  });
-}
-function openDmMessageMenu(messageId){
-  const menu=document.querySelector(`[data-dm-message-menu="${CSS.escape(String(messageId))}"]`);
-  if(!menu)return;
-  const opening=menu.classList.contains('hidden');
-  closeDmMessageMenus(opening?messageId:null);
-  menu.classList.toggle('hidden',!opening);
-  menu.classList.remove('open-up');
-  if(opening){
-    requestAnimationFrame(()=>{
-      const log=$('#dm-log');
-      if(!log)return;
-      const mr=menu.getBoundingClientRect(),lr=log.getBoundingClientRect();
-      if(mr.bottom>lr.bottom-8)menu.classList.add('open-up');
-    });
-  }
-}
-async function startEditDirectMessage(messageId){
-  const {data,error}=await supabase.from('direct_messages').select('id,body,sender_id,message_kind,deleted_at').eq('id',messageId).maybeSingle();
-  if(error||!data||data.sender_id!==state.profile.id||data.message_kind!=='text'||data.deleted_at)return toast('Essa mensagem não pode ser editada.');
-  const bubble=document.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
-  const body=bubble?.querySelector('.dm-message-body');
-  if(!bubble||!body)return;
-  closeDmMessageMenus();
-  const wrapper=document.createElement('div');
-  wrapper.className='dm-inline-edit';
-  wrapper.innerHTML=`<textarea maxlength="1000">${escapeHtml(data.body||'')}</textarea><div><button type="button" data-dm-edit-save="${escapeAttr(messageId)}">salvar</button><button type="button" data-dm-edit-cancel="${escapeAttr(messageId)}">cancelar</button></div>`;
-  body.replaceWith(wrapper);
-  wrapper.querySelector('textarea')?.focus();
-}
-async function saveEditDirectMessage(messageId){
-  const bubble=document.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
-  const input=bubble?.querySelector('.dm-inline-edit textarea');
-  const body=String(input?.value||'').trim();
-  if(!body)return toast('Mensagem vazia continua sendo silêncio.');
-  if(body.length>1000)return toast('Até 1000 caracteres. Nem o MSN aguentava um tratado.');
-  const {error}=await supabase.rpc('edit_direct_message',{p_message_id:messageId,p_body:body});
-  if(error)return toast('A edição tropeçou no cabo.');
-  await refreshDirectMessageBubble(messageId);
-}
-async function deleteDirectMessage(messageId){
-  if(!messageId||!confirm('Apagar esta mensagem? Ela ficará marcada como apagada para manter a conversa sincronizada.'))return;
-  const {data:attachmentPath,error}=await supabase.rpc('delete_direct_message',{p_message_id:messageId});
-  if(error)return toast('A mensagem se recusou a desaparecer.');
-  if(attachmentPath)await supabase.storage.from('avesso-chat').remove([attachmentPath]).catch(()=>{});
-  await refreshDirectMessageBubble(messageId);
-}
-async function toggleDirectMessageReaction(messageId,reaction){
-  if(!messageId||!DM_REACTIONS.includes(reaction))return;
-  const {data:existing}=await supabase.from('direct_message_reactions').select('reaction').eq('message_id',messageId).eq('user_id',state.profile.id).maybeSingle();
-  let error=null;
-  if(existing?.reaction===reaction){
-    ({error}=await supabase.from('direct_message_reactions').delete().eq('message_id',messageId).eq('user_id',state.profile.id));
-  }else{
-    ({error}=await supabase.from('direct_message_reactions').upsert({message_id:messageId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'message_id,user_id'}));
-  }
-  if(error)return toast('A reação teve uma reação adversa.');
-  closeDmMessageMenus();
-  await refreshDirectMessageBubble(messageId);
+  return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}</small></article>`;
 }
 async function handleDirectMessageMutation(row){
   if(!row?.id||!state.chatWindowOpen||!state.directPeerId)return;
   const belongs=(row.sender_id===state.profile.id&&row.recipient_id===state.directPeerId)||(row.sender_id===state.directPeerId&&row.recipient_id===state.profile.id);
   if(belongs)await refreshDirectMessageBubble(row.id);
 }
-async function handleDirectReactionMutation(payload){
-  const messageId=payload?.new?.message_id||payload?.old?.message_id;
-  if(!messageId||!state.chatWindowOpen)return;
-  const bubble=$('#dm-log')?.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
-  if(bubble)await refreshDirectMessageBubble(messageId);
-}
-let dmLongPressOrigin=null;
-document.addEventListener('click',e=>{
-  const menuButton=e.target.closest('[data-dm-menu-toggle]');
-  if(menuButton){e.stopPropagation();openDmMessageMenu(menuButton.dataset.dmMenuToggle);return;}
-  const react=e.target.closest('[data-dm-react]');
-  if(react){e.stopPropagation();toggleDirectMessageReaction(react.dataset.messageId,react.dataset.dmReact);return;}
-  const edit=e.target.closest('[data-dm-edit]');
-  if(edit){e.stopPropagation();startEditDirectMessage(edit.dataset.dmEdit);return;}
-  const del=e.target.closest('[data-dm-delete]');
-  if(del){e.stopPropagation();deleteDirectMessage(del.dataset.dmDelete);return;}
-  const save=e.target.closest('[data-dm-edit-save]');
-  if(save){e.stopPropagation();saveEditDirectMessage(save.dataset.dmEditSave);return;}
-  const cancel=e.target.closest('[data-dm-edit-cancel]');
-  if(cancel){e.stopPropagation();refreshDirectMessageBubble(cancel.dataset.dmEditCancel);return;}
-});
-document.addEventListener('pointerdown',e=>{
-  if(!window.matchMedia('(max-width:760px), (pointer:coarse)').matches)return;
-  if(e.target.closest('button,a,input,textarea,audio'))return;
-  const bubble=e.target.closest('.dm-bubble:not(.deleted)');
-  if(!bubble?.dataset.dmId)return;
-  clearTimeout(state.dmLongPressTimer);
-  dmLongPressOrigin={x:e.clientX,y:e.clientY,id:bubble.dataset.dmId};
-  state.dmLongPressTimer=setTimeout(()=>{
-    openDmMessageMenu(bubble.dataset.dmId);
-    try{navigator.vibrate?.(16);}catch{}
-    state.dmLongPressTimer=null;
-  },560);
-});
-document.addEventListener('pointermove',e=>{
-  if(!dmLongPressOrigin||!state.dmLongPressTimer)return;
-  if(Math.hypot(e.clientX-dmLongPressOrigin.x,e.clientY-dmLongPressOrigin.y)>12){
-    clearTimeout(state.dmLongPressTimer);state.dmLongPressTimer=null;dmLongPressOrigin=null;
-  }
-});
-['pointerup','pointercancel'].forEach(type=>document.addEventListener(type,()=>{
-  if(state.dmLongPressTimer){clearTimeout(state.dmLongPressTimer);state.dmLongPressTimer=null;}
-  dmLongPressOrigin=null;
-}));
 async function repairLegacyVoicePlayers(root=document){
   const players=[...root.querySelectorAll?.('.dm-voice-audio')||[]].filter(audio=>!audio.dataset.voiceRepaired&&audio.dataset.voiceType&&audio.dataset.voiceType!=='audio/wav').slice(0,30);
   for(const audio of players){
@@ -2665,7 +2593,7 @@ function updateChatPeerHeader(peer){
 
 async function renderMessagesPage(){
   if(state.tab!=='messages')return;
-  const friends=await acceptedFriendProfiles();
+  const friends=(await acceptedFriendProfiles())||[];
   if(state.tab!=='messages')return;
   $('#feed-status').classList.add('hidden');
   $('#feed-list').innerHTML=`<section class="messages-hub">
@@ -2687,7 +2615,6 @@ document.addEventListener('pointerdown',e=>{
   if(emoji&&!emoji.classList.contains('hidden')&&!e.target.closest('#dm-emoticon-palette,#dm-emoticons'))emoji.classList.add('hidden');
   const postEmoji=$('#post-emoticon-palette');
   if(postEmoji&&!postEmoji.classList.contains('hidden')&&!e.target.closest('#post-emoticon-palette,#post-emoticons'))postEmoji.classList.add('hidden');
-  if(!e.target.closest('[data-dm-message-menu],[data-dm-menu-toggle]'))closeDmMessageMenus();
 });
 
 function preferredVoiceMime(){
@@ -2908,7 +2835,7 @@ function bindHoldToTalk(){
 
 const CHAT_GEOMETRY_KEY='avesso.chat.geometry.v2';
 function chatDesktopEnabled(){
-  return window.matchMedia('(min-width: 761px) and (pointer:fine)').matches;
+  return window.matchMedia('(min-width: 761px)').matches;
 }
 function defaultChatGeometry(){
   const width=Math.min(560,Math.max(360,window.innerWidth-44));
@@ -2917,8 +2844,8 @@ function defaultChatGeometry(){
 }
 function clampChatGeometry(geometry={}){
   const gap=6;
-  const minWidth=Math.min(340,Math.max(300,window.innerWidth-gap*2));
-  const minHeight=Math.min(300,Math.max(240,window.innerHeight-gap*2));
+  const minWidth=Math.min(300,Math.max(280,window.innerWidth-gap*2));
+  const minHeight=Math.min(280,Math.max(250,window.innerHeight-gap*2));
   const maxWidth=Math.max(minWidth,window.innerWidth-gap*2);
   const maxHeight=Math.max(minHeight,window.innerHeight-gap*2);
   const width=Math.min(maxWidth,Math.max(minWidth,Number(geometry.width)||560));
@@ -2989,8 +2916,8 @@ function startChatPointerAction(event,mode){
   const win=ensureChatWindow();
   const rect=win.getBoundingClientRect();
   const start={x:event.clientX,y:event.clientY,left:rect.left,top:rect.top,width:rect.width,height:state.chatWindowMinimized?loadChatGeometry().height:rect.height};
-  const minW=Math.min(340,Math.max(300,window.innerWidth-12));
-  const minH=Math.min(300,Math.max(240,window.innerHeight-12));
+  const minW=Math.min(300,Math.max(280,window.innerWidth-12));
+  const minH=Math.min(280,Math.max(250,window.innerHeight-12));
   document.documentElement.classList.add('dm-window-interacting');
   event.preventDefault();
   const move=ev=>{
@@ -3135,14 +3062,39 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   $('.chat-theme-choice').forEach(b=>b.onclick=()=>setChatTheme(b.dataset.chatTheme));
   $$('[data-chat-wallpaper]').forEach(b=>b.onclick=()=>setChatWallpaper(b.dataset.chatWallpaper));
   installChatDesktopWindowing();
+  window.postMessage({type:'AVESSO_PRESENCE_REQUEST'},location.origin);
   syncVoiceRecordingUI();
-  const scrollLatest=()=>{
-    const log=$('#dm-log');
-    if(log)log.scrollTop=log.scrollHeight;
-  };
-  requestAnimationFrame(()=>requestAnimationFrame(scrollLatest));
-  setTimeout(scrollLatest,120);
+  installChatScrollContainment(win);
+  pinChatToLatest(win);
   repairLegacyVoicePlayers(win);
+  setTimeout(()=>pinChatToLatest(win),180);
+  setTimeout(()=>pinChatToLatest(win),650);
+}
+function pinChatToLatest(root=ensureChatWindow()){
+  const log=root?.querySelector?.('#dm-log')||$('#dm-log');
+  if(!log)return;
+  const stick=()=>{
+    log.scrollTop=Math.max(0,log.scrollHeight-log.clientHeight);
+  };
+  stick();
+  requestAnimationFrame(()=>{stick();requestAnimationFrame(stick);});
+  log.querySelectorAll('img,audio').forEach(media=>{
+    const event=media.tagName==='IMG'?'load':'loadedmetadata';
+    media.addEventListener(event,stick,{once:true});
+  });
+}
+function installChatScrollContainment(win){
+  if(!win)return;
+  win.onwheel=e=>{
+    const scrollable=e.target.closest('#dm-log,.dm-options-menu,.dm-emoticon-palette');
+    if(!scrollable){e.stopPropagation();return;}
+    const canScroll=scrollable.scrollHeight>scrollable.clientHeight+1;
+    if(!canScroll){e.preventDefault();e.stopPropagation();return;}
+    const atTop=scrollable.scrollTop<=0;
+    const atBottom=scrollable.scrollTop+scrollable.clientHeight>=scrollable.scrollHeight-1;
+    if((e.deltaY<0&&atTop)||(e.deltaY>0&&atBottom))e.preventDefault();
+    e.stopPropagation();
+  };
 }
 async function refreshChatWindow(){
   if(!state.chatWindowOpen||!state.directPeerId)return;
@@ -3560,7 +3512,7 @@ async function renderProfile(){
   $('#feed-list').innerHTML=`<section class="profile-control" style="--profile-wallpaper:url('${wallpaperUrl(state.profile.profile_wallpaper)}')">
     <header class="profile-control-hero">
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
-      <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><div id="profile-hero-listening" class="profile-hero-listening">${nowPlayingHtml(state.profile)}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
+      <div><span class="section-code">MEU CANTO // IDENTIDADE</span><h2>${escapeHtml(state.profile.display_name)}</h2><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><div class="profile-auto-listening"><span>AUTOMÁTICO // OUVINDO AGORA</span><div id="profile-hero-listening" class="profile-hero-listening">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
@@ -3569,7 +3521,7 @@ async function renderProfile(){
     </section>
     <div class="profile-settings-grid">
       <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Status ao lado do nome <small>aparece de forma compacta nas conversas</small><input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Aparecer como<select id="profile-presence"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
-      <section class="profile-settings-card listening-privacy-card"><span class="section-code">PRIVACIDADE // OUVINDO AGORA</span><h3>Seu player não precisa virar testemunha</h3><label class="listening-privacy-switch"><input id="listening-visible" type="checkbox" ${state.profile.listening_visible?'checked':''}><span><b>mostrar o que estou ouvindo</b><small>ativa o status musical no seu Canto</small></span></label><label class="listening-privacy-switch"><input id="chat-listening-visible" type="checkbox" ${state.profile.chat_listening_visible!==false?'checked':''}><span><b>mostrar também nas conversas</b><small>fica ao lado do seu nome, sem ocupar a coluna do avatar</small></span></label><div id="profile-now-playing-preview" class="profile-now-playing-preview">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty">nada detectado agora. o silêncio também tem presença.</div>'}</div><div class="manual-now-playing"><span>SEM PONTE? // COLE O QUE ESTÁ TOCANDO</span><input id="manual-now-playing-url" type="url" inputmode="url" autocomplete="off" placeholder="YouTube ou Spotify"><div><button id="save-manual-now-playing" type="button">usar este link</button><button id="stop-now-playing" type="button">parar de ouvir</button></div></div><button id="save-listening-privacy" type="button">salvar privacidade</button><small id="listening-bridge-status">${state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // use o link manual ou o AVESSO Presence'}</small><em>A detecção automática de outras abas exige o AVESSO Presence. Sem ele, o link manual funciona no desktop e no celular. Navegadores comuns não deixam um site bisbilhotar o resto do aparelho. Uma rara decisão sensata.</em></section>
+      <section class="profile-settings-card listening-privacy-card"><span class="section-code">PRIVACIDADE // OUVINDO AGORA</span><h3>Seu player não precisa virar testemunha</h3><label class="listening-privacy-switch"><input id="listening-visible" type="checkbox" ${state.profile.listening_visible?'checked':''}><span><b>mostrar o que estou ouvindo</b><small>ativa o status musical no seu Canto</small></span></label><label class="listening-privacy-switch"><input id="chat-listening-visible" type="checkbox" ${state.profile.chat_listening_visible!==false?'checked':''}><span><b>mostrar também nas conversas</b><small>fica ao lado do seu nome, sem ocupar a coluna do avatar</small></span></label><div id="profile-now-playing-preview" class="profile-now-playing-preview">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty">nada detectado agora. o silêncio também tem presença.</div>'}</div><div class="manual-now-playing"><span>FALLBACK MANUAL // SÓ SE A PONTE NÃO ESTIVER DISPONÍVEL</span><input id="manual-now-playing-url" type="url" inputmode="url" autocomplete="off" placeholder="YouTube ou Spotify"><div><button id="save-manual-now-playing" type="button">usar este link</button><button id="stop-now-playing" type="button">parar de ouvir</button></div></div><button id="save-listening-privacy" type="button">salvar privacidade</button><small id="listening-bridge-status">${state.presenceBridgeSeen?'PONTE ATIVA // recebendo do navegador':'PONTE AUSENTE // use o link manual ou o AVESSO Presence'}</small><em>A detecção automática de outras abas exige o AVESSO Presence. Sem ele, o link manual funciona no desktop e no celular. Navegadores comuns não deixam um site bisbilhotar o resto do aparelho. Uma rara decisão sensata.</em></section>
       <section class="profile-settings-card security-card"><span class="section-code">CONTA // SEGURANÇA</span><p><b>E-mail</b><br>${escapeHtml(state.session?.user?.email||'')}</p><label>Nova senha<input id="profile-password" type="password" minlength="8" autocomplete="new-password"></label><label>Confirmar nova senha<input id="profile-password-confirm" type="password" minlength="8" autocomplete="new-password"></label><button id="change-password">alterar senha</button><small>Seu @ continua estável para links. Seu nome exibido pode trocar de personalidade quantas vezes quiser.</small></section>
     </div>
     <section class="wallpaper-control"><span class="section-code">AMBIENTE // 10 REALIDADES DISPONÍVEIS</span><h2>Seu Canto não precisa parecer aluguel mobiliado</h2><p>Escolha um cenário para o perfil e outro para o AVESSO inteiro. Porque até o caos merece papel de parede.</p><div class="wallpaper-current-grid"><button id="choose-profile-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.profile_wallpaper)}')"><span>MEU CANTO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.profile_wallpaper)?.[1]||'Cidade 56K')}</b></button><button id="choose-app-wallpaper" style="--thumb:url('${wallpaperUrl(state.profile.app_wallpaper)}')"><span>AVESSO</span><b>${escapeHtml(WALLPAPER_OPTIONS.find(x=>x[0]===state.profile.app_wallpaper)?.[1]||'Cidade 56K')}</b></button></div></section>
@@ -3589,7 +3541,7 @@ async function renderProfile(){
       <button class="world-mode-option ${mode==='world'?'active':''}" data-world-mode="world"><strong>MUNDO ${mode==='world'?'<i>ATIVO</i>':''}</strong><small>Visitas, falas e acontecimentos. Sem vandalismo cosmético pessoal.</small></button>
       <button class="world-mode-option ${mode==='chaos'?'active':''}" data-world-mode="chaos"><strong>CAOS ${mode==='chaos'?'<i>ATIVO</i>':''}</strong><small>404 pode interagir pessoalmente. A sabotagem visual continua controlada pelo sistema global.</small></button>
     </div>
-    <label class="ai-browser-context-setting"><input id="ai-browser-context-visible" type="checkbox" ${state.profile.ai_browser_context_visible?'checked':''}><span><b>Aquele que Lê Tudo pode notar quando eu troco de aba</b><small>requer AVESSO Presence. A ponte envia somente domínio, título visível da aba e se há áudio; não lê formulários, mensagens ou o conteúdo interno da página.</small></span></label><small id="ai-browser-context-status">${state.profile.ai_browser_context_visible?'ATIVO // domínio, título visível da aba e áudio. Só isso.':'DESLIGADO // Aquele fica restrito ao que acontece dentro do AVESSO.'}</small>
+    <div class="ai-context-card ${state.profile.ai_browser_context_visible?'enabled':'disabled'}"><div class="ai-context-copy"><span class="ai-context-code">AQUELE QUE LÊ TUDO // CONTEXTO EXTERNO</span><b>Perceber troca de aba</b><small>Com AVESSO Presence, ele recebe apenas domínio, título visível da aba e se existe áudio. Não recebe texto digitado, mensagens, formulários nem conteúdo interno.</small><small id="ai-browser-context-status">${state.profile.ai_browser_context_visible?'ATIVO // contexto mínimo liberado':'DESLIGADO // só enxerga o que acontece dentro do AVESSO'}</small></div><label class="ai-context-switch" title="Permitir contexto mínimo de outras abas"><input id="ai-browser-context-visible" type="checkbox" ${state.profile.ai_browser_context_visible?'checked':''}><span aria-hidden="true"></span><em>${state.profile.ai_browser_context_visible?'ON':'OFF'}</em></label></div>
     <div class="world-pref-foot"><span id="profile-world-status">carregando modo...</span><small>${interferenceOnline?'Interferências visuais globais estão online.':'O motor visual ainda está bloqueado globalmente.'} Personagens nunca reescrevem o que você publicou.</small></div>
   </section>`;
   $('#open-avatar-picker').onclick=openAvatarDialog;
@@ -3633,6 +3585,7 @@ async function renderProfile(){
     });
   }
   algoSay('profile');
+  window.postMessage({type:'AVESSO_PRESENCE_REQUEST'},location.origin);
   setTimeout(()=>maybeWorldCharacter('profile',{surface:'profile'},.12,180000),900);
 }
 async function saveAvatar(url){
@@ -3734,12 +3687,11 @@ async function openPublicProfile(userId){
   if(!userId)return;
   stopCornerMusic();
   if(userId===state.profile.id){document.querySelector('[data-app-tab="profile"]')?.click();return;}
-  autoMinimizeChat();
   state.tab='public_profile';state.publicProfileId=userId;bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.remove('active'));
   applyAppTabLayout();$('#feed-status').classList.add('hidden');
   const [profileRes,friendship]=await Promise.all([
-    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen,corner_music_url,corner_music_enabled,corner_music_title,corner_music_provider,listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual').eq('id',userId).maybeSingle(),
+    supabase.from('profiles').select('id,display_name,handle,bio,avatar_url,status_message,created_at,profile_wallpaper,presence_mode,last_seen,online_until,away_after_minutes,corner_music_url,corner_music_enabled,corner_music_title,corner_music_provider,listening_visible,chat_listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual').eq('id',userId).maybeSingle(),
     getFriendshipWith(userId)
   ]);
   if(state.tab!=='public_profile'||state.publicProfileId!==userId)return;
@@ -3754,7 +3706,7 @@ async function openPublicProfile(userId){
     : '<div class="guestbook-locked">Recados são para amigos. Civilização mínima, aparentemente.</div>';
   $('#feed-list').innerHTML=`<section class="public-profile" style="--profile-wallpaper:url('${wallpaperUrl(p.profile_wallpaper)}')">
     <button id="back-from-profile" class="back-button">← voltar</button>
-    <header><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><h1>${escapeHtml(p.display_name)}</h1><p class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</p><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div><div id="public-now-playing">${nowPlayingHtml(p)}</div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><p>${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
+    <header class="public-profile-hero"><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div class="public-profile-identity"><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><div class="public-profile-name-row"><h1>${escapeHtml(p.display_name)}</h1><span class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</span></div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><div class="public-profile-sound-row"><div id="public-now-playing">${nowPlayingHtml(p)}</div><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div></div><p class="public-profile-bio">${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}</div></div></header>
     <section class="public-story-section">
       <span class="section-code">STORIES // AINDA NÃO EXPIRARAM</span>
       <h2>Stories de ${escapeHtml(p.display_name)}</h2>

@@ -6209,3 +6209,434 @@ body.avesso-own-corner .profile-avatar-large img{
   .dm-resize-ne,.dm-resize-nw,.dm-resize-se,.dm-resize-sw{width:15px!important;height:15px!important}
 }
 
+
+
+/* AVESSO REPAIR // chat, perfil, presença e privacidade 2026-10-01 */
+
+/* Conversa contém o próprio scroll. A página atrás não precisa participar da fofoca. */
+.dm-floating-window,
+.dm-floating-window .dm-window-body,
+.dm-floating-window .dm-log,
+.dm-floating-window .dm-options-menu,
+.dm-floating-window .dm-emoticon-palette{
+  overscroll-behavior:contain!important;
+}
+.dm-floating-window .dm-log{
+  scroll-behavior:auto!important;
+}
+
+/* Ações de editar/apagar/reagir foram removidas da conversa a pedido. */
+.dm-message-kebab,
+.dm-message-menu,
+.dm-message-reactions{
+  display:none!important;
+}
+
+/* Janela desktop volta a ser livre e visivelmente redimensionável. */
+@media(min-width:761px){
+  .dm-floating-window.desktop-windowed{
+    min-width:280px!important;
+    min-height:250px!important;
+  }
+  .dm-floating-window.desktop-windowed .dm-msn-titlebar{
+    cursor:move!important;
+  }
+  .dm-floating-window.desktop-windowed:not(.maximized):not(.minimized) .dm-resize-handle{
+    display:block!important;
+    opacity:.01;
+    transition:opacity .12s,background .12s;
+  }
+  .dm-floating-window.desktop-windowed:not(.maximized):not(.minimized):hover .dm-resize-handle{
+    opacity:.45;
+  }
+  .dm-floating-window.desktop-windowed .dm-resize-e,
+  .dm-floating-window.desktop-windowed .dm-resize-w{width:12px!important}
+  .dm-floating-window.desktop-windowed .dm-resize-n,
+  .dm-floating-window.desktop-windowed .dm-resize-s{height:12px!important}
+  .dm-floating-window.desktop-windowed .dm-resize-ne,
+  .dm-floating-window.desktop-windowed .dm-resize-nw,
+  .dm-floating-window.desktop-windowed .dm-resize-se,
+  .dm-floating-window.desktop-windowed .dm-resize-sw{width:18px!important;height:18px!important}
+  .dm-floating-window.desktop-windowed .dm-resize-se:after{
+    content:"";
+    position:absolute;
+    right:3px;
+    bottom:3px;
+    width:8px;
+    height:8px;
+    border-right:2px solid var(--dm-accent);
+    border-bottom:2px solid var(--dm-accent);
+    box-shadow:3px 3px 0 #0004;
+  }
+}
+
+/* OPTIONS.EXE: mini perfil dentro da conversa, agora legível e compacto. */
+.dm-options-menu-head{
+  width:min(340px,calc(100% - 16px))!important;
+  max-height:min(520px,calc(100vh - 135px))!important;
+  padding:0!important;
+  background:#eaf1f1!important;
+  border:2px solid color-mix(in srgb,var(--dm-accent) 72%,#4f666b)!important;
+  box-shadow:7px 7px 0 #0008!important;
+}
+.dm-options-menu-head:before{
+  content:"OPTIONS.EXE";
+  display:block;
+  padding:7px 9px;
+  border-bottom:1px solid #9fb4b7;
+  background:color-mix(in srgb,var(--dm-accent) 16%,#102024);
+  color:#dffcff;
+  font:800 .50rem/1 var(--mono);
+  letter-spacing:.05em;
+}
+.dm-options-menu-head .dm-options-user{
+  display:grid!important;
+  grid-template-columns:54px minmax(0,1fr)!important;
+  gap:10px!important;
+  align-items:center!important;
+  margin:0!important;
+  padding:11px!important;
+  border-bottom:1px solid #b7c9cc!important;
+  background:linear-gradient(90deg,#102126,#19343a)!important;
+}
+.dm-options-menu-head .dm-options-user .mini-avatar{
+  width:54px!important;
+  height:54px!important;
+  border:2px solid #d8ff3e!important;
+  box-shadow:3px 3px 0 #000!important;
+}
+.dm-options-menu-head .dm-options-user b{
+  display:block!important;
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  color:#f3f6f3!important;
+  font:800 .68rem/1.25 var(--mono)!important;
+}
+.dm-options-menu-head .dm-options-user small{
+  display:block!important;
+  margin-top:4px!important;
+  color:#8fddea!important;
+  font:600 .49rem/1.3 var(--mono)!important;
+}
+.dm-options-menu-head>button,
+.dm-options-menu-head>.dm-away-setting,
+.dm-options-menu-head>.dm-chat-listening-setting,
+.dm-options-menu-head>.dm-status-setting,
+.dm-options-menu-head>.dm-theme-section,
+.dm-options-menu-head>.dm-wallpaper-section{
+  margin-left:10px!important;
+  margin-right:10px!important;
+}
+.dm-options-menu-head>button{
+  width:calc(100% - 20px)!important;
+  text-align:left!important;
+  min-height:32px!important;
+  margin-top:6px!important;
+  border:1px solid #a7b9bc!important;
+  background:#f5f8f8!important;
+  color:#233b40!important;
+  font:700 .50rem/1.25 var(--mono)!important;
+}
+.dm-options-menu-head>button:hover{
+  border-color:var(--dm-accent)!important;
+  background:#fff!important;
+}
+.dm-options-menu-head>button.danger{
+  color:#a23835!important;
+  border-color:#d7aaa7!important;
+}
+.dm-options-menu-head .dm-theme-section,
+.dm-options-menu-head .dm-wallpaper-section{
+  padding-bottom:10px!important;
+}
+
+/* Meu Canto: status musical automático tem presença visual própria. */
+.profile-auto-listening{
+  margin:8px 0 7px;
+  width:min(560px,100%);
+}
+.profile-auto-listening>span{
+  display:block;
+  margin-bottom:4px;
+  color:var(--cyan);
+  font:800 .47rem/1.2 var(--mono);
+  letter-spacing:.05em;
+}
+.profile-auto-listening .now-playing-empty.compact{
+  display:block;
+  width:100%;
+  padding:7px 9px;
+  border-left:2px solid #4b5e62;
+  background:#071012b8;
+  color:#84918f;
+  font:600 .49rem/1.35 var(--mono);
+}
+.profile-auto-listening .now-playing-status{
+  width:100%!important;
+  max-width:560px!important;
+}
+
+/* Privacidade do Aquele: um card, não uma checkbox perdida no deserto. */
+.ai-context-card{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:16px;
+  align-items:center;
+  margin-top:12px;
+  padding:14px 16px;
+  border:1px solid #34494e;
+  background:
+    linear-gradient(90deg,#071012f2,#0b1517e8),
+    repeating-linear-gradient(0deg,transparent 0 7px,#22d9ee08 7px 8px);
+  box-shadow:inset 3px 0 0 #526368;
+}
+.ai-context-card.enabled{
+  border-color:#6f9020;
+  box-shadow:inset 3px 0 0 var(--acid),0 0 16px #d8ff3e0f;
+}
+.ai-context-copy{
+  min-width:0;
+}
+.ai-context-copy>*{
+  display:block;
+}
+.ai-context-code{
+  margin-bottom:5px;
+  color:var(--cyan);
+  font:800 .47rem/1.25 var(--mono);
+}
+.ai-context-copy>b{
+  color:#eef2ef;
+  font:800 .74rem/1.3 var(--sans);
+}
+.ai-context-copy>small{
+  margin-top:5px;
+  max-width:800px;
+  color:#8f9d9a;
+  font:500 .51rem/1.5 var(--mono);
+}
+#ai-browser-context-status{
+  margin-top:7px!important;
+  color:var(--acid)!important;
+  font-weight:800!important;
+}
+.ai-context-card.disabled #ai-browser-context-status{
+  color:#81908d!important;
+}
+.ai-context-switch{
+  display:grid;
+  grid-template-columns:auto;
+  justify-items:center;
+  gap:4px;
+  cursor:pointer;
+  user-select:none;
+}
+.ai-context-switch input{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+}
+.ai-context-switch>span{
+  position:relative;
+  width:50px;
+  height:25px;
+  border:1px solid #52676b;
+  background:#121b1d;
+  box-shadow:inset 0 0 0 2px #05090a;
+}
+.ai-context-switch>span:after{
+  content:"";
+  position:absolute;
+  top:4px;
+  left:4px;
+  width:15px;
+  height:15px;
+  background:#788784;
+  transition:transform .16s,background .16s,box-shadow .16s;
+}
+.ai-context-switch input:checked+span{
+  border-color:#89ad25;
+  background:#18210b;
+}
+.ai-context-switch input:checked+span:after{
+  transform:translateX(25px);
+  background:var(--acid);
+  box-shadow:0 0 10px #d8ff3e66;
+}
+.ai-context-switch em{
+  color:#788784;
+  font:800 .43rem/1 var(--mono);
+  font-style:normal;
+}
+.ai-context-card.enabled .ai-context-switch em{
+  color:var(--acid);
+}
+
+/* Perfil público aberto a partir da conversa. */
+.public-profile .public-profile-hero{
+  display:grid!important;
+  grid-template-columns:112px minmax(0,1fr)!important;
+  gap:20px!important;
+  align-items:start!important;
+  padding:24px!important;
+  min-height:0!important;
+}
+.public-profile-hero .public-profile-avatar{
+  width:112px!important;
+  height:112px!important;
+  margin:0!important;
+}
+.public-profile-identity{
+  min-width:0;
+}
+.public-profile-name-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 14px;
+  align-items:center;
+}
+.public-profile-name-row h1{
+  min-width:0;
+  margin:4px 0!important;
+  font-size:clamp(2rem,4.2vw,4rem)!important;
+  line-height:.95!important;
+  overflow-wrap:anywhere;
+}
+.public-profile-name-row .public-presence{
+  margin:0!important;
+  display:inline-flex!important;
+  align-items:center;
+  gap:6px;
+  padding:5px 8px;
+  border:1px solid #314248;
+  background:#071012;
+  color:#aeb9b6;
+  font:700 .49rem/1 var(--mono);
+}
+.public-profile-sound-row{
+  display:grid;
+  gap:5px;
+  margin:7px 0;
+  max-width:620px;
+}
+.public-profile-sound-row>div:empty{
+  display:none;
+}
+.public-profile-bio{
+  max-width:760px;
+  margin:8px 0!important;
+  color:#aab4b1!important;
+}
+.public-profile-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:10px;
+}
+
+/* Lista de amigos: nunca vira um retângulo vazio sem explicação. */
+.online-friends-sync{
+  color:var(--cyan)!important;
+}
+.online-friends-list:empty:after{
+  content:"◌ sincronizando presença...";
+  display:block;
+  padding:12px;
+  color:#7e8d8a;
+  font:600 .47rem/1.4 var(--mono);
+}
+
+/* GIF drawer em telas pequenas continua dentro do compositor. */
+@media(max-width:760px){
+  .ai-context-card{
+    grid-template-columns:1fr auto;
+    padding:12px;
+  }
+  .public-profile .public-profile-hero{
+    grid-template-columns:76px minmax(0,1fr)!important;
+    gap:12px!important;
+    padding:15px!important;
+  }
+  .public-profile-hero .public-profile-avatar{
+    width:76px!important;
+    height:76px!important;
+  }
+  .public-profile-name-row h1{
+    font-size:clamp(1.5rem,8vw,2.6rem)!important;
+  }
+}
+
+
+/* GIFs mantidos pelo próprio repositório. */
+.repo-gif-head{
+  grid-column:1/-1;
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  padding-bottom:6px;
+  border-bottom:1px dashed #314448;
+}
+.repo-gif-head b{
+  color:var(--cyan);
+  font:800 .48rem/1.2 var(--mono);
+}
+.repo-gif-head small{
+  color:#7f8b89;
+  font:500 .43rem/1.2 var(--mono);
+}
+.repo-gif-library{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:repeat(6,minmax(58px,1fr));
+  gap:5px;
+}
+.repo-gif-choice{
+  min-width:0;
+  padding:5px;
+  border:1px solid #36494d;
+  background:#071012;
+  color:#9eaaa7;
+  cursor:pointer;
+  text-align:center;
+}
+.repo-gif-choice:hover,
+.repo-gif-choice.active{
+  border-color:var(--acid);
+  color:var(--acid);
+  background:#0d1608;
+  box-shadow:inset 0 -2px 0 var(--acid);
+}
+.repo-gif-choice img{
+  display:block;
+  width:100%;
+  aspect-ratio:1;
+  object-fit:contain;
+  image-rendering:pixelated;
+  background:#030708;
+}
+.repo-gif-choice span{
+  display:block;
+  margin-top:4px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font:700 .39rem/1.2 var(--mono);
+}
+
+@media(max-width:760px){
+  .repo-gif-library{
+    grid-template-columns:repeat(3,minmax(62px,1fr));
+    max-height:170px;
+    overflow:auto;
+  }
+  .repo-gif-head{
+    display:block;
+  }
+  .repo-gif-head small{
+    display:block;
+    margin-top:3px;
+  }
+}
