@@ -254,7 +254,7 @@ function storyCardHtml(story,{compact=false}={}){
   return '<button class="story-card '+(compact?'compact ':'')+(isVideo?'has-video':'')+'" data-story-open="'+escapeAttr(story.id)+'" style="'+style+'">'+
     '<span class="story-ring"><i>'+avatarHtml(a.avatar_url,a.display_name||'?')+'</i></span>'+
     (isVideo?'<em class="story-card-media">▶ vídeo</em>':'')+
-    '<span class="story-card-copy"><b>'+escapeHtml(a.display_name||'humano')+'</b><small>'+(story.visibility==='amigos'?'amigos':'público')+' · '+storyTimeLeft(story.expires_at)+'</small></span>'+
+    '<span class="story-card-copy"><b>'+userDisplayNameHtml(a)+'</b><small>'+(story.visibility==='amigos'?'amigos':'público')+' · '+storyTimeLeft(story.expires_at)+'</small></span>'+
   '</button>';
 }
 
@@ -522,10 +522,10 @@ async function openStory(storyId,options={}){
     return `<button class="story-reaction ${active?'active':''}" data-story-react="${id}"><span>${icon}</span>${label}${rows.length?` <b>${rows.length}</b>`:''}</button>`;
   }).join('');
   const a=authorRes.data||{},canDelete=story.author_id===state.profile.id;
-  const commentsHtml=comments.map(row=>{const p=commentProfiles[row.user_id]||{};return `<article class="story-comment"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${escapeHtml(p.display_name||'alguém')}</b><small>@${escapeHtml(p.handle||'...')} · ${ago(row.created_at)}</small><p>${escapeHtml(row.body)}</p></div></article>`;}).join('')||'<p class="story-empty">Sem comentários. O silêncio também expira.</p>';
+  const commentsHtml=comments.map(row=>{const p=commentProfiles[row.user_id]||{};return `<article class="story-comment"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name||'?')}</span><div><b>${userDisplayNameHtml(p)}</b><small>@${escapeHtml(p.handle||'...')} · ${ago(row.created_at)}</small><p>${escapeHtml(row.body)}</p></div></article>`;}).join('')||'<p class="story-empty">Sem comentários. O silêncio também expira.</p>';
   const host=$('#story-view-content');
   host.innerHTML=`<article class="story-view-card">
-    <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${escapeHtml(a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
+    <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${userDisplayNameHtml(a)}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
     <div class="story-stage ${image_url?'has-image':''} ${storyIsVideo?'has-video':''}" style="${image_url&&!storyIsVideo?`--story-image:url('${escapeAttr(image_url)}')`:''}">${image_url?(storyIsVideo?`<video class="story-video" src="${escapeAttr(image_url)}" controls playsinline preload="metadata"></video>`:`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||'usuário')}" decoding="async" fetchpriority="high">`):''}${story.body?`<p>${escapeHtml(story.body)}</p>`:''}</div>
     <div class="story-reactions">${reactionHtml}</div>
     <section class="story-comments"><h3>respostas // sem plateia</h3><div class="story-comment-list">${commentsHtml}</div><div class="story-comment-compose"><textarea id="story-comment-body" maxlength="420" placeholder="responda antes que isso desapareça..."></textarea><div><button id="story-comment-emoticons" type="button">☻ avessícones</button><button id="story-comment-send" type="button">responder</button></div><div id="story-comment-palette" class="feed-emoticon-palette hidden">${avessoEmoticonButtons('data-story-comment-emoticon')}</div></div></section>
@@ -1662,7 +1662,7 @@ function leaveApp(){
 }
 
 let searchTimer;$('#recipient-search').addEventListener('input',e=>{state.recipient=null;clearTimeout(searchTimer);const q=e.target.value.trim();if(q.length<2){$('#recipient-results').classList.add('hidden');return}searchTimer=setTimeout(()=>searchProfiles(q),250)});
-async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${escapeHtml(p.display_name)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
+async function searchProfiles(q){const {data,error}=await supabase.from('profiles').select('id,handle,display_name').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).neq('id',state.profile.id).limit(12);if(error)return toast('A busca tropeçou. Tente de novo.');const visible=(data||[]).filter(p=>!isPeerBlocked(p.id)).slice(0,6);const box=$('#recipient-results');box.innerHTML=visible.map(p=>`<button data-user='${p.id}' data-name='${escapeAttr(p.display_name)}' data-handle='${escapeAttr(p.handle)}'><span>${userDisplayNameHtml(p)}</span><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<button disabled>ninguém encontrado neste pedaço da internet</button>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{state.recipient={id:b.dataset.user,name:b.dataset.name,handle:b.dataset.handle};$('#recipient-search').value=`${b.dataset.name} (@${b.dataset.handle})`;box.classList.add('hidden')});}
 
 function updateComposerTarget(){
   const directed=$('#post-target').value==='person';
@@ -2206,7 +2206,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
           const c=item.character||{};
           return `<article class="conversation-item character-conversation">${characterVisual(c,'conversation-character')}<div><div class="conversation-author"><b>${escapeHtml(c.name||'Habitante')}</b><span>HABITANTE · ${ago(item.created_at)}</span></div><p>${escapeHtml(item.body)}</p></div></article>`;
         }
-        return `<article class="conversation-item"><button class="mini-avatar profile-avatar-button" data-profile-id="${item.author_id}">${avatarHtml(item.author?.avatar_url,item.author?.display_name||'?')}</button><div><div class="conversation-author"><button class="user-link" data-profile-id="${item.author_id}">${escapeHtml(item.author?.display_name||'alguém')}</button><span>@${escapeHtml(item.author?.handle||'...')} · ${ago(item.created_at)}</span></div><p>${escapeHtml(item.body)}</p></div></article>`;
+        return `<article class="conversation-item"><button class="mini-avatar profile-avatar-button" data-profile-id="${item.author_id}">${avatarHtml(item.author?.avatar_url,item.author?.display_name||'?')}</button><div><div class="conversation-author"><button class="user-link" data-profile-id="${item.author_id}">${userDisplayNameHtml(item.author||{},item.author_id)}</button><span>@${escapeHtml(item.author?.handle||'...')} · ${ago(item.created_at)}</span></div><p>${escapeHtml(item.body)}</p></div></article>`;
       }).join('')}</div></section>`:'';
     const reactionHtml=ACID_REACTIONS.map(([id,icon,label])=>{
       const rows=reactionRows.filter(x=>x.reaction===id);
@@ -2706,7 +2706,7 @@ async function loadPlazaMessages(){
       return `<article class="plaza-message npc-message">${characterVisual(c,'plaza-msg-avatar')}<div><header><strong>${escapeHtml(c?.name||'NPC')}</strong><span>HABITANTE · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
     }
     const p=profiles[m.user_id]||{};
-    return `<article class="plaza-message"><button class="plaza-avatar" data-profile-id="${m.user_id}">${avatarHtml(p.avatar_url,p.display_name||'?')}</button><div><header><button class="user-link" data-profile-id="${m.user_id}">${escapeHtml(p.display_name||'alguém')}</button><span>@${escapeHtml(p.handle||'...')} · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
+    return `<article class="plaza-message"><button class="plaza-avatar" data-profile-id="${m.user_id}">${avatarHtml(p.avatar_url,p.display_name||'?')}</button><div><header><button class="user-link" data-profile-id="${m.user_id}">${userDisplayNameHtml(p,m.user_id)}</button><span>@${escapeHtml(p.handle||'...')} · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
   }).join('')||'<div class="plaza-empty">A praça está vazia. O NPC está fingindo que isso era parte do planejamento urbano.</div>';
   bindProfileLinks();
   log.scrollTop=log.scrollHeight;
@@ -2875,7 +2875,7 @@ function renderOnlineFriendsDock(){
       const statusLabel=entry.mode==='online'?'online':entry.mode==='away'?'ausente':'offline';
       return `<button class="online-friend-item ${entry.mode}" data-online-friend="${friend.id}" type="button">
         <span class="online-friend-avatar">${avatarHtml(friend.avatar_url,friend.display_name)}</span>
-        <span class="online-friend-copy"><b>${escapeHtml(friend.display_name)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${statusLabel}</strong><span class="online-friend-status-message">${escapeHtml(friend.status_message||'sem status. provavelmente ocupado existindo.')}</span><em>${np?`♫ ${escapeHtml(np.title)}`:entry.mode==='offline'?'◌ fora da rede':'♫ silêncio detectado'}</em></span>
+        <span class="online-friend-copy"><b>${userDisplayNameHtml(friend)}</b><small>@${escapeHtml(friend.handle)}</small><strong><i class="presence-dot ${entry.mode}"></i> ${statusLabel}</strong><span class="online-friend-status-message">${escapeHtml(friend.status_message||'sem status. provavelmente ocupado existindo.')}</span><em>${np?`♫ ${escapeHtml(np.title)}`:entry.mode==='offline'?'◌ fora da rede':'♫ silêncio detectado'}</em></span>
       </button>`;
     }).join('')||'<div class="online-friends-empty">Nenhum cúmplice adicionado ainda. Estatisticamente tranquilo.</div>');
   }
@@ -3283,7 +3283,7 @@ async function renderMessagesPage(){
   $('#feed-list').innerHTML=`<section class="messages-hub">
     <header class="messages-hub-head"><div><span class="section-code">MSN.EXE // AMIZADES HUMANAS</span><h2>Amigos & cúmplices</h2><p>Sua lista de gente que você aceitou voluntariamente. Clique em alguém e a janela aparece, porque 2006 ainda tinha algumas ideias úteis.</p></div>
     <div class="messages-head-controls"><label class="presence-picker">aparecer como <select id="presence-mode-select"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><button id="notification-permission-button" class="notification-permission-button">${notificationPermissionLabel()}</button></div></header>
-    <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f),muted=isPeerMuted(f.id);return `<button class="compact-friend" data-open-chat="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${escapeHtml(f.display_name)}${muted?' <i class="muted-mark">🔇</i>':''}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}${muted?' · mutado':''}</em></button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
+    <div class="compact-friend-grid">${friends.map(f=>{const p=presenceView(f),muted=isPeerMuted(f.id);return `<button class="compact-friend" data-open-chat="${f.id}"><span class="mini-avatar">${avatarHtml(f.avatar_url,f.display_name)}</span><span><b>${userDisplayNameHtml(f)}${muted?' <i class="muted-mark">🔇</i>':''}</b><small>@${escapeHtml(f.handle)}</small></span><i class="presence-dot ${p.mode}"></i><em>${p.label}${muted?' · mutado':''}</em></button>`}).join('')||'<div class="dm-empty">Nenhum amigo aceito. Uma lista de contatos vazia é muito minimalista até para nós.</div>'}</div>
   </section>`;
   $('#presence-mode-select').value=state.profile.presence_mode||'online';
   $('#presence-mode-select').onchange=e=>setPresenceMode(e.target.value);
@@ -4007,7 +4007,7 @@ async function loadFriendPanel(){
   const incoming=list.filter(r=>r.status==='pending'&&r.addressee_id===state.profile.id);
   const outgoing=list.filter(r=>r.status==='pending'&&r.requester_id===state.profile.id);
   const accepted=list.filter(r=>r.status==='accepted');
-  const card=(p,extra='')=>`<div class="friend-row"><button class="friend-avatar" data-profile-id="${p.id}">${avatarHtml(p.avatar_url,p.display_name)}</button><div><button class="user-link" data-profile-id="${p.id}">${escapeHtml(p.display_name)}</button><small>@${escapeHtml(p.handle)} ${p.status_message?'· '+escapeHtml(p.status_message):''}</small></div>${extra}</div>`;
+  const card=(p,extra='')=>`<div class="friend-row"><button class="friend-avatar" data-profile-id="${p.id}">${avatarHtml(p.avatar_url,p.display_name)}</button><div><button class="user-link" data-profile-id="${p.id}">${userDisplayNameHtml(p)}</button><small>@${escapeHtml(p.handle)} ${p.status_message?'· '+escapeHtml(p.status_message):''}</small></div>${extra}</div>`;
   host.innerHTML=`
     <div class="friend-section"><h3>Pedidos recebidos <b>${incoming.length}</b></h3>${incoming.map(r=>{const p=profiles[r.requester_id];return p?card(p,`<div class="friend-actions"><button data-friend-accept="${r.id}">aceitar</button><button data-friend-decline="${r.id}">recusar</button></div>`):''}).join('')||'<p>Ninguém batendo na porta. Paz temporária.</p>'}</div>
     <div class="friend-section"><h3>Amigos <b>${accepted.length}</b></h3>${accepted.map(r=>{const id=r.requester_id===state.profile.id?r.addressee_id:r.requester_id;const p=profiles[id];return p?card(p,`<div class="friend-actions"><button data-friend-chat="${id}">mensagem</button><button data-friend-remove="${r.id}">remover</button></div>`):''}).join('')||'<p>Lista vazia. O MSN também começou assim.</p>'}</div>
@@ -4174,7 +4174,7 @@ function imageViewerCommentHtml(row,ownerId=''){
   const canDelete=row.user_id===state.profile?.id||ownerId===state.profile?.id;
   return '<article class="image-viewer-comment">'+
     '<span class="mini-avatar">'+avatarHtml(row.author?.avatar_url,row.author?.display_name||'?')+'</span>'+
-    '<div><header><button class="user-link" data-profile-id="'+escapeAttr(row.user_id)+'">'+escapeHtml(row.author?.display_name||'alguém')+'</button>'+
+    '<div><header><button class="user-link" data-profile-id="'+escapeAttr(row.user_id)+'">'+userDisplayNameHtml(row.author||{},row.user_id)+'</button>'+
     '<small>@'+escapeHtml(row.author?.handle||'...')+' · '+ago(row.created_at)+'</small></header>'+
     '<p>'+escapeHtml(row.body)+'</p>'+
     (canDelete?'<button class="image-comment-delete" data-photo-comment-delete="'+escapeAttr(row.id)+'" data-photo-comment-photo="'+escapeAttr(row.photo_id)+'">apagar</button>':'')+
@@ -4220,7 +4220,7 @@ async function openAlbumPhotoViewer(photoId){
     '<div class="image-viewer-stage"><img src="'+escapeAttr(photo._url)+'" alt="'+escapeAttr(photo.caption||'Foto do álbum')+'"></div>'+
     '<aside class="image-viewer-social">'+
       '<header class="image-viewer-owner"><span class="mini-avatar">'+avatarHtml(owner.avatar_url,owner.display_name||'?')+'</span><div>'+
-      '<button class="user-link" data-profile-id="'+escapeAttr(owner.id||photo.user_id)+'">'+escapeHtml(owner.display_name||'alguém')+'</button>'+
+      '<button class="user-link" data-profile-id="'+escapeAttr(owner.id||photo.user_id)+'">'+userDisplayNameHtml(owner,owner.id||photo.user_id)+'</button>'+
       '<small>@'+escapeHtml(owner.handle||'...')+' · '+ago(photo.created_at)+'</small></div></header>'+
       '<p class="image-viewer-caption">'+escapeHtml(photo.caption||'sem legenda. corajoso.')+'</p>'+
       '<div class="image-viewer-actions"><button class="turn-feed-button" data-viewer-turn-photo="'+photo.id+'">↻ virar no feed</button></div>'+
@@ -4294,7 +4294,7 @@ async function openFeedImageViewer(postId){
   }).join('');
   const turned=post.reshare_author_id?
     '<div class="post-turned-badge"><span>↻ VIRADO DO AVESSO</span><b>original: @'+escapeHtml(post.reshare_author_handle||'alguém')+'</b><small>virado por @'+escapeHtml(post.author_handle||'alguém')+'</small></div>':'';
-  const commentHtml=comments.map(c=>'<article class="image-viewer-comment"><span class="mini-avatar">'+avatarHtml(c.author?.avatar_url,c.author?.display_name||'?')+'</span><div><header><button class="user-link" data-profile-id="'+escapeAttr(c.author_id)+'">'+escapeHtml(c.author?.display_name||'alguém')+'</button><small>@'+escapeHtml(c.author?.handle||'...')+' · '+ago(c.created_at)+'</small></header><p>'+escapeHtml(c.body)+'</p></div></article>').join('');
+  const commentHtml=comments.map(c=>'<article class="image-viewer-comment"><span class="mini-avatar">'+avatarHtml(c.author?.avatar_url,c.author?.display_name||'?')+'</span><div><header><button class="user-link" data-profile-id="'+escapeAttr(c.author_id)+'">'+userDisplayNameHtml(c.author||{},c.author_id)+'</button><small>@'+escapeHtml(c.author?.handle||'...')+' · '+ago(c.created_at)+'</small></header><p>'+escapeHtml(c.body)+'</p></div></article>').join('');
   host.innerHTML='<section class="image-viewer-grid">'+
     '<div class="image-viewer-stage"><img src="'+escapeAttr(imageUrl)+'" alt="Imagem da publicação"></div>'+
     '<aside class="image-viewer-social">'+
@@ -4598,18 +4598,18 @@ async function openPublicProfile(userId){
     <header class="public-profile-hero"><div class="public-profile-avatar">${avatarHtml(p.avatar_url,p.display_name)}</div><div class="public-profile-identity"><span class="section-code">CANTO // @${escapeHtml(p.handle)}</span><div class="public-profile-name-row"><h1>${userDisplayNameHtml(p)}</h1><span class="public-presence"><i class="presence-dot ${presenceView(p).mode}"></i> ${presenceView(p).label}</span></div><p class="status-line">${escapeHtml(p.status_message||'sem mensagem de status')}</p><div class="public-profile-sound-row"><div id="public-now-playing">${nowPlayingHtml(p)}</div><div id="public-corner-music">${cornerMusicBadgeHtml(p)}</div></div><p class="public-profile-bio">${escapeHtml(p.bio||'Sem bio. Uma pessoa que conseguiu parar de digitar.')}</p><div class="public-profile-actions">${friendControl}<button class="report-user-button" data-report-user="${p.id}">⚑ denunciar</button></div></div></header>
     <section class="public-story-section">
       <span class="section-code">STORIES // AINDA NÃO EXPIRARAM</span>
-      <h2>Stories de ${escapeHtml(p.display_name)}</h2>
+      <h2>Stories de ${userDisplayNameHtml(p)}</h2>
       <div id="public-story-list" class="profile-story-list"><p class="story-empty">checando o relógio...</p></div>
     </section>
     <section class="guestbook-section public-guestbook">
       <span class="section-code">RECADOS // ESCREVA NA PAREDE DE ALGUÉM</span>
-      <h2>Recados para ${escapeHtml(p.display_name)}</h2>
+      <h2>Recados para ${userDisplayNameHtml(p)}</h2>
       <p>Uma relíquia social anterior ao “engajamento”. Texto, emoji, link e imagem. Só amigos podem escrever.</p>
       ${guestbookComposer}
       <div id="public-guestbook-list" class="guestbook-list"><p>carregando recados...</p></div>
     </section>
-    <section class="public-album"><h2>Álbum de ${escapeHtml(p.display_name)}</h2><div id="public-album" class="profile-album-grid"><p>abrindo gavetas...</p></div></section>
-    <section class="public-media"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Mídia publicada por ${escapeHtml(p.display_name)}</h2><div id="public-media-list" class="profile-media-grid"><p>procurando fitas...</p></div></section>
+    <section class="public-album"><h2>Álbum de ${userDisplayNameHtml(p)}</h2><div id="public-album" class="profile-album-grid"><p>abrindo gavetas...</p></div></section>
+    <section class="public-media"><span class="section-code">MÍDIA // SOM & MOVIMENTO</span><h2>Mídia publicada por ${userDisplayNameHtml(p)}</h2><div id="public-media-list" class="profile-media-grid"><p>procurando fitas...</p></div></section>
   </section>`;
   $('#back-from-profile').onclick=()=>document.querySelector('[data-app-tab="feed"]')?.click();
   $('[data-add-friend]')?.addEventListener('click',e=>requestFriend(e.currentTarget.dataset.addFriend));
