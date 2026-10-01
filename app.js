@@ -2076,20 +2076,53 @@ async function loadDirectConversation(peerId,{markRead=true}={}){
   }
   const rows=data||[];
   rows.forEach(m=>{if(m.recipient_id===me)rememberDirectMessage(m.id);});
-  return Promise.all(rows.map(hydrateDirectMessage));
+  const ids=rows.map(m=>m.id).filter(Boolean);
+  const grouped={};
+  if(ids.length){
+    const {data:reactionRows}=await supabase.from('direct_message_reactions').select('message_id,user_id,reaction').in('message_id',ids);
+    (reactionRows||[]).forEach(r=>{(grouped[r.message_id]??=[]).push(r);});
+  }
+  return Promise.all(rows.map(async m=>({...await hydrateDirectMessage(m),_reactions:grouped[m.id]||[]})));
+}
+async function directMessageWithReactions(messageId){
+  const {data,error}=await supabase.from('direct_messages').select('*').eq('id',messageId).maybeSingle();
+  if(error||!data)return null;
+  const {data:reactions}=await supabase.from('direct_message_reactions').select('message_id,user_id,reaction').eq('message_id',messageId);
+  return {...await hydrateDirectMessage(data),_reactions:reactions||[]};
+}
+async function refreshDirectMessageBubble(messageId){
+  if(!messageId||!state.chatWindowOpen)return;
+  const log=$('#dm-log');if(!log)return;
+  const row=await directMessageWithReactions(messageId);
+  const old=log.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
+  if(!row){old?.remove();return;}
+  if(old)old.outerHTML=dmMessageHtml(row);
+}
+function dmReactionSummary(m){
+  const rows=Array.isArray(m?._reactions)?m._reactions:[];
+  return DM_REACTIONS.map(icon=>{
+    const hit=rows.filter(r=>r.reaction===icon);
+    if(!hit.length)return'';
+    const active=hit.some(r=>r.user_id===state.profile.id);
+    return `<button type="button" class="dm-reaction-chip ${active?'active':''}" data-dm-react="${escapeAttr(icon)}" data-message-id="${escapeAttr(m.id)}" aria-pressed="${active}"><span>${escapeHtml(icon)}</span>${hit.length>1?`<b>${hit.length}</b>`:''}</button>`;
+  }).join('');
 }
 function dmMessageHtml(m){
   const mine=m.sender_id===state.profile.id;
   const messageId=escapeAttr(String(m.id||`local-${Date.now()}`));
   if(m.message_kind==='attention')return `<article class="dm-attention-event" data-dm-id="${messageId}">⚡ ${escapeHtml(m.body||'CHAMAR ATENÇÃO')} <small>${ago(m.created_at)}</small></article>`;
+  if(m.message_kind==='deleted'||m.deleted_at)return `<article class="dm-bubble ${mine?'mine':'theirs'} deleted" data-dm-id="${messageId}"><p class="dm-message-deleted">◌ mensagem apagada</p><small class="dm-message-time">${ago(m.created_at)}</small></article>`;
   const voiceDuration=m.message_kind==='audio'?String(m.body||'').match(/(\d+)s/)?.[1]:null;
   const attachment=m.attachment_url?(m.message_kind==='image'
     ?`<a class="dm-image-link" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><img src="${escapeAttr(m.attachment_url)}" alt="${escapeAttr(m.attachment_name||'imagem')}" loading="eager" decoding="async"></a>`
     :m.message_kind==='audio'
       ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio class="dm-voice-audio" data-voice-type="${escapeAttr(m.attachment_type||'')}" controls preload="metadata"><source src="${escapeAttr(m.attachment_url)}" type="${escapeAttr(m.attachment_type||'audio/wav')}">Seu navegador recusou este áudio.</audio><a class="dm-audio-open" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener">abrir áudio</a></div>`
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
-  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p>${escapeHtml(m.body)}</p>`:'');
-  return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}${mine&&m.read_at?' · lida':''}</small></article>`;
+  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${escapeHtml(m.body)}</p>`:'');
+  const canEdit=mine&&m.message_kind==='text'&&!m.attachment_path;
+  const menu=`<button type="button" class="dm-message-kebab" data-dm-menu-toggle="${messageId}" aria-label="Opções da mensagem">•••</button><div class="dm-message-menu hidden" data-dm-message-menu="${messageId}"><div class="dm-message-menu-actions">${canEdit?`<button type="button" data-dm-edit="${messageId}">editar</button>`:''}${mine?`<button type="button" class="danger" data-dm-delete="${messageId}">apagar</button>`:''}<span>reagir</span></div><div class="dm-message-react-choices">${DM_REACTIONS.map(icon=>`<button type="button" data-dm-react="${escapeAttr(icon)}" data-message-id="${messageId}">${escapeHtml(icon)}</button>`).join('')}</div></div>`;
+  const reactions=dmReactionSummary(m);
+  return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}">${menu}${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}${m.edited_at?' · editada':''}${mine&&m.read_at?' · lida':''}</small>${reactions?`<div class="dm-message-reactions">${reactions}</div>`:''}</article>`;
 }
 async function repairLegacyVoicePlayers(root=document){
   const players=[...root.querySelectorAll?.('.dm-voice-audio')||[]].filter(audio=>!audio.dataset.voiceRepaired&&audio.dataset.voiceType&&audio.dataset.voiceType!=='audio/wav').slice(0,30);
