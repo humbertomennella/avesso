@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, dashboardSection:'overview', staffRoles:{}, badgeCatalog:{}, userBadgeMap:{}, staffChatChannel:null, staffChatRealtime:null, suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, dashboardSection:'overview', staffRoles:{}, badgeCatalog:{}, userBadgeMap:{}, systemAssets:[], staffChatChannel:null, staffChatRealtime:null, suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
@@ -54,8 +54,22 @@ const STORY_REACTIONS=[
   ['pane','⚡','deu pane'],
   ['quatro_zero_quatro','404','isso merece um 404']
 ];
+function customEmoticonAssets(){
+  return (state.systemAssets||[]).filter(a=>a.asset_type==='emoticon'&&a.active!==false&&String(a.shortcode||'').trim());
+}
 function avessoEmoticonButtons(attribute='data-emoticon-value'){
-  return AVESSO_EMOTICONS.map(value=>`<button type="button" ${attribute}="${escapeAttr(value)}" title="inserir ${escapeAttr(value)}">${escapeHtml(value)}</button>`).join('');
+  const built=AVESSO_EMOTICONS.map(value=>`<button type="button" ${attribute}="${escapeAttr(value)}" title="inserir ${escapeAttr(value)}">${escapeHtml(value)}</button>`).join('');
+  const custom=customEmoticonAssets().map(a=>`<button type="button" class="custom-emoticon-choice" ${attribute}="${escapeAttr(a.shortcode)}" title="${escapeAttr(a.name)}"><img src="${escapeAttr(adminAssetUrl(a.storage_path))}" alt="${escapeAttr(a.name)}"><small>${escapeHtml(a.shortcode)}</small></button>`).join('');
+  return built+custom;
+}
+function chatTextHtml(value=''){
+  let html=escapeHtml(value);
+  for(const a of customEmoticonAssets()){
+    const token=String(a.shortcode||'').trim();
+    if(!token)continue;
+    html=html.split(escapeHtml(token)).join('<img class="custom-emoticon-inline" src="'+escapeAttr(adminAssetUrl(a.storage_path))+'" alt="'+escapeAttr(token)+'" title="'+escapeAttr(a.name)+'">');
+  }
+  return html;
 }
 function setupFeedEmoticons(){
   const palette=$('#post-emoticon-palette');
@@ -127,16 +141,18 @@ function identityNameHtml(userId,name,{badges=true}={}){
 }
 async function loadIdentityMetadata(){
   if(!state.profile?.id)return;
-  const [staffRes,badgesRes,userBadgesRes]=await Promise.all([
+  const [staffRes,badgesRes,userBadgesRes,assetsRes]=await Promise.all([
     supabase.from('admin_users').select('user_id,role'),
     supabase.from('badges').select('id,name,description,image_path,active'),
-    supabase.from('user_badges').select('user_id,badge_id')
+    supabase.from('user_badges').select('user_id,badge_id'),
+    supabase.from('admin_assets').select('id,asset_type,name,slug,storage_path,mime_type,shortcode,meta,active').eq('active',true)
   ]);
   state.staffRoles=Object.fromEntries((staffRes.data||[]).map(x=>[x.user_id,x.role]));
   state.badgeCatalog=Object.fromEntries((badgesRes.data||[]).map(x=>[x.id,x]));
   const map={};
   for(const row of userBadgesRes.data||[])(map[row.user_id]??=[]).push(row.badge_id);
   state.userBadgeMap=map;
+  state.systemAssets=assetsRes.data||[];
 }
 function applySiteSettings(settings=state.siteSettings||{}){
   if(!settings)return;
@@ -160,6 +176,13 @@ function applySiteSettings(settings=state.siteSettings||{}){
   const announcement=String(settings.announcement||'').trim();
   bar.textContent=announcement;
   bar.classList.toggle('hidden',!announcement);
+  const density=settings.layout_settings?.density||'compact';
+  document.documentElement.dataset.avessoDensity=density;
+  document.body.classList.toggle('avesso-comfortable',density==='comfortable');
+  const registrationEnabled=settings.login_settings?.registration_enabled!==false;
+  document.documentElement.dataset.registrationEnabled=registrationEnabled?'1':'0';
+  document.querySelectorAll('[data-auth-mode="signup"]').forEach(el=>{el.classList.toggle('hidden',!registrationEnabled);el.setAttribute('aria-hidden',registrationEnabled?'false':'true');});
+  if(!registrationEnabled&&state.mode==='signup'&&typeof setAuthMode==='function')setAuthMode('login');
 }
 async function loadSiteSettings(){
   const {data,error}=await supabase.from('site_settings').select('*').eq('id','global').maybeSingle();
@@ -220,7 +243,7 @@ function storyCardHtml(story,{compact=false}={}){
 
 async function loadStoriesStrip(){
   const host=$('#stories-zone');
-  if(!host||!state.profile||state.tab!=='feed'){host?.classList.add('hidden');return;}
+  if(!host||!state.profile||state.tab!=='feed'||state.siteSettings?.story_settings?.enabled===false){host?.classList.add('hidden');return;}
   host.classList.remove('hidden');
   const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,media_type,visibility,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(60);
   if(error){host.innerHTML='<div class="stories-error">stories deram tela azul.</div>';return;}
@@ -272,6 +295,7 @@ function renderStoryMediaPreview(file){
   box.classList.remove('hidden');
 }
 async function openStoryCamera(){
+  if(state.siteSettings?.story_settings?.camera_enabled===false)return toast('A câmera dos Stories está desativada pela configuração global.');
   if(!navigator.mediaDevices?.getUserMedia)return toast('Este navegador não liberou câmera para o AVESSO.');
   stopStoryCamera();
   const constraints={
@@ -359,6 +383,7 @@ function toggleStoryRecording(){
   state.storyRecordStopTimer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();},15000);
 }
 function openStoryCreate(){
+  if(state.siteSettings?.story_settings?.enabled===false)return toast('Stories estão desativados pela configuração global.');
   const dialog=$('#story-create-dialog');if(!dialog)return;
   stopStoryCamera();
   state.storyCapturedFile=null;
@@ -1515,7 +1540,7 @@ $('#story-image').onchange=e=>{
   renderStoryMediaPreview(file);
 };
 $$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
-function setAuthMode(mode){ state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
+function setAuthMode(mode){ if(mode==='signup'&&state.siteSettings?.login_settings?.registration_enabled===false){toast('Novos cadastros estão temporariamente fechados.');mode='login';} state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
 
 $('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);const email=f.get('email');const password=f.get('password');$('#auth-submit').disabled=true;$('#auth-message').textContent='conversando com os computadores...';let result;if(state.mode==='signup'){const handle=String(f.get('handle')||'').toLowerCase();const display_name=String(f.get('display_name')||'').trim().slice(0,80);if(!display_name){result={error:{message:'Escolha um nome exibido. Vale símbolo, emoji, drama e decisões questionáveis.'}}}else if(!/^[a-z0-9_]{3,24}$/.test(handle)){result={error:{message:'Seu @ precisa ter 3–24 letras minúsculas, números ou _.'}}}else{result=await supabase.auth.signUp({email,password,options:{data:{handle,display_name},emailRedirectTo:SITE_URL}});}}else result=await supabase.auth.signInWithPassword({email,password});$('#auth-submit').disabled=false;if(result.error){$('#auth-message').textContent=humanError(result.error.message);return}if(state.mode==='signup'&&!result.data.session){$('#auth-message').textContent='Confira seu e-mail e use o link mais recente. Se já confirmou a conta, abra a aba de entrar e use sua senha.';$('#resend-confirmation').classList.remove('hidden');return}$('#auth-dialog').close();toast('Você entrou. Tente não estragar tudo.');});
 
@@ -2107,7 +2132,8 @@ async function loadFeed(){
   if(requestedTab==='quiet')query=query.eq('response_count',0);
   if(requestedTab==='sent')query=query.eq('author_id',state.profile.id);
 
-  const {data,error}=await query.order('created_at',{ascending:false}).limit(40);
+  const pageSize=Math.max(10,Math.min(100,Number(state.siteSettings?.feed_settings?.page_size)||40));
+  const {data,error}=await query.order('created_at',{ascending:false}).limit(pageSize);
 
   // O usuário pode ter mudado de página enquanto o banco respondia.
   if(viewVersion!==state.viewVersion||state.tab!==requestedTab||!isFeedTab())return;
@@ -2191,7 +2217,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
       ${feedMediaHtml(p.media_url,p.media_kind)}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
       ${conversationHtml}
-      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button><button class="turn-feed-button" data-turn-post="${p.id}">↻ virar no feed</button>${p.response_count===0?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
+      <div class="post-actions"><button data-reply-toggle="${p.id}">↳ entrar na conversa</button><button class="turn-feed-button" data-turn-post="${p.id}">↻ virar no feed</button>${p.response_count===0&&state.siteSettings?.feed_settings?.show_attention_tag!==false?'<span class="need-tag">PRECISA DE ATENÇÃO</span>':''}</div>
       <div class="inline-reply hidden" data-reply-box="${p.id}"><label>RESPOSTA // fale com a pessoa, não com a métrica</label><textarea maxlength="420" placeholder="Escreva algo que valha o espaço que ocupa."></textarea><div class="reply-emoticon-row"><button type="button" data-reply-emoticons="${p.id}">☻ avessícones</button><div class="feed-emoticon-palette hidden" data-reply-emoticon-palette="${p.id}">${avessoEmoticonButtons('data-reply-emoticon')}</div></div><div><button data-reply-send="${p.id}">publicar resposta</button><button data-reply-cancel="${p.id}">cancelar</button></div></div>
     </article>`;
   }).join('');
@@ -3747,7 +3773,7 @@ function dmMessageHtml(m){
     :m.message_kind==='audio'
       ?`<div class="dm-audio-card"><div class="dm-audio-head"><span>VOICE.MSG</span><small>${voiceDuration?`${voiceDuration}s`:'áudio'}</small></div><audio class="dm-voice-audio" data-voice-type="${escapeAttr(m.attachment_type||'')}" controls preload="metadata"><source src="${escapeAttr(m.attachment_url)}" type="${escapeAttr(m.attachment_type||'audio/wav')}">Seu navegador recusou este áudio.</audio><a class="dm-audio-open" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener">abrir áudio</a></div>`
       :`<a class="dm-file-card" href="${escapeAttr(m.attachment_url)}" target="_blank" rel="noopener"><span>▤</span><b>${escapeHtml(m.attachment_name||'arquivo')}</b><small>${m.attachment_size?Math.ceil(m.attachment_size/1024)+' KB':''}</small></a>`):'';
-  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${escapeHtml(m.body)}</p>`:'');
+  const bodyHtml=m.message_kind==='audio'?'':(m.body&&(!m.attachment_path||m.body!==m.attachment_name)?`<p class="dm-message-body">${chatTextHtml(m.body)}</p>`:'');
   return `<article class="dm-bubble ${mine?'mine':'theirs'}" data-dm-id="${messageId}" data-dm-mine="${mine?'1':'0'}">${bodyHtml}${attachment}<small class="dm-message-time">${ago(m.created_at)}</small></article>`;
 }
 async function handleDirectMessageMutation(row){
@@ -4567,10 +4593,15 @@ async function removeFriendship(id){
   await primeFriendPresenceCache();
   loadFriendPanel();
 }
+function availableAvatarOptions(){
+  const custom=(state.systemAssets||[]).filter(a=>a.asset_type==='avatar'&&a.active!==false).map(a=>[a.name,adminAssetUrl(a.storage_path),'custom']);
+  return [...AVATAR_OPTIONS,...custom];
+}
 function openAvatarDialog(){
   const grid=$('#avatar-modal-grid');
-  grid.innerHTML=AVATAR_OPTIONS.map(([label,url,kind])=>`<button class="avatar-choice-modal ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${escapeAttr(url)}"><img src="${escapeAttr(url)}" alt="${escapeAttr(label)}"><b>${label}</b><small>${kind}</small></button>`).join('');
-  $$('[data-avatar-url]').forEach(b=>b.onclick=()=>saveAvatar(b.dataset.avatarUrl));
+  const options=availableAvatarOptions();
+  grid.innerHTML=options.map(([label,url,kind])=>`<button class="avatar-choice-modal ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${escapeAttr(url)}"><img src="${escapeAttr(url)}" alt="${escapeAttr(label)}"><b>${escapeHtml(label)}</b><small>${escapeHtml(kind)}</small></button>`).join('');
+  $('[data-avatar-url]').forEach(b=>b.onclick=()=>saveAvatar(b.dataset.avatarUrl));
   $('#avatar-dialog').showModal();
 }
 async function saveProfileSettings(){
@@ -5005,7 +5036,7 @@ async function renderProfile(){
   setTimeout(()=>maybeWorldCharacter('profile',{surface:'profile'},.12,180000),900);
 }
 async function saveAvatar(url){
-  if(!AVATAR_OPTIONS.some(x=>x[1]===url))return;
+  if(!availableAvatarOptions().some(x=>x[1]===url))return;
   const {data,error}=await supabase.from('profiles').update({avatar_url:url}).eq('id',state.profile.id).select().single();
   if(error)return toast('O avatar se recusou a cooperar. Dramático.');
   state.profile=data;renderNavAvatar();
