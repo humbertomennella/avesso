@@ -63,7 +63,10 @@
 
   function clearBadgeForTab(tab){
     if(tab==='messages') unread.messages=0;
-    if(tab==='profile') unread.profile=0;
+    if(tab==='profile'){
+      unread.profile=0;
+      moreButton?.classList.remove('has-notice');
+    }
     renderBadges();
   }
 
@@ -152,6 +155,7 @@
 
   function openMoreSheet(){
     if(!moreSheet)return;
+    moreButton?.classList.remove('has-notice');
     rebuildMoreSheet();
     syncNotificationLabel();
     moreSheet.classList.remove('hidden');
