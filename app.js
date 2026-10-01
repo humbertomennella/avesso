@@ -1612,6 +1612,7 @@ async function enterApp(){
   armBrowserNotifications();
   startStoryRealtime();
   loadStoryNotifications();
+  loadPendingStaffNotices();
   scheduleIdleWorld();
   scheduleTowerPulse();
   trackAction('login','app');
@@ -5214,6 +5215,21 @@ document.addEventListener('click',e=>{
   }
 },{passive:true});
 
+async function deliverStaffNotice(row){
+  if(!row||row.user_id!==state.profile?.id)return;
+  socialNotify({
+    title:'STAFF // '+String(row.title||'Mensagem da equipe'),
+    body:String(row.body||''),
+    kind:'moderation'
+  });
+  toast((row.severity==='critico'?'AVISO CRÍTICO // ':'STAFF // ')+String(row.title||'nova notificação'));
+  await supabase.from('user_staff_notifications').update({read_at:new Date().toISOString()}).eq('id',row.id).eq('user_id',state.profile.id);
+}
+async function loadPendingStaffNotices(){
+  if(!state.profile?.id)return;
+  const {data}=await supabase.from('user_staff_notifications').select('*').eq('user_id',state.profile.id).is('read_at',null).order('created_at',{ascending:true}).limit(20);
+  for(const row of data||[])await deliverStaffNotice(row);
+}
 function subscribeRealtime(){
   supabase.channel('avesso-feed')
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>{if(isFeedTab())loadFeed();})
@@ -5247,6 +5263,7 @@ function subscribeRealtime(){
       if(state.tab==='profile'&&row.profile_id===state.profile?.id)loadGuestbook(state.profile.id,'#profile-guestbook');
       if(state.tab==='public_profile'&&row.profile_id===state.publicProfileId)loadGuestbook(state.publicProfileId,'#public-guestbook-list');
     })
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'user_staff_notifications',filter:`user_id=eq.${state.profile.id}`},payload=>deliverStaffNotice(payload.new))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'character_interactions'},payload=>{
       const row=payload.new||{};
       if(row.trigger_type==='plaza_chat')return;
