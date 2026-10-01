@@ -1923,7 +1923,7 @@ async function loadThreadData(posts){
   const [responsesRes,reactionsRes,characterRes]=await Promise.all([
     supabase.from('responses').select('id,post_id,author_id,body,created_at').in('post_id',ids).order('created_at',{ascending:true}),
     supabase.from('post_reactions').select('post_id,user_id,reaction,created_at').in('post_id',ids),
-    supabase.from('character_interactions').select('id,post_id,character_id,body,created_at,source,visibility,metadata').in('post_id',ids).order('created_at',{ascending:true})
+    supabase.from('character_interactions').select('id,post_id,character_id,body,created_at,source,visibility,metadata,expires_at').in('post_id',ids).or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order('created_at',{ascending:true})
   ]);
   const responses=(responsesRes.data||[]).filter(r=>!isPeerBlocked(r.author_id));
   const reactions=(reactionsRes.data||[]).filter(r=>!isPeerBlocked(r.user_id));
