@@ -1912,14 +1912,19 @@ function applyChatGeometry(){
     return;
   }
   win.classList.add('desktop-windowed');
+  if(state.chatWindowMinimized){
+    win.classList.remove('maximized');
+    Object.assign(win.style,{left:'auto',top:'auto',right:'16px',bottom:'16px',width:'min(320px, calc(100vw - 24px))',height:'58px'});
+    return;
+  }
   if(state.chatMaximized){
     win.classList.add('maximized');
-    Object.assign(win.style,{left:'6px',top:'6px',right:'auto',bottom:'auto',width:'calc(100vw - 12px)',height:state.chatWindowMinimized?'38px':'calc(100vh - 12px)'});
+    Object.assign(win.style,{left:'6px',top:'6px',right:'auto',bottom:'auto',width:'calc(100vw - 12px)',height:'calc(100vh - 12px)'});
     return;
   }
   win.classList.remove('maximized');
   const g=loadChatGeometry();
-  Object.assign(win.style,{left:`${g.left}px`,top:`${g.top}px`,right:'auto',bottom:'auto',width:`${g.width}px`,height:state.chatWindowMinimized?'38px':`${g.height}px`});
+  Object.assign(win.style,{left:`${g.left}px`,top:`${g.top}px`,right:'auto',bottom:'auto',width:`${g.width}px`,height:`${g.height}px`});
 }
 function toggleChatMaximize(){
   if(!state.chatWindowOpen||!chatDesktopEnabled())return;
