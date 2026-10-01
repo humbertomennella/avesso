@@ -5,6 +5,9 @@ alter table public.profiles
   add column if not exists chat_wallpaper text not null default 'none';
 
 alter table public.profiles
+  drop constraint if exists profiles_chat_theme_check;
+
+alter table public.profiles
   alter column chat_theme set default 'bbs_cyan';
 
 update public.profiles
@@ -18,9 +21,6 @@ set chat_theme = case chat_theme
   else chat_theme
 end
 where chat_theme in ('aqua','acid','violet','coral','midnight','graphite');
-
-alter table public.profiles
-  drop constraint if exists profiles_chat_theme_check;
 
 alter table public.profiles
   add constraint profiles_chat_theme_check
