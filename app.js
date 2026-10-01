@@ -3662,10 +3662,11 @@ function appendDirectMessage(m,{replaceId=null}={}){
   const html=dmMessageHtml(m);
   if(replaceId){
     const old=log.querySelector(`[data-dm-id="${CSS.escape(String(replaceId))}"]`);
-    if(old){old.outerHTML=html;log.scrollTop=log.scrollHeight;return;}
+    if(old){old.outerHTML=html;bindDirectMessageActions(log);log.scrollTop=log.scrollHeight;return;}
   }
   log.querySelector('.dm-empty')?.remove();
   log.insertAdjacentHTML('beforeend',html);
+  bindDirectMessageActions(log);
   log.scrollTop=log.scrollHeight;
 }
 async function markDirectRead(id){
@@ -5072,7 +5073,7 @@ async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDu
     clearOptimistic();
     return toast('O banco recusou o pacote. Elegante.');
   }
-  const hydrated=await hydrateDirectMessage(data);
+  const hydrated=(await hydrateDirectMessages([data]))[0]||data;
   if(state.chatWindowOpen&&state.directPeerId===recipientId){
     if(optimisticId)appendDirectMessage(hydrated,{replaceId:optimisticId});
     else appendDirectMessage(hydrated);
