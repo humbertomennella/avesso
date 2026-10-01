@@ -585,6 +585,7 @@ async function toggleStoryReaction(storyId,reaction){
     ?await supabase.from('story_reactions').delete().eq('story_id',storyId).eq('user_id',state.profile.id)
     :await supabase.from('story_reactions').upsert({story_id:storyId,user_id:state.profile.id,reaction},{onConflict:'story_id,user_id'});
   if(result.error)return toast('A reação ao story teve uma reação adversa.');
+  if(existing?.reaction!==reaction)dispatchPush('story_reaction',storyId);
   trackAction('story_reaction','stories',{story_id:storyId,reaction});
   openStory(storyId,{sequence:state.storySequence});
 }
@@ -592,8 +593,9 @@ async function toggleStoryReaction(storyId,reaction){
 async function sendStoryComment(storyId){
   const input=$('#story-comment-body'),body=String(input?.value||'').trim().slice(0,420);
   if(!body)return toast('Resposta vazia é só telepatia com interface.');
-  const {error}=await supabase.from('story_comments').insert({story_id:storyId,user_id:state.profile.id,body});
+  const {data:commentRow,error}=await supabase.from('story_comments').insert({story_id:storyId,user_id:state.profile.id,body}).select('id').single();
   if(error)return toast('A resposta não chegou ao story.');
+  dispatchPush('story_comment',commentRow?.id);
   input.value='';trackAction('story_reply','stories',{story_id:storyId});openStory(storyId,{sequence:state.storySequence});
 }
 
@@ -667,11 +669,12 @@ function notificationPermissionLabel(){
 }
 async function requestBrowserNotifications({quiet=false}={}){
   if(!('Notification' in window)){if(!quiet)toast('Este navegador não oferece notificações do sistema.');return false;}
-  if(Notification.permission==='granted')return true;
+  if(Notification.permission==='granted'){ensureWebPushSubscription();return true;}
   if(Notification.permission==='denied'){if(!quiet)toast('As notificações foram bloqueadas no navegador. Libere a permissão do site para voltar a 2006 com dignidade.');return false;}
   try{
     const result=await Notification.requestPermission();
-    if(!quiet)toast(result==='granted'?'Notificações ativadas. Seus amigos agora podem interromper sua produtividade oficialmente.':'Sem permissão, o AVESSO só consegue avisar dentro da própria aba.');
+    if(result==='granted')await ensureWebPushSubscription();
+    if(!quiet)toast(result==='granted'?'Notificações ativadas no celular. O AVESSO agora consegue bater na porta mesmo fechado.':'Sem permissão, o AVESSO só consegue avisar dentro da própria aba.');
     return result==='granted';
   }catch{return false;}
 }
@@ -696,6 +699,44 @@ async function registerNotificationWorker(){
     state.notificationRegistration.update().catch(()=>{});
     return state.notificationRegistration;
   }catch{return null;}
+}
+function pushKeyBytes(value=''){
+  const padding='='.repeat((4-value.length%4)%4);
+  const base64=(value+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(base64);
+  return Uint8Array.from([...raw].map(char=>char.charCodeAt(0)));
+}
+async function ensureWebPushSubscription(){
+  if(!state.profile?.id||!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)||Notification.permission!=='granted')return false;
+  try{
+    const registration=await registerNotificationWorker();
+    if(!registration)return false;
+    const {data:keyData,error:keyError}=await supabase.functions.invoke('send-push',{body:{action:'public-key'}});
+    if(keyError||!keyData?.publicKey)return false;
+    let subscription=await registration.pushManager.getSubscription();
+    if(!subscription){
+      subscription=await registration.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:pushKeyBytes(keyData.publicKey)
+      });
+    }
+    const serialized=subscription.toJSON();
+    const keys=serialized.keys||{};
+    if(!serialized.endpoint||!keys.p256dh||!keys.auth)return false;
+    const {error}=await supabase.from('push_subscriptions').upsert({
+      user_id:state.profile.id,
+      endpoint:serialized.endpoint,
+      p256dh:keys.p256dh,
+      auth:keys.auth,
+      user_agent:String(navigator.userAgent||'').slice(0,500),
+      updated_at:new Date().toISOString()
+    },{onConflict:'endpoint'});
+    return !error;
+  }catch{return false;}
+}
+function dispatchPush(event_type,entity_id){
+  if(!state.session?.user?.id||!event_type||!entity_id)return;
+  supabase.functions.invoke('send-push',{body:{action:'send',event_type,entity_id:String(entity_id)}}).catch(()=>{});
 }
 async function browserNotify({title='AVESSO',body='',avatar='',kind='message',action=null}={}){
   if((!document.hidden&&document.hasFocus())||!('Notification' in window)||Notification.permission!=='granted')return;
@@ -1649,6 +1690,7 @@ async function enterApp(){
   startFriendPresenceWatch();
   Promise.allSettled([loadFeed(),loadImpact(),loadStoriesStrip(),loadMutedPeers()]).then(()=>{});
   registerNotificationWorker();
+  if('Notification' in window&&Notification.permission==='granted')ensureWebPushSubscription();
   armBrowserNotifications();
   startStoryRealtime();
   loadStoryNotifications();
@@ -2367,6 +2409,7 @@ async function toggleReaction(postId,reaction,active){
     ({error}=await supabase.from('post_reactions').upsert({post_id:postId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'post_id,user_id'}));
   }
   if(error)return toast('A reação teve uma reação adversa.');
+  if(!active)dispatchPush('post_reaction',postId);
   trackAction('acid_reaction','feed',{post_id:postId,reaction:active?'remove':reaction});
   if(isFeedTab())loadFeed();
 }
@@ -2375,8 +2418,9 @@ async function sendReply(post_id){
   const input=box?.querySelector('textarea');
   const body=input?.value.trim()||'';
   if(body.length<2)return toast('A resposta precisa de pelo menos 2 caracteres.');
-  const {error}=await supabase.from('responses').insert({post_id,author_id:state.profile.id,body});
+  const {data:replyRow,error}=await supabase.from('responses').insert({post_id,author_id:state.profile.id,body}).select('id').single();
   if(error)return toast('A resposta caiu no vazio. Tente novamente.');
+  dispatchPush('post_reply',replyRow?.id);
   input.value='';
   toast('Resposta publicada. Agora ela aparece na conversa, como seria razoável esperar.');
   trackAction('reply_created','feed',{post_id});
@@ -4320,6 +4364,7 @@ async function sendDirectMessage(e){
     return toast('A mensagem não atravessou o fio. Confirme que vocês ainda são amigos.');
   }
   if(state.chatWindowOpen&&state.directPeerId===peerId)appendDirectMessage(data);
+  dispatchPush('message',data.id);
 }
 async function sendAttention(){
   if(!state.directPeerId)return;
@@ -4330,6 +4375,7 @@ async function sendAttention(){
     .select('*').single();
   if(error)return toast('Nem chamar atenção chamou atenção.');
   if(state.chatWindowOpen&&state.directPeerId===peerId)appendDirectMessage(data);
+  dispatchPush('message',data.id);
   playUiSound('attention');
   const button=$('#dm-attention');
   if(button){button.classList.remove('sent');void button.offsetWidth;button.classList.add('sent');setTimeout(()=>button.classList.remove('sent'),450);}
@@ -4361,6 +4407,7 @@ async function sendDirectAttachment(file,{recipientId=state.directPeerId,voiceDu
     if(optimisticId)appendDirectMessage(hydrated,{replaceId:optimisticId});
     else appendDirectMessage(hydrated);
   }
+  dispatchPush('message',data.id);
   if(optimisticUrl)setTimeout(()=>URL.revokeObjectURL(optimisticUrl),500);
 }
 function restoreChatWindowInstant(){
@@ -4574,7 +4621,10 @@ async function togglePhotoReaction(photoId,reaction,userId,editable){
   if(!PHOTO_REACTIONS.some(x=>x[0]===reaction))return;
   const {data:existing}=await supabase.from('photo_reactions').select('reaction').eq('photo_id',photoId).eq('user_id',state.profile.id).maybeSingle();
   if(existing?.reaction===reaction)await supabase.from('photo_reactions').delete().eq('photo_id',photoId).eq('user_id',state.profile.id);
-  else await supabase.from('photo_reactions').upsert({photo_id:photoId,user_id:state.profile.id,reaction},{onConflict:'photo_id,user_id'});
+  else{
+    await supabase.from('photo_reactions').upsert({photo_id:photoId,user_id:state.profile.id,reaction},{onConflict:'photo_id,user_id'});
+    dispatchPush('photo_reaction',photoId);
+  }
   delete state.albumDataCache[userId];
   loadAlbum(userId,editable);
 }
@@ -4659,8 +4709,9 @@ async function sendPhotoViewerComment(photoId){
   const form=$('#photo-viewer-comment-form'),input=form?.querySelector('textarea');
   const body=String(input?.value||'').trim();
   if(body.length<2)return toast('Comentário curto demais até para 56K.');
-  const {error}=await supabase.from('photo_comments').insert({photo_id:photoId,user_id:state.profile.id,body});
+  const {data:commentRow,error}=await supabase.from('photo_comments').insert({photo_id:photoId,user_id:state.profile.id,body}).select('id').single();
   if(error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'O comentário caiu atrás da imagem.');
+  dispatchPush('photo_comment',commentRow?.id);
   await openAlbumPhotoViewer(photoId);
 }
 async function deletePhotoViewerComment(commentId,photoId){
@@ -4675,6 +4726,7 @@ async function toggleViewerPhotoReaction(photoId,reaction){
   if(existing?.reaction===reaction)result=await supabase.from('photo_reactions').delete().eq('photo_id',photoId).eq('user_id',state.profile.id);
   else result=await supabase.from('photo_reactions').upsert({photo_id:photoId,user_id:state.profile.id,reaction},{onConflict:'photo_id,user_id'});
   if(result.error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'A reação tropeçou.');
+  if(existing?.reaction!==reaction)dispatchPush('photo_reaction',photoId);
   await openAlbumPhotoViewer(photoId);
 }
 async function turnPhotoToFeed(photoId){
@@ -4736,8 +4788,9 @@ async function sendPostViewerComment(postId){
   const input=$('#post-viewer-comment-form')?.querySelector('textarea');
   const body=String(input?.value||'').trim();
   if(body.length<2)return toast('Comentário curto demais.');
-  const {error}=await supabase.from('responses').insert({post_id:postId,author_id:state.profile.id,body});
+  const {data:replyRow,error}=await supabase.from('responses').insert({post_id:postId,author_id:state.profile.id,body}).select('id').single();
   if(error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'O comentário caiu no vazio.');
+  dispatchPush('post_reply',replyRow?.id);
   if(isFeedTab())loadFeed();
   await openFeedImageViewer(postId);
 }
@@ -4747,6 +4800,7 @@ async function toggleViewerPostReaction(postId,reaction){
   if(existing?.reaction===reaction)result=await supabase.from('post_reactions').delete().eq('post_id',postId).eq('user_id',state.profile.id);
   else result=await supabase.from('post_reactions').upsert({post_id:postId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'post_id,user_id'});
   if(result.error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'A reação caiu no vazio.');
+  if(existing?.reaction!==reaction)dispatchPush('post_reaction',postId);
   if(isFeedTab())loadFeed();
   await openFeedImageViewer(postId);
 }
@@ -4912,11 +4966,12 @@ async function requestFriend(userId){
   if(!userId||userId===state.profile.id)return;
   const {data:ownBlock}=await supabase.from('blocks').select('blocked_id').eq('blocker_id',state.profile.id).eq('blocked_id',userId).maybeSingle();
   if(ownBlock)return toast('Você bloqueou esta pessoa. Desbloqueie antes de mandar amizade. Contradição social evitada.');
-  const {error}=await supabase.from('friendships').insert({requester_id:state.profile.id,addressee_id:userId,status:'pending'});
+  const {data:friendship,error}=await supabase.from('friendships').insert({requester_id:state.profile.id,addressee_id:userId,status:'pending'}).select('id').single();
   if(error){
     if(String(error.code)==='23505')return toast('Essa relação já existe em algum estado burocrático.');
     return toast('Não foi possível enviar o pedido.');
   }
+  dispatchPush('friend_request',friendship?.id);
   toast('Pedido de amizade enviado. Sem poke. Ainda.');
   openPublicProfile(userId);
 }
@@ -4972,7 +5027,7 @@ async function sendGuestbookEntry(profileId){
     const {error:uploadError}=await supabase.storage.from('avesso-recados').upload(imagePath,file,{cacheControl:'3600',upsert:false,contentType:file.type});
     if(uploadError){if(btn){btn.disabled=false;btn.textContent='deixar recado';}return toast('A imagem recusou a vida pública.');}
   }
-  const {error}=await supabase.from('guestbook_entries').insert({profile_id:profileId,author_id:state.profile.id,body,image_path:imagePath});
+  const {data:guestbookRow,error}=await supabase.from('guestbook_entries').insert({profile_id:profileId,author_id:state.profile.id,body,image_path:imagePath}).select('id').single();
   if(error){
     if(imagePath)await supabase.storage.from('avesso-recados').remove([imagePath]);
     if(btn){btn.disabled=false;btn.textContent='deixar recado';}
@@ -4981,6 +5036,7 @@ async function sendGuestbookEntry(profileId){
   if($('#guestbook-body'))$('#guestbook-body').value='';
   if($('#guestbook-image'))$('#guestbook-image').value='';
   if(btn){btn.disabled=false;btn.textContent='deixar recado';}
+  dispatchPush('guestbook',guestbookRow?.id);
   toast('Recado deixado. A parede agora tem testemunhas.');
   trackAction('guestbook_post','public_profile',{profile_id:profileId,has_image:Boolean(file)});
   loadGuestbook(profileId,'#public-guestbook-list');
