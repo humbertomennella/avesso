@@ -1,9 +1,31 @@
 const PUBLIC_IMAGE_CACHE='avesso-public-images-v1';
+const SHELL_CACHE='avesso-shell-v2';
+const SHELL_ASSETS=[
+  './',
+  './index.html',
+  './styles.css',
+  './mobile.css',
+  './app.js',
+  './mobile.js',
+  './config.js',
+  './gif-library.js',
+  './manifest.webmanifest',
+  './assets/avesso-app-icon.svg'
+];
 
-self.addEventListener('install',()=>self.skipWaiting());
+self.addEventListener('install',event=>event.waitUntil((async()=>{
+  try{
+    const cache=await caches.open(SHELL_CACHE);
+    await cache.addAll(SHELL_ASSETS);
+  }catch{}
+  await self.skipWaiting();
+})()));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
   const keys=await caches.keys();
-  await Promise.all(keys.filter(key=>key.startsWith('avesso-public-images-')&&key!==PUBLIC_IMAGE_CACHE).map(key=>caches.delete(key)));
+  await Promise.all(keys.filter(key=>
+    (key.startsWith('avesso-public-images-')&&key!==PUBLIC_IMAGE_CACHE)||
+    (key.startsWith('avesso-shell-')&&key!==SHELL_CACHE)
+  ).map(key=>caches.delete(key)));
   await self.clients.claim();
 })()));
 
@@ -55,17 +77,41 @@ self.addEventListener('notificationclick',event=>{
 
 self.addEventListener('fetch',event=>{
   const request=event.request;
-  if(request.method!=='GET'||request.destination!=='image')return;
+  if(request.method!=='GET')return;
   const url=new URL(request.url);
-  if(!url.pathname.includes('/storage/v1/object/public/'))return;
+
+  if(request.destination==='image'&&url.pathname.includes('/storage/v1/object/public/')){
+    event.respondWith((async()=>{
+      const cache=await caches.open(PUBLIC_IMAGE_CACHE);
+      const cached=await cache.match(request);
+      const network=fetch(request).then(async response=>{
+        if(response&&(response.ok||response.type==='opaque'))await cache.put(request,response.clone());
+        return response;
+      }).catch(()=>null);
+      if(cached){event.waitUntil(network);return cached;}
+      return (await network)||Response.error();
+    })());
+    return;
+  }
+
+  const sameOrigin=url.origin===self.location.origin;
+  const inScope=url.href.startsWith(self.registration.scope);
+  const shellLike=sameOrigin&&inScope&&(
+    request.mode==='navigate'||
+    ['script','style','manifest'].includes(request.destination)
+  );
+  if(!shellLike)return;
+
   event.respondWith((async()=>{
-    const cache=await caches.open(PUBLIC_IMAGE_CACHE);
-    const cached=await cache.match(request);
-    const network=fetch(request).then(async response=>{
-      if(response&&(response.ok||response.type==='opaque'))await cache.put(request,response.clone());
+    const cache=await caches.open(SHELL_CACHE);
+    try{
+      const response=await fetch(request);
+      if(response?.ok)await cache.put(request,response.clone());
       return response;
-    }).catch(()=>null);
-    if(cached){event.waitUntil(network);return cached;}
-    return (await network)||Response.error();
+    }catch{
+      return (await cache.match(request))||
+        (request.mode==='navigate'?await cache.match('./index.html'):null)||
+        Response.error();
+    }
   })());
 });
