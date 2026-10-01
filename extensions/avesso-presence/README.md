@@ -1,4 +1,4 @@
-# AVESSO Presence
+# AVESSO Presence 0.3.0
 
 Ponte opcional para o recurso **Ouvindo agora** e para as observações autorizadas do **Aquele que Lê Tudo**.
 
@@ -10,7 +10,7 @@ Ponte opcional para o recurso **Ouvindo agora** e para as observações autoriza
 - TIDAL Web
 - Apple Music Web
 
-A faixa tocando é reavaliada continuamente. O AVESSO recebe título, artista, fonte e URL enquanto a aba continua reproduzindo áudio, em vez de ficar preso à primeira música que o navegador viu.
+A faixa tocando é reavaliada continuamente. Além do conteúdo do player, a 0.3.0 usa o título da aba audível como fallback para YouTube/YouTube Music. Isso cobre a navegação SPA em que o player troca de vídeo mas deixa um nó antigo no DOM. A aba do AVESSO também consulta a extensão periodicamente, em vez de depender de um único evento.
 
 ## Contexto de abas
 O AVESSO pode, se o usuário ativar a opção no **Meu Canto**, avisar Aquele que Lê Tudo quando houver troca de aba. A extensão envia somente:
