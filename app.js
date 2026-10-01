@@ -1155,7 +1155,7 @@ async function toggleVoiceRecording(){
     recorder.onerror=()=>{clearVoiceRecordingState();toast('A gravação tropeçou no próprio cabo.');};
     recorder.onstop=async()=>{
       const chunks=[...state.voiceChunks];
-      const type=recorder.mimeType||mime||'audio/webm';
+      const type=(recorder.mimeType||mime||'audio/webm').split(';')[0];
       clearInterval(state.voiceTimer);
       state.voiceTimer=null;
       stream.getTracks().forEach(track=>track.stop());
