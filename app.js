@@ -988,7 +988,7 @@ $('#publish-post').onclick=async()=>{
   const {data:createdPost,error}=await supabase.from('posts').insert({
     author_id:state.profile.id,
     recipient_id:directed?state.recipient.id:null,
-    body:body||(media_kind==='video'?'Vídeo publicado no AVESSO.':media_kind==='audio'?'Áudio publicado no AVESSO.':'Imagem publicada no AVESSO.'),
+    body:body||(media_kind==='youtube'?'Vídeo do YouTube publicado no AVESSO.':media_kind==='spotify'?'Spotify publicado no AVESSO.':media_kind==='video'?'Vídeo publicado no AVESSO.':media_kind==='audio'?'Áudio publicado no AVESSO.':'Imagem publicada no AVESSO.'),
     image_url,
     media_url,
     media_kind,
@@ -1111,7 +1111,7 @@ function renderFeed(posts,threadData={responses:{},characters:{},reactions:{}}){
     return `<article class="post-card" data-post-card="${p.id}">
       <div class="post-route"><button class="mini-avatar profile-avatar-button" data-profile-id="${p.author_id}">${avatarHtml(p.author_avatar_url,p.author_name)}</button><button class="user-link" data-profile-id="${p.author_id}">${escapeHtml(p.author_name)}</button><span class="arrow">→</span><span>${p.recipient_id?escapeHtml(p.recipient_name||'pessoa'):'comunidade'}</span><span class="post-meta">${ago(p.created_at)} · ${p.response_count} resposta${p.response_count===1?'':'s'}</span></div>
       <p class="post-body" data-post-body="${p.id}">${escapeHtml(p.body)}</p>
-      ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea><div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
+      ${p.author_id===state.profile.id?`<div class="post-edit-panel hidden" data-post-edit-panel="${p.id}"><textarea maxlength="420">${escapeHtml(p.body)}</textarea>${['youtube','spotify'].includes(p.media_kind)?`<input type="url" data-post-media-link-edit="${p.id}" value="${escapeAttr(p.media_url||'')}" placeholder="link do YouTube ou Spotify">`:''}<div><button data-post-save="${p.id}">salvar edição</button><button data-post-cancel="${p.id}">cancelar</button></div></div>`:''}
       ${p.image_url?`<figure class="post-image"><img src="${escapeHtml(p.image_url)}" alt="Imagem publicada por ${escapeHtml(p.author_name)}" loading="${postIndex<8?'eager':'lazy'}" decoding="async" fetchpriority="${postIndex<4?'high':'auto'}"></figure>`:''}
       ${feedMediaHtml(p.media_url,p.media_kind)}
       <div class="acid-reactions" aria-label="Reações do Avesso">${reactionHtml}</div>
@@ -1139,7 +1139,14 @@ async function savePostEdit(postId){
   const body=String(panel?.querySelector('textarea')?.value||'').trim();
   if(body.length<12)return toast('A edição precisa manter pelo menos 12 caracteres.');
   if(body.length>420)return toast('Até 420 caracteres. A parede do AVESSO não virou tese.');
-  const {error}=await supabase.from('posts').update({body,edited_at:new Date().toISOString()}).eq('id',postId).eq('author_id',state.profile.id);
+  const patch={body,edited_at:new Date().toISOString()};
+  const linkInput=panel?.querySelector('[data-post-media-link-edit]');
+  if(linkInput){
+    const parsed=parseExternalMediaLink(linkInput.value);
+    if(!parsed)return toast('O link editado precisa ser do YouTube ou Spotify.');
+    patch.media_url=parsed.url;patch.media_kind=parsed.kind;
+  }
+  const {error}=await supabase.from('posts').update(patch).eq('id',postId).eq('author_id',state.profile.id);
   if(error)return toast('A edição não foi salva.');
   toast('Post editado. A internet aceitou uma rara correção.');
   if(isFeedTab())loadFeed();
