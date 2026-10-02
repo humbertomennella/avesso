@@ -19,6 +19,7 @@
   let recentChats=[];
   let notificationGroups=new Map();
   let contextTarget=null;
+  let contextOpener=null;
   let desktopSyncQueued=false;
 
   function currentHandle(){
@@ -64,16 +65,31 @@
       const icon=parts.shift()||'•';
       const label=parts.join(' ');
       button.innerHTML='<span class="desktop-nav-icon">'+esc(icon)+'</span><span class="desktop-nav-label">'+esc(label)+'</span>';
+      if(label){
+        button.setAttribute('aria-label',label);
+        button.title=label;
+      }
     });
     navDecorated=true;
+    syncNavAccessibility();
   }
 
   function restoreNav(){
     if(!navDecorated)return;
     qa('.app-nav [data-app-tab]').forEach(button=>{
       if(button.dataset.desktopOriginalHtml)button.innerHTML=button.dataset.desktopOriginalHtml;
+      button.removeAttribute('aria-current');
+      button.removeAttribute('title');
     });
     navDecorated=false;
+  }
+
+  function syncNavAccessibility(){
+    qa('.app-nav [data-app-tab]').forEach(button=>{
+      const active=button.classList.contains('active');
+      if(active)button.setAttribute('aria-current','page');
+      else button.removeAttribute('aria-current');
+    });
   }
 
   function ensureCollapseButton(){
@@ -113,9 +129,9 @@
     bar.id='desktop-command-bar';
     bar.className='desktop-command-bar';
     bar.innerHTML=`
-      <form class="desktop-quick-search" data-desktop-search-form>
-        <span>⌕</span>
-        <input id="desktop-quick-search-input" type="search" autocomplete="off" placeholder="BUSCAR.EXE // pessoas, posts, conversas">
+      <form class="desktop-quick-search" data-desktop-search-form role="search" aria-label="Busca universal do AVESSO">
+        <span aria-hidden="true">⌕</span>
+        <input id="desktop-quick-search-input" type="search" autocomplete="off" aria-label="Pesquisar no AVESSO" placeholder="BUSCAR.EXE // pessoas, posts, chats, stories, fotos, praça">
         <button type="submit" aria-label="Buscar">↵</button>
         <kbd>Ctrl K</kbd>
       </form>
@@ -144,6 +160,9 @@
     drawer=document.createElement('aside');
     drawer.id='desktop-notification-drawer';
     drawer.className='desktop-notification-drawer';
+    drawer.setAttribute('role','region');
+    drawer.setAttribute('aria-label','Central de notificações');
+    drawer.setAttribute('aria-hidden','true');
     drawer.innerHTML=`
       <header>
         <div><small>AVESSO // NOTIFICAÇÕES</small><b>coisas que aconteceram sem pedir licença</b></div>
@@ -162,9 +181,14 @@
       </footer>`;
     document.body.appendChild(drawer);
     q('[data-desktop-notification-close]',drawer).onclick=closeNotificationDrawer;
+    qa('[data-desktop-notification-filter]',drawer).forEach((button,index)=>button.setAttribute('aria-pressed',String(index===0)));
     qa('[data-desktop-notification-filter]',drawer).forEach(button=>button.onclick=()=>{
       notificationFilter=button.dataset.desktopNotificationFilter||'all';
-      qa('[data-desktop-notification-filter]',drawer).forEach(x=>x.classList.toggle('active',x===button));
+      qa('[data-desktop-notification-filter]',drawer).forEach(x=>{
+        const active=x===button;
+        x.classList.toggle('active',active);
+        x.setAttribute('aria-pressed',String(active));
+      });
       renderNotificationDrawer();
     });
     q('[data-desktop-mark-read]',drawer).onclick=()=>{
@@ -270,10 +294,14 @@
     const drawer=ensureNotificationDrawer();
     renderNotificationDrawer();
     drawer.classList.add('open');
+    drawer.setAttribute('aria-hidden','false');
     document.body.classList.add('desktop-notifications-open');
+    q('[data-desktop-notification-close]',drawer)?.focus({preventScroll:true});
   }
   function closeNotificationDrawer(){
-    q('#desktop-notification-drawer')?.classList.remove('open');
+    const drawer=q('#desktop-notification-drawer');
+    drawer?.classList.remove('open');
+    drawer?.setAttribute('aria-hidden','true');
     document.body.classList.remove('desktop-notifications-open');
   }
 
@@ -454,6 +482,18 @@
     menu.className='desktop-context-menu hidden';
     menu.setAttribute('role','menu');
     document.body.appendChild(menu);
+    menu.addEventListener('keydown',event=>{
+      const buttons=qa('button:not([disabled])',menu);
+      if(!buttons.length)return;
+      const index=Math.max(0,buttons.indexOf(document.activeElement));
+      let next=null;
+      if(event.key==='ArrowDown')next=buttons[(index+1)%buttons.length];
+      else if(event.key==='ArrowUp')next=buttons[(index-1+buttons.length)%buttons.length];
+      else if(event.key==='Home')next=buttons[0];
+      else if(event.key==='End')next=buttons[buttons.length-1];
+      else if(event.key==='Escape'){event.preventDefault();closeDesktopContextMenu(true);return;}
+      if(next){event.preventDefault();next.focus();}
+    });
     menu.addEventListener('click',event=>{
       const button=event.target.closest('[data-context-action]');
       if(!button||!contextTarget)return;
@@ -463,9 +503,13 @@
     return menu;
   }
 
-  function closeDesktopContextMenu(){
+  function closeDesktopContextMenu(returnFocus=false){
     q('#desktop-context-menu')?.classList.add('hidden');
+    qa('.desktop-context-trigger[aria-expanded="true"]').forEach(button=>button.setAttribute('aria-expanded','false'));
+    const opener=contextOpener;
     contextTarget=null;
+    contextOpener=null;
+    if(returnFocus&&opener?.isConnected)opener.focus({preventScroll:true});
   }
 
   function contextUserFromNode(node){
@@ -598,6 +642,8 @@
     button.dataset.desktopContextType=type;
     button.dataset.desktopContextId=id;
     button.setAttribute('aria-label','Mais ações');
+    button.setAttribute('aria-haspopup','menu');
+    button.setAttribute('aria-expanded','false');
     button.title='Mais ações';
     button.textContent='•••';
     return button;
@@ -622,6 +668,8 @@
         event.preventDefault();event.stopPropagation();
         const descriptor=contextDescriptor(trigger.parentElement||trigger);
         if(!descriptor)return;
+        contextOpener=trigger;
+        trigger.setAttribute('aria-expanded','true');
         const rect=trigger.getBoundingClientRect();
         openDesktopContextMenu(descriptor,rect.right,rect.bottom+4);
         return;
@@ -834,7 +882,7 @@
         e.preventDefault();q('#dm-search')?.click();return;
       }
       if(e.key==='Escape'){
-        closeDesktopContextMenu();
+        closeDesktopContextMenu(true);
         closeNotificationDrawer();
         const dialog=q('#avesso-discovery-dialog');if(dialog?.open)dialog.close();
         q('#dm-options-menu')?.classList.add('hidden');
@@ -865,6 +913,7 @@
     ensureCollapseButton();
     q('#desktop-nav-collapse')?.removeAttribute('hidden');
     syncCollapseButton();
+    syncNavAccessibility();
     ensureCommandBar();
     q('#desktop-command-bar')?.classList.remove('desktop-hidden');
     ensureNotificationDrawer();
