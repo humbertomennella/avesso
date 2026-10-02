@@ -996,12 +996,27 @@ async function browserNotify({title='AVESSO',body='',avatar='',kind='message',ac
     setTimeout(()=>n.close(),9000);
   }catch{}
 }
+const recentSocialNotifications=new Map();
+function socialNotificationDedupeKey({kind='message',title='',body='',target=null}={}){
+  const targetKey=target?.type&&target?.id?`${target.type}:${target.id}`:'';
+  return [kind,targetKey,title,body].join('|').toLowerCase();
+}
 function socialNotify({title='AVESSO',body='',avatar='',kind='message',action=null,sound=true,target=null}={}){
-  const item={title,body,avatar,kind,action,sound,target};
+  const dedupeKey=socialNotificationDedupeKey({kind,title,body,target});
+  const now=Date.now();
+  const seenAt=recentSocialNotifications.get(dedupeKey)||0;
+  if(now-seenAt<3500)return;
+  recentSocialNotifications.set(dedupeKey,now);
+  if(recentSocialNotifications.size>80){
+    for(const [key,at] of recentSocialNotifications){
+      if(now-at>60000)recentSocialNotifications.delete(key);
+    }
+  }
+  const item={title,body,avatar,kind,action,sound,target,dedupeKey};
   state.socialNotificationQueue.push(item);
   if(state.socialNotificationQueue.length>6)state.socialNotificationQueue.shift();
   try{
-    window.dispatchEvent(new CustomEvent('avesso:notification',{detail:{kind,title,body,avatar,target,createdAt:Date.now()}}));
+    window.dispatchEvent(new CustomEvent('avesso:notification',{detail:{kind,title,body,avatar,target,dedupeKey,createdAt:now}}));
     if(typeof navigator.setAppBadge==='function')navigator.setAppBadge(1).catch(()=>{});
   }catch{}
   browserNotify(item);
