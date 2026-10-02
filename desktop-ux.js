@@ -21,6 +21,7 @@
   let contextTarget=null;
   let contextOpener=null;
   let desktopSyncQueued=false;
+  let profileJumpObserver=null;
 
   function currentHandle(){
     return String(q('#nav-handle')?.textContent||'anon').trim().replace(/^@/,'')||'anon';
@@ -713,6 +714,8 @@
     q('#desktop-profile-layout')?.remove();
     q('#desktop-profile-settings-panel')?.remove();
     q('#desktop-profile-tools')?.remove();
+    qa('.desktop-profile-jump-nav').forEach(node=>node.remove());
+    profileJumpObserver?.disconnect();profileJumpObserver=null;
     q('.profile-control')?.classList.remove('desktop-profile-enhanced','desktop-profile-settings-open');
     document.body.classList.remove('desktop-profile-settings-open');
   }
@@ -720,6 +723,79 @@
   function tagProfileNode(node,key){
     if(node)node.dataset.desktopProfileKey=key;
     return node;
+  }
+
+
+  function setupProfileJumpNav({root,hero,items,publicView=false}){
+    if(!root||!hero||!items?.length)return;
+    const existing=q('.desktop-profile-jump-nav',root);
+    if(existing)return;
+
+    const nav=document.createElement('nav');
+    nav.className='desktop-profile-jump-nav';
+    nav.setAttribute('aria-label',publicView?'Navegação do Canto público':'Navegação do Meu Canto');
+    nav.innerHTML=items.map(item=>`
+      <button type="button" data-profile-jump="${esc(item.key)}">
+        <span>${esc(item.icon||'·')}</span>
+        <b>${esc(item.label)}</b>
+        ${item.count?'<small data-profile-jump-count>…</small>':''}
+      </button>`).join('');
+    hero.insertAdjacentElement('afterend',nav);
+
+    const activate=key=>{
+      qa('[data-profile-jump]',nav).forEach(button=>button.classList.toggle('active',button.dataset.profileJump===key));
+    };
+    activate(items[0].key);
+
+    qa('[data-profile-jump]',nav).forEach(button=>{
+      button.onclick=()=>{
+        const item=items.find(entry=>entry.key===button.dataset.profileJump);
+        const target=item?.selector?q(item.selector,root)||q(item.selector):null;
+        if(item?.key==='settings'){
+          const ownerRoot=q('.profile-control');
+          ownerRoot?.classList.add('desktop-profile-settings-open');
+          document.body.classList.add('desktop-profile-settings-open');
+          try{localStorage.setItem('avesso.desktop.profile.settings','1');}catch{}
+          const settingsButton=q('[data-desktop-profile-settings]');
+          if(settingsButton)settingsButton.textContent='× fechar ajustes';
+        }
+        activate(item?.key||'');
+        target?.scrollIntoView({behavior:'smooth',block:'start'});
+      };
+    });
+
+    profileJumpObserver?.disconnect();
+    if('IntersectionObserver' in window){
+      const observed=items
+        .map(item=>({item,node:item.selector?(q(item.selector,root)||q(item.selector)):null}))
+        .filter(entry=>entry.node&&entry.item.key!=='settings');
+      profileJumpObserver=new IntersectionObserver(entries=>{
+        const visible=entries
+          .filter(entry=>entry.isIntersecting)
+          .sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
+        if(!visible)return;
+        const match=observed.find(entry=>entry.node===visible.target);
+        if(match)activate(match.item.key);
+      },{root:null,rootMargin:'-18% 0px -62% 0px',threshold:[0,.08,.2,.4]});
+      observed.forEach(entry=>profileJumpObserver.observe(entry.node));
+    }
+  }
+
+  function enhancePublicProfileDesktop(){
+    if(!isDesktop()||!document.body.classList.contains('avesso-public-corner'))return;
+    const root=q('.public-profile');
+    const hero=q('.public-profile-hero',root);
+    if(!root||!hero)return;
+    setupProfileJumpNav({
+      root,hero,publicView:true,
+      items:[
+        {key:'stories',label:'Stories',icon:'◌',selector:'.public-story-section'},
+        {key:'public-posts',label:'Publicações',icon:'↗',selector:'.public-posts',count:true},
+        {key:'album',label:'Álbum',icon:'▧',selector:'.public-album'},
+        {key:'media',label:'Mídia',icon:'♫',selector:'.public-media'},
+        {key:'guestbook',label:'Recados',icon:'✎',selector:'.public-guestbook'}
+      ]
+    });
   }
 
   function enhanceProfileDesktop(){
@@ -793,6 +869,7 @@
     const settingsContent=q('.desktop-profile-settings-content',settings);
 
     moveProfileNode(tagProfileNode(q('.profile-story-section',root),'stories'),main,'stories');
+    moveProfileNode(tagProfileNode(q('.profile-posts-control',root),'posts'),main,'posts');
     moveProfileNode(tagProfileNode(q('.profile-album-control',root),'album'),main,'album');
     moveProfileNode(tagProfileNode(q('.profile-media-control',root),'media'),main,'media');
 
@@ -806,6 +883,19 @@
 
     const world=q('.world-preferences');
     moveProfileNode(tagProfileNode(world,'world'),settingsContent,'world');
+
+    setupProfileJumpNav({
+      root,hero,
+      items:[
+        {key:'stories',label:'Stories',icon:'◌',selector:'.profile-story-section'},
+        {key:'posts',label:'Publicações',icon:'↗',selector:'.profile-posts-control',count:true},
+        {key:'album',label:'Álbum',icon:'▧',selector:'.profile-album-control'},
+        {key:'media',label:'Mídia',icon:'♫',selector:'.profile-media-control'},
+        {key:'guestbook',label:'Recados',icon:'✎',selector:'.guestbook-own'},
+        {key:'friends',label:'Amigos',icon:'↔',selector:'.friends-control'},
+        {key:'settings',label:'Ajustes',icon:'⚙',selector:'#desktop-profile-settings-panel'}
+      ]
+    });
 
     const open=profileSettingsOpen();
     root.classList.toggle('desktop-profile-settings-open',open);
@@ -929,6 +1019,7 @@
     renderChatShelf();
     ensureChatDesktopEnhancements();
     enhanceProfileDesktop();
+    enhancePublicProfileDesktop();
     enhanceContextButtons();
     bindChatDrop();
     refreshNotificationBadge();
