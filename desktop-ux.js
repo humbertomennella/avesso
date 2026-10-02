@@ -19,6 +19,7 @@
   let recentChats=[];
   let notificationGroups=new Map();
   let contextTarget=null;
+  let desktopSyncQueued=false;
 
   function currentHandle(){
     return String(q('#nav-handle')?.textContent||'anon').trim().replace(/^@/,'')||'anon';
@@ -603,33 +604,7 @@
   }
 
   function enhanceContextButtons(){
-    if(!isDesktop())return;
-    qa('.post-card[data-post-card]').forEach(card=>{
-      if(q(':scope > .desktop-context-trigger',card))return;
-      const button=contextButton('post',card.dataset.postCard);
-      card.appendChild(button);
-    });
-    qa('.album-photo[data-album-photo]').forEach(card=>{
-      if(q(':scope > .desktop-context-trigger',card))return;
-      const button=contextButton('photo',card.dataset.albumPhoto);
-      card.appendChild(button);
-    });
-    qa('.dm-bubble[data-dm-id]:not(.deleted)').forEach(bubble=>{
-      if(q(':scope > .desktop-context-trigger',bubble))return;
-      const button=contextButton('message',bubble.dataset.dmId);
-      bubble.appendChild(button);
-    });
-    qa('.friend-row').forEach(row=>{
-      if(q(':scope > .desktop-context-trigger',row))return;
-      const id=q('[data-profile-id]',row)?.dataset.profileId;
-      if(!id)return;
-      row.appendChild(contextButton('user',id));
-    });
-    const publicHero=q('.public-profile-hero');
-    if(publicHero&&!q(':scope > .desktop-context-trigger',publicHero)){
-      const id=q('[data-profile-id]',publicHero)?.dataset.profileId;
-      if(id)publicHero.appendChild(contextButton('user',id));
-    }
+    enhanceContextButtonsIn(document);
   }
 
   function bindDesktopContextMenus(){
@@ -791,6 +766,33 @@
     if(settingsButton)settingsButton.textContent=open?'× fechar ajustes':'⚙ ajustes do Canto';
   }
 
+
+  function enhanceContextButtonsIn(root){
+    if(!isDesktop()||!root)return;
+    const nodes=[];
+    if(root.matches?.('.post-card[data-post-card],.album-photo[data-album-photo],.dm-bubble[data-dm-id]:not(.deleted),.friend-row,.public-profile-hero'))nodes.push(root);
+    root.querySelectorAll?.('.post-card[data-post-card],.album-photo[data-album-photo],.dm-bubble[data-dm-id]:not(.deleted),.friend-row,.public-profile-hero').forEach(node=>nodes.push(node));
+    nodes.forEach(node=>{
+      if(q(':scope > .desktop-context-trigger',node))return;
+      if(node.matches('.post-card[data-post-card]'))node.appendChild(contextButton('post',node.dataset.postCard));
+      else if(node.matches('.album-photo[data-album-photo]'))node.appendChild(contextButton('photo',node.dataset.albumPhoto));
+      else if(node.matches('.dm-bubble[data-dm-id]:not(.deleted)'))node.appendChild(contextButton('message',node.dataset.dmId));
+      else{
+        const id=q('[data-profile-id]',node)?.dataset.profileId;
+        if(id)node.appendChild(contextButton('user',id));
+      }
+    });
+  }
+
+  function scheduleDesktopSync(){
+    if(desktopSyncQueued)return;
+    desktopSyncQueued=true;
+    requestAnimationFrame(()=>{
+      desktopSyncQueued=false;
+      syncDesktop();
+    });
+  }
+
   function bindChatDrop(){
     const win=q('#dm-floating-window');
     if(!win||win.dataset.desktopDropBound)return;
@@ -882,10 +884,29 @@
   function boot(){
     bindKeyboard();
     bindDesktopContextMenus();
-    const observer=new MutationObserver(()=>requestAnimationFrame(()=>{
+    const observer=new MutationObserver(mutations=>{
+      let needsSync=false;
+      for(const mutation of mutations){
+        if(mutation.type==='childList'){
+          mutation.addedNodes.forEach(node=>{
+            if(node.nodeType===1)enhanceContextButtonsIn(node);
+          });
+          const target=mutation.target;
+          if(
+            target===document.body||
+            target?.id==='app-view'||
+            target?.id==='feed-list'||
+            target?.classList?.contains('feed-column')||
+            target?.classList?.contains('profile-control')
+          )needsSync=true;
+        }else if(mutation.type==='attributes'){
+          const target=mutation.target;
+          if(target===document.body||target?.id==='app-view')needsSync=true;
+        }
+      }
       if(isDesktop()&&!document.body.classList.contains('avesso-own-corner')&&q('.profile-control.desktop-profile-enhanced'))restoreProfileDesktop();
-      syncDesktop();
-    }));
+      if(needsSync)scheduleDesktopSync();
+    });
     observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
     window.addEventListener('avesso:desktop-summary',e=>renderSummary(e.detail||{}));
     window.addEventListener('avesso:chat-opened',e=>{
@@ -897,7 +918,12 @@
       if(e.data?.type==='AVESSO_PUSH_WHILE_VISIBLE')setTimeout(refreshNotificationBadge,60);
     });
     media.addEventListener?.('change',syncDesktop);
-    window.addEventListener('resize',()=>{const el=q('#desktop-command-bar small');if(el)el.textContent='desktop // '+window.innerWidth+'×'+window.innerHeight;});
+    let lastDesktopState=isDesktop();
+    window.addEventListener('resize',()=>{
+      const el=q('#desktop-command-bar small');if(el)el.textContent='desktop // '+window.innerWidth+'×'+window.innerHeight;
+      const next=isDesktop();
+      if(next!==lastDesktopState){lastDesktopState=next;scheduleDesktopSync();}
+    });
     syncDesktop();
   }
 
