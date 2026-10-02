@@ -2061,3 +2061,535 @@
     z-index:4200!important;
   }
 }
+
+
+/* =========================================================
+   AVESSO MOBILE REFRAME 2026-10-02
+   Escala, respiro e enquadramento comuns a todas as páginas.
+   Esta camada é propositalmente final para neutralizar hotfixes
+   antigos sem desmontar a lógica mobile existente.
+   ========================================================= */
+@media (max-width:820px){
+  :root{
+    --av-mobile-gutter:14px;
+    --av-mobile-nav-h:72px;
+    --av-mobile-radius:9px;
+    --av-mobile-font-xs:.7rem;
+    --av-mobile-font-sm:.78rem;
+    --av-mobile-font-body:.98rem;
+  }
+
+  body.avesso-app-active{
+    font-size:16px;
+    line-height:1.55;
+  }
+
+  #app-view,
+  #app-view.app-shell,
+  #app-view.app-shell.inhabitants-open{
+    padding:
+      12px var(--av-mobile-gutter)
+      calc(var(--av-mobile-nav-h) + env(safe-area-inset-bottom) + 18px)!important;
+  }
+
+  .feed-column,
+  .profile-control,
+  .public-profile,
+  .messages-hub,
+  .inhabitants-world,
+  .tower-world,
+  .plaza-world,
+  .staff-dashboard,
+  .admin-panel{
+    margin-inline:auto!important;
+  }
+
+  /* Tipografia global: chega de arqueologia ocular */
+  .section-code,
+  .eyebrow{
+    font-size:var(--av-mobile-font-xs)!important;
+    line-height:1.4!important;
+    letter-spacing:.09em!important;
+  }
+
+  .post-meta,
+  .need-tag,
+  .thread-title,
+  .thread-author,
+  .thread-author small,
+  .composer-hint,
+  .feed-status,
+  .presence-picker,
+  .world-pref-foot,
+  .resident span,
+  .guestbook-card header small,
+  .compact-friend small,
+  .messages-hub small,
+  .staff-dashboard small,
+  .staff-dashboard-nav button,
+  .mobile-more-item,
+  .mobile-notification-row,
+  .avesso-mobile-more-sheet small{
+    font-size:var(--av-mobile-font-xs)!important;
+    line-height:1.45!important;
+  }
+
+  .post-body,
+  .thread-reply p,
+  .guestbook-card>p,
+  .aside-card p,
+  .world-dialogue,
+  .inhabitant-copy p,
+  .tower-grid p,
+  .tower-grid li,
+  .plaza-panels p{
+    font-size:var(--av-mobile-font-body)!important;
+    line-height:1.58!important;
+  }
+
+  button,
+  [role="button"],
+  .btn,
+  .image-pick{
+    min-height:44px;
+  }
+
+  /* Cabeçalhos */
+  .feed-header{
+    align-items:flex-start!important;
+    gap:12px!important;
+    margin:4px 0 16px!important;
+  }
+  .feed-header h1{
+    font-size:clamp(2.15rem,10.5vw,3.15rem)!important;
+    line-height:.94!important;
+  }
+  .feed-header .icon-btn{
+    margin-top:3px;
+  }
+
+  /* Cards e superfícies */
+  .composer,
+  .post-card,
+  .stories-zone,
+  .profile-story-section,
+  .profile-settings-card,
+  .profile-posts-control,
+  .profile-album-control,
+  .profile-media-control,
+  .guestbook-section,
+  .friends-control,
+  .blocked-control,
+  .wallpaper-control,
+  .corner-music-control,
+  .world-preferences,
+  .messages-hub,
+  .staff-dashboard-content,
+  .public-story-section,
+  .public-posts,
+  .public-album,
+  .public-media,
+  .public-guestbook{
+    border-radius:var(--av-mobile-radius)!important;
+  }
+
+  .composer,
+  .post-card{
+    padding:15px!important;
+  }
+  .post-card{
+    margin:10px 0!important;
+  }
+  .post-route{
+    gap:8px!important;
+    font-size:.78rem!important;
+    line-height:1.4!important;
+  }
+  .post-route .mini-avatar{
+    width:34px!important;
+    height:34px!important;
+  }
+  .post-meta{
+    margin-left:auto!important;
+    width:auto!important;
+  }
+  .post-actions{
+    gap:7px!important;
+  }
+  .post-actions button,
+  .acid-reactions button{
+    min-height:42px!important;
+    padding:8px 10px!important;
+    font-size:.7rem!important;
+  }
+
+  /* Stories: tamanho controlado e trilha horizontal previsível */
+  .stories-zone{
+    padding:14px!important;
+  }
+  .stories-strip,
+  .profile-story-list{
+    display:flex!important;
+    gap:10px!important;
+    padding:6px 2px 10px!important;
+    scroll-snap-type:x proximity;
+  }
+  .stories-strip>.story-card,
+  .stories-strip>.story-new-card{
+    flex:0 0 104px!important;
+    width:104px!important;
+    min-width:104px!important;
+    scroll-snap-align:start;
+  }
+  .profile-story-list .story-card{
+    flex:0 0 166px!important;
+    width:166px!important;
+    min-width:166px!important;
+    min-height:74px!important;
+    grid-template-columns:52px minmax(0,1fr)!important;
+    padding:9px!important;
+    scroll-snap-align:start;
+  }
+  .profile-story-list .story-ring{
+    width:50px!important;
+    height:50px!important;
+  }
+  .story-view-dialog{
+    width:100vw!important;
+    max-width:none!important;
+    height:100dvh!important;
+    max-height:none!important;
+    margin:0!important;
+    border:0!important;
+    border-radius:0!important;
+  }
+  .story-stage,
+  .story-stage.has-video{
+    max-height:min(68dvh,640px)!important;
+    overflow:hidden!important;
+  }
+  .story-stage img,
+  .story-stage .story-video{
+    width:100%!important;
+    height:auto!important;
+    max-height:min(68dvh,640px)!important;
+    object-fit:contain!important;
+  }
+
+  /* Meu Canto / perfil público */
+  .profile-control-hero{
+    grid-template-columns:96px minmax(0,1fr)!important;
+    gap:14px!important;
+    padding:15px!important;
+  }
+  .profile-avatar-large{
+    width:96px!important;
+    height:96px!important;
+  }
+  .profile-control-hero h2,
+  .profile-name-listening-row h2{
+    font-size:clamp(1.65rem,8.2vw,2.2rem)!important;
+    line-height:1.02!important;
+  }
+  .profile-control-hero p,
+  .profile-control-hero small{
+    font-size:.78rem!important;
+    line-height:1.5!important;
+  }
+  .profile-story-section,
+  .profile-settings-card,
+  .profile-posts-control,
+  .profile-album-control,
+  .profile-media-control,
+  .guestbook-section,
+  .friends-control,
+  .blocked-control,
+  .wallpaper-control,
+  .corner-music-control,
+  .world-preferences{
+    padding:15px!important;
+  }
+  .profile-story-section h2,
+  .profile-posts-control h2,
+  .profile-album-control h2,
+  .profile-media-control h2,
+  .guestbook-section h2,
+  .friends-control h2,
+  .blocked-control h2,
+  .wallpaper-control h2,
+  .corner-music-control h2,
+  .world-preferences h2{
+    font-size:clamp(1.5rem,7vw,2.05rem)!important;
+    line-height:1.08!important;
+  }
+  .public-profile>header{
+    grid-template-columns:96px minmax(0,1fr)!important;
+    gap:14px!important;
+    padding:15px!important;
+  }
+  .public-profile-avatar{
+    width:96px!important;
+    height:96px!important;
+  }
+  .public-profile h1{
+    font-size:clamp(1.7rem,8vw,2.25rem)!important;
+  }
+
+  /* Formulários e controles */
+  input,
+  textarea,
+  select{
+    min-height:46px!important;
+    padding:11px 12px!important;
+    font-size:16px!important;
+    line-height:1.35!important;
+  }
+  textarea{
+    min-height:110px;
+  }
+  label{
+    overflow-wrap:anywhere;
+  }
+
+  /* Páginas de mundo */
+  .inhabitants-world,
+  .tower-world,
+  .plaza-world{
+    padding:15px!important;
+    min-height:0!important;
+  }
+  .inhabitants-hero h2,
+  .tower-header>span{
+    font-size:clamp(2rem,10vw,3rem)!important;
+    line-height:.98!important;
+  }
+  .inhabitant-card{
+    border-radius:7px!important;
+    clip-path:none!important;
+  }
+  .inhabitant-copy{
+    padding:17px!important;
+  }
+  .inhabitant-copy h3{
+    font-size:1.55rem!important;
+  }
+  .plaza-sign{
+    max-width:100%;
+    font-size:.95rem!important;
+  }
+  .plaza-panels,
+  .tower-grid{
+    grid-template-columns:1fr!important;
+  }
+
+  /* Amigos, mensagens e administração */
+  .messages-hub{
+    padding:15px!important;
+  }
+  .messages-hub-head h2{
+    font-size:clamp(2rem,9vw,2.65rem)!important;
+  }
+  .compact-friend{
+    min-height:58px!important;
+    padding:9px!important;
+    grid-template-columns:46px minmax(0,1fr) auto!important;
+  }
+  .compact-friend .mini-avatar{
+    width:46px!important;
+    height:46px!important;
+  }
+  .staff-dashboard{
+    padding:0!important;
+  }
+  .staff-dashboard-nav{
+    gap:6px!important;
+    padding:7px!important;
+  }
+  .staff-dashboard-nav button{
+    min-height:44px!important;
+    padding:8px 10px!important;
+  }
+  .staff-dashboard-content{
+    padding:14px!important;
+  }
+
+  /* Navegação inferior */
+  .avesso-mobile-nav,
+  .app-nav nav{
+    min-height:var(--av-mobile-nav-h)!important;
+    padding:
+      6px 8px
+      calc(6px + env(safe-area-inset-bottom))!important;
+    gap:4px!important;
+  }
+  .avesso-mobile-nav .mobile-primary-tab,
+  .avesso-mobile-nav .mobile-nav-more{
+    min-height:54px!important;
+    padding:6px 5px!important;
+    font-size:.68rem!important;
+    line-height:1.15!important;
+  }
+  .avesso-mobile-nav .mobile-primary-tab>span,
+  .avesso-mobile-nav .mobile-nav-more>span{
+    font-size:1.05rem!important;
+  }
+
+  /* Overlays não podem esmagar o conteúdo */
+  .toast,
+  .social-notifications,
+  .world-encounter-float{
+    left:var(--av-mobile-gutter)!important;
+    right:var(--av-mobile-gutter)!important;
+    width:auto!important;
+    max-width:none!important;
+    font-size:.78rem!important;
+    line-height:1.45!important;
+  }
+
+  /* AUTH V2 mobile */
+  #auth-dialog.auth-dialog-v2{
+    width:100vw!important;
+    max-width:none!important;
+    height:100dvh!important;
+    max-height:none!important;
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:0!important;
+    overflow:hidden!important;
+    background:#070b0d!important;
+  }
+  #auth-dialog .auth-shell{
+    display:block!important;
+    min-height:100%!important;
+    height:100%!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  #auth-dialog .auth-dialog-close{
+    position:fixed!important;
+    top:calc(10px + env(safe-area-inset-top))!important;
+    right:12px!important;
+    z-index:20!important;
+  }
+  #auth-dialog .auth-intro{
+    min-height:auto!important;
+    padding:
+      calc(20px + env(safe-area-inset-top))
+      18px 18px!important;
+    border:0!important;
+    border-bottom:1px solid #293a3f!important;
+  }
+  #auth-dialog .auth-intro-brand{
+    padding-right:48px;
+  }
+  #auth-dialog .auth-intro-copy{
+    margin:22px 0 0!important;
+  }
+  #auth-dialog .auth-intro-copy h2{
+    margin:7px 0 8px!important;
+    font-size:clamp(2.15rem,11vw,3.15rem)!important;
+    line-height:.92!important;
+  }
+  #auth-dialog .auth-intro-copy p{
+    max-width:620px;
+    font-size:.94rem!important;
+  }
+  #auth-dialog .auth-intro-grid,
+  #auth-dialog .auth-intro>small{
+    display:none!important;
+  }
+  #auth-dialog .auth-panel{
+    padding:20px 16px 24px!important;
+    overflow:visible!important;
+  }
+  #auth-dialog .auth-brand h2{
+    font-size:2rem!important;
+  }
+  #auth-dialog .auth-brand p{
+    font-size:.9rem!important;
+  }
+  #auth-dialog .auth-tabs{
+    position:sticky;
+    z-index:4;
+    top:0;
+    margin:18px 0 16px!important;
+    background:#05090bf5!important;
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+  }
+  #auth-dialog .auth-tabs button{
+    min-height:46px!important;
+    font-size:.76rem!important;
+  }
+  #auth-dialog .auth-field-grid{
+    grid-template-columns:1fr!important;
+    gap:13px!important;
+  }
+  #auth-dialog #auth-form{
+    gap:14px!important;
+  }
+  #auth-dialog #auth-form label{
+    font-size:.76rem!important;
+  }
+  #auth-dialog #auth-form input{
+    min-height:50px!important;
+    font-size:16px!important;
+  }
+  #auth-dialog .auth-context{
+    padding:12px!important;
+  }
+  #auth-dialog .auth-context p{
+    font-size:.82rem!important;
+  }
+  #auth-dialog .auth-submit{
+    min-height:50px!important;
+    font-size:.78rem!important;
+  }
+}
+
+@media (max-width:430px){
+  :root{
+    --av-mobile-gutter:12px;
+    --av-mobile-nav-h:70px;
+  }
+  .profile-control-hero,
+  .public-profile>header{
+    grid-template-columns:88px minmax(0,1fr)!important;
+  }
+  .profile-avatar-large,
+  .public-profile-avatar{
+    width:88px!important;
+    height:88px!important;
+  }
+  .profile-story-list .story-card{
+    flex-basis:154px!important;
+    width:154px!important;
+    min-width:154px!important;
+  }
+  .avesso-mobile-nav .mobile-primary-tab,
+  .avesso-mobile-nav .mobile-nav-more{
+    font-size:.65rem!important;
+  }
+}
+
+@media (max-width:360px){
+  :root{--av-mobile-gutter:10px}
+  #auth-dialog .auth-panel{padding-inline:12px!important}
+  .profile-control-hero,
+  .public-profile>header{
+    grid-template-columns:80px minmax(0,1fr)!important;
+  }
+  .profile-avatar-large,
+  .public-profile-avatar{
+    width:80px!important;
+    height:80px!important;
+  }
+}
+
+@supports not (height:100dvh){
+  @media (max-width:820px){
+    #auth-dialog.auth-dialog-v2{height:100vh!important}
+  }
+}
