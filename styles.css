@@ -9251,3 +9251,39 @@ body[data-network-state="offline"] #refresh-feed{
   border-color:var(--acid)!important;
   box-shadow:0 0 0 2px #071012,0 0 0 4px var(--acid)!important;
 }
+
+
+/* AVESSO Dialog Compatibility Fallback 2026-10-02 */
+body.dialog-fallback-lock{
+  overflow:hidden!important;
+}
+body.dialog-fallback-lock::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:24990;
+  background:#000c;
+  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
+}
+dialog.dialog-fallback-open[open]{
+  position:fixed!important;
+  z-index:25000!important;
+  inset:50% auto auto 50%!important;
+  transform:translate(-50%,-50%)!important;
+  display:block!important;
+  width:min(720px,calc(100vw - 28px))!important;
+  max-height:calc(100dvh - 28px)!important;
+  overflow:auto!important;
+  margin:0!important;
+}
+@supports not (height:100dvh){
+  dialog.dialog-fallback-open[open]{
+    max-height:calc(100vh - 28px)!important;
+  }
+}
+@supports not ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+  body.dialog-fallback-lock::before{
+    background:#000e;
+  }
+}
