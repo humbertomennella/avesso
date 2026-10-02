@@ -83,9 +83,40 @@ function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).jo
 function ago(date){ const s=Math.floor((Date.now()-new Date(date))/1000); if(s<60)return'agora'; if(s<3600)return`${Math.floor(s/60)}min`; if(s<86400)return`${Math.floor(s/3600)}h`; return`${Math.floor(s/86400)}d`; }
 function escapeHtml(value=''){ const d=document.createElement('div'); d.textContent=value; return d.innerHTML; }
 function escapeAttr(value=''){return String(value).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll("'",'&#39;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
+const clientErrorRecent=new Map();
+let clientErrorWindowStartedAt=0;
+let clientErrorWindowCount=0;
+function clientErrorKey(message,metadata={}){
+  return [
+    String(message||'erro desconhecido').slice(0,240),
+    String(metadata?.filename||metadata?.type||''),
+    String(metadata?.lineno||''),
+    String(state.tab||'')
+  ].join('|').toLowerCase();
+}
+function clientErrorAllowed(key){
+  const now=Date.now();
+  if(!clientErrorWindowStartedAt||now-clientErrorWindowStartedAt>5*60*1000){
+    clientErrorWindowStartedAt=now;
+    clientErrorWindowCount=0;
+  }
+  const seenAt=clientErrorRecent.get(key)||0;
+  if(now-seenAt<30000)return false;
+  if(clientErrorWindowCount>=10)return false;
+  clientErrorRecent.set(key,now);
+  clientErrorWindowCount+=1;
+  if(clientErrorRecent.size>60){
+    for(const [entry,at] of clientErrorRecent){
+      if(now-at>10*60*1000)clientErrorRecent.delete(entry);
+    }
+  }
+  return true;
+}
 async function logClientError(message,metadata={}){
   try{
-    if(!state.session?.user?.id)return;
+    if(!state.session?.user?.id||!navigator.onLine)return;
+    const key=clientErrorKey(message,metadata);
+    if(!clientErrorAllowed(key))return;
     await supabase.from('client_error_logs').insert({
       user_id:state.session.user.id,
       message:String(message||'erro desconhecido').slice(0,1000),
