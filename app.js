@@ -2049,8 +2049,42 @@ $('#story-image').onchange=e=>{
   if(!allowed){e.target.value='';clearStoryPreview();return toast('Story aceita imagem, GIF, WEBM, MP4 ou MOV.');}
   renderStoryMediaPreview(file);
 };
-$$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
-function setAuthMode(mode){ state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
+$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
+$('#auth-password-toggle')?.addEventListener('click',e=>{
+  const input=$('#auth-password');
+  if(!input)return;
+  const visible=input.type==='text';
+  input.type=visible?'password':'text';
+  e.currentTarget.textContent=visible?'mostrar':'ocultar';
+  e.currentTarget.setAttribute('aria-pressed',String(!visible));
+  e.currentTarget.setAttribute('aria-label',visible?'Mostrar senha':'Ocultar senha');
+});
+function setAuthMode(mode){
+  state.mode=mode;
+  const login=mode==='login';
+  $('[data-auth-mode]').forEach(b=>{
+    const active=b.dataset.authMode===mode;
+    b.classList.toggle('active',active);
+    b.setAttribute('aria-selected',String(active));
+  });
+  $('#signup-fields')?.classList.toggle('hidden',login);
+  $('#resend-confirmation')?.classList.add('hidden');
+  const submit=$('#auth-submit');
+  if(submit)submit.textContent=login?'entrar no AVESSO':'criar meu canto';
+  const title=$('#auth-title');
+  if(title)title.textContent=login?'Entre de novo':'Crie seu Canto';
+  const note=$('#auth-mode-note');
+  if(note)note.textContent=login
+    ?'Seu Canto continua onde você deixou. Use o mesmo e-mail e senha.'
+    :'Você escolhe um nome e um @. Avatar, bio e o resto entram logo depois.';
+  const context=$('#auth-context');
+  if(context)context.innerHTML=login
+    ?'<span>voltando ao AVESSO</span><p>Feed, conversas, Meu Canto e suas preferências voltam com sua conta.</p>'
+    :'<span>depois do cadastro</span><p>Você escolhe avatar, ajusta sua identidade e recebe uma introdução rápida sobre Feed, Praça, Amigos & Cúmplices e Meu Canto.</p>';
+  const password=$('#auth-password');
+  if(password)password.autocomplete=login?'current-password':'new-password';
+  $('#auth-message').textContent='';
+}
 
 $('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();if(state.mode==='signup'&&state.siteSettings?.login_settings?.registration_enabled===false){$('#auth-message').textContent='Novos cadastros estão temporariamente desativados pelo administrador.';return;}const f=new FormData(e.currentTarget);const email=f.get('email');const password=f.get('password');$('#auth-submit').disabled=true;$('#auth-message').textContent='conversando com os computadores...';let result;if(state.mode==='signup'){const handle=String(f.get('handle')||'').toLowerCase();const display_name=String(f.get('display_name')||'').trim().slice(0,80);if(!display_name){result={error:{message:'Escolha um nome exibido. Vale símbolo, emoji, drama e decisões questionáveis.'}}}else if(!/^[a-z0-9_]{3,24}$/.test(handle)){result={error:{message:'Seu @ precisa ter 3–24 letras minúsculas, números ou _.'}}}else{result=await supabase.auth.signUp({email,password,options:{data:{handle,display_name},emailRedirectTo:SITE_URL}});}}else result=await supabase.auth.signInWithPassword({email,password});$('#auth-submit').disabled=false;if(result.error){$('#auth-message').textContent=humanError(result.error.message);return}if(state.mode==='signup'&&!result.data.session){$('#auth-message').textContent='Confira seu e-mail e use o link mais recente. Se já confirmou a conta, abra a aba de entrar e use sua senha.';$('#resend-confirmation').classList.remove('hidden');return}closeCompatDialog($('#auth-dialog'));toast('Você entrou. Tente não estragar tudo.');});
 
