@@ -1590,19 +1590,19 @@
 
 /* AVESSO Canto Público Desktop 2026-10-02 */
 @media (min-width:821px){
-  body:has(.public-profile) #app-view.app-shell{
+  body.avesso-public-corner #app-view.app-shell{
     grid-template-columns:var(--desktop-nav-w) minmax(0,1fr);
     max-width:1780px;
   }
-  body:has(.public-profile) .feed-column{
+  body.avesso-public-corner .feed-column{
     grid-column:2;
     min-width:0;
     max-width:none;
   }
-  body:has(.public-profile) .app-aside{
+  body.avesso-public-corner .app-aside{
     display:none!important;
   }
-  body:has(.public-profile) #feed-list{
+  body.avesso-public-corner #feed-list{
     width:100%;
     max-width:1440px;
     margin-inline:auto;
