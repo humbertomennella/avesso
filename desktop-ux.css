@@ -1893,10 +1893,10 @@
     top:11px;
     right:11px;
   }
-  .post-card:has(>.desktop-context-trigger) .post-route{
+  .post-card.has-desktop-context .post-route{
     padding-right:38px;
   }
-  .post-card:has(>.desktop-context-trigger)>.post-owner-actions{
+  .post-card.has-desktop-context>.post-owner-actions{
     display:none!important;
   }
 
@@ -1905,7 +1905,7 @@
     right:10px;
     opacity:.56;
   }
-  .album-photo:has(>.desktop-context-trigger)>.album-owner-actions{
+  .album-photo.has-desktop-context>.album-owner-actions{
     display:none!important;
   }
   .album-photo:hover>.desktop-context-trigger{
@@ -1927,11 +1927,11 @@
   .dm-bubble:focus-within>.desktop-context-trigger{
     opacity:1;
   }
-  .dm-bubble:has(>.desktop-context-trigger)>.dm-bubble-actions{
+  .dm-bubble.has-desktop-context>.dm-bubble-actions{
     display:none!important;
   }
-  .dm-bubble:has(>.desktop-context-trigger)>.dm-message-body,
-  .dm-bubble:has(>.desktop-context-trigger)>.dm-reply-preview{
+  .dm-bubble.has-desktop-context>.dm-message-body,
+  .dm-bubble.has-desktop-context>.dm-reply-preview{
     margin-right:22px;
   }
 
@@ -1947,7 +1947,7 @@
   .friend-row:hover>.desktop-context-trigger{
     opacity:.95;
   }
-  .friend-row:has(>.desktop-context-trigger){
+  .friend-row.has-desktop-context{
     padding-right:37px!important;
   }
 
