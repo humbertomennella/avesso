@@ -9002,7 +9002,7 @@ body.avesso-own-corner .profile-avatar-large img{
 }
 
 
-/* AVESSO AVATAR QUALITY FIX 2026-10-01 */
+/* AVESSO AVATAR QUALITY FIX 2026-10-01 v2 */
 .avatar-choice img,
 .avatar-choice-modal img{
   width:min(100%,180px)!important;
@@ -9017,10 +9017,7 @@ body.avesso-own-corner .profile-avatar-large img{
   backface-visibility:hidden;
 }
 .avatar-choice,
-.avatar-choice-modal{
-  min-width:0;
-  overflow:hidden;
-}
+.avatar-choice-modal{min-width:0;overflow:hidden}
 .avatar img,
 .mini-avatar img,
 .profile-avatar-large img,
@@ -9030,6 +9027,21 @@ body.avesso-own-corner .profile-avatar-large img{
   object-fit:cover!important;
   object-position:center!important;
   image-rendering:auto!important;
+}
+img[src*="assets/avatars/mago-avesso.webp"],
+img[src*="assets/avatars/guerreiro-avesso.webp"],
+img[src*="assets/avatars/paladina-avesso.webp"],
+img[src*="assets/avatars/barda-avesso.webp"],
+img[src*="assets/avatars/robo-crt-avesso.webp"],
+img[src*="assets/avatars/ciborgue-avesso.webp"],
+img[src*="assets/avatars/entidade-avesso.webp"],
+img[src*="assets/avatars/anao-avesso.webp"],
+img[src*="assets/avatars/alienigena-avesso.webp"],
+img[src*="assets/avatars/lich-avesso.webp"],
+img[src*="assets/avatars/engenheira-avesso.webp"],
+img[src*="assets/avatars/robo-avesso.webp"]{
+  image-rendering:crisp-edges!important;
+  image-rendering:pixelated!important;
 }
 @media(max-width:760px){
   .avatar-choice img,
