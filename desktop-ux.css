@@ -2598,3 +2598,423 @@
     pointer-events:auto;
   }
 }
+
+
+/* AVESSO Desktop Legibility + Geometry Pass 2026-10-02 */
+@media (min-width:821px){
+  body{
+    --desktop-nav-track-w:248px;
+    --desktop-nav-w:248px;
+    --desktop-aside-w:320px;
+  }
+
+  #app-view.app-shell{
+    width:100%!important;
+    max-width:1800px!important;
+    grid-template-columns:var(--desktop-nav-track-w) minmax(0,1fr) var(--desktop-aside-w)!important;
+    gap:24px!important;
+    padding:18px 22px 30px!important;
+    align-items:start;
+  }
+
+  .app-nav{
+    width:var(--desktop-nav-w)!important;
+    max-width:100%;
+    min-width:0;
+    justify-self:start;
+    transition:width .18s ease,transform .18s ease;
+  }
+  body.desktop-nav-collapsed{
+    --desktop-nav-w:96px;
+  }
+  body.desktop-nav-collapsed .app-nav{
+    justify-self:end;
+  }
+  body.desktop-nav-collapsed .app-nav nav button{
+    width:58px;
+    min-height:50px;
+    justify-self:center;
+    padding:8px!important;
+  }
+  body.desktop-nav-collapsed .desktop-nav-icon{
+    font-size:1.28rem!important;
+  }
+  body.desktop-nav-collapsed .desktop-nav-collapse{
+    width:58px;
+    min-height:40px;
+    margin-inline:auto;
+  }
+  body.desktop-nav-collapsed .desktop-nav-collapse span{
+    font-size:1.05rem!important;
+  }
+  body.desktop-nav-collapsed .app-nav>.brand,
+  body.desktop-nav-collapsed .app-nav .user-chip{
+    justify-content:center!important;
+  }
+  body.desktop-nav-collapsed .app-nav .user-chip .avatar{
+    width:48px!important;
+    height:48px!important;
+    flex:0 0 48px!important;
+  }
+
+  .app-nav nav button,
+  .nav-logout{
+    min-height:44px;
+    font-size:.78rem!important;
+    line-height:1.25!important;
+  }
+  .desktop-nav-label{
+    font-size:.78rem!important;
+  }
+  .desktop-nav-icon{
+    font-size:1.05rem!important;
+  }
+  .desktop-nav-collapse{
+    min-height:38px;
+    font-size:.7rem!important;
+  }
+  .app-nav .user-chip strong{
+    font-size:.82rem!important;
+  }
+  .app-nav .user-chip small{
+    font-size:.72rem!important;
+  }
+
+  /* Legibilidade global: metadados deixam de disputar com microscópios. */
+  #app-view{
+    font-size:16px;
+    line-height:1.5;
+  }
+  #app-view small{
+    font-size:.74rem!important;
+    line-height:1.45!important;
+  }
+  #app-view .section-code{
+    font-size:.69rem!important;
+    line-height:1.45!important;
+    letter-spacing:.075em!important;
+  }
+  #app-view p{
+    font-size:max(.86rem,13.5px);
+    line-height:1.55;
+  }
+  #app-view label{
+    font-size:.78rem;
+    line-height:1.4;
+  }
+  #app-view input,
+  #app-view textarea,
+  #app-view select{
+    font-size:.88rem!important;
+    line-height:1.45!important;
+  }
+  #app-view button{
+    line-height:1.25;
+  }
+
+  .desktop-command-bar{
+    min-height:50px;
+    padding:7px 8px;
+  }
+  .desktop-command-bar>button{
+    min-height:38px;
+    font-size:.7rem!important;
+  }
+  .desktop-command-bar>button>span{
+    font-size:.95rem!important;
+  }
+  .desktop-command-bar kbd,
+  .desktop-command-bar>small{
+    font-size:.58rem!important;
+  }
+  .desktop-quick-search input{
+    font-size:.72rem!important;
+  }
+
+  .app-aside .side-card,
+  .app-aside .desktop-live-card{
+    min-width:0;
+  }
+  .app-aside p,
+  .desktop-live-card p,
+  .tower-live p{
+    font-size:.78rem!important;
+    line-height:1.55!important;
+  }
+  .app-aside small,
+  .desktop-live-card small{
+    font-size:.66rem!important;
+  }
+  .tower-live h3{
+    font-size:1.15rem!important;
+  }
+
+  .feed-column,
+  .feed-column>*,
+  #feed-list,
+  #feed-list>*,
+  .staff-dashboard,
+  .messages-hub,
+  .profile-control,
+  .public-profile{
+    min-width:0;
+    max-width:100%;
+  }
+  .feed-column img,
+  .feed-column video,
+  .staff-dashboard img,
+  .staff-dashboard video{
+    max-width:100%;
+  }
+
+  .post-card small,
+  .response-card small,
+  .friend-row small,
+  .conversation-item small,
+  .compact-friend small,
+  .plaza-message header span{
+    font-size:.68rem!important;
+    line-height:1.4!important;
+  }
+  .post-card p,
+  .response-card p,
+  .conversation-item p,
+  .plaza-message p{
+    font-size:.88rem!important;
+    line-height:1.55!important;
+  }
+  .friend-row b,
+  .compact-friend b,
+  .dm-friend b{
+    font-size:.82rem!important;
+  }
+
+  .staff-dashboard p,
+  .staff-dashboard li{
+    font-size:.82rem!important;
+    line-height:1.5!important;
+  }
+  .staff-dashboard small,
+  .staff-dashboard code,
+  .staff-dashboard .section-code{
+    font-size:.67rem!important;
+  }
+  .staff-dashboard button,
+  .staff-dashboard input,
+  .staff-dashboard select,
+  .staff-dashboard textarea{
+    font-size:.75rem!important;
+  }
+
+  /* Dock de conversas recentes: canto inferior, nunca no centro da interface. */
+  .desktop-chat-shelf{
+    left:auto!important;
+    right:18px!important;
+    bottom:18px!important;
+    transform:none!important;
+    max-width:min(520px,calc(100vw - 40px))!important;
+    min-height:48px;
+    padding:6px 8px;
+    z-index:11280;
+  }
+  .desktop-chat-shelf-label{
+    font-size:.58rem!important;
+    padding-inline:6px;
+  }
+  .desktop-chat-shelf-list>button{
+    height:42px;
+    max-width:160px;
+    grid-template-columns:32px minmax(0,1fr);
+  }
+  .desktop-chat-avatar{
+    width:32px;
+    height:32px;
+  }
+  .desktop-chat-shelf-list b{
+    font-size:.67rem!important;
+  }
+  .desktop-chat-shelf-list small{
+    font-size:.56rem!important;
+  }
+
+  /* Stories do perfil: todos os ativos aparecem, sem se cobrirem. */
+  .desktop-profile-main .profile-story-list,
+  .public-profile .profile-story-list{
+    display:grid!important;
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr))!important;
+    gap:10px!important;
+    overflow:visible!important;
+    padding:8px 0 2px!important;
+  }
+  .desktop-profile-main .profile-story-list .story-card,
+  .public-profile .profile-story-list .story-card{
+    width:100%!important;
+    min-width:0!important;
+    min-height:116px!important;
+    aspect-ratio:16/9;
+    grid-template-columns:52px minmax(0,1fr)!important;
+    padding:10px!important;
+    border-radius:6px;
+  }
+  .profile-story-list .story-ring{
+    width:48px!important;
+    height:48px!important;
+  }
+  .profile-story-list .story-card b{
+    font-size:.7rem!important;
+  }
+  .profile-story-list .story-card small{
+    font-size:.62rem!important;
+  }
+
+  /* Visualizador: mídia mantém a proporção original e não toma a tela inteira. */
+  .story-view-dialog{
+    width:min(1080px,calc(100vw - 64px))!important;
+    height:min(760px,calc(100dvh - 54px))!important;
+    max-height:calc(100dvh - 54px)!important;
+  }
+  .story-view-card{
+    grid-template-columns:minmax(0,1fr) 340px!important;
+  }
+  .story-stage{
+    display:grid!important;
+    place-items:center!important;
+    padding:18px!important;
+    overflow:hidden!important;
+  }
+  .story-stage img,
+  .story-stage .story-video{
+    width:auto!important;
+    height:auto!important;
+    max-width:100%!important;
+    max-height:100%!important;
+    object-fit:contain!important;
+    margin:auto;
+  }
+  .story-view-card>header>div>b{
+    font-size:.82rem!important;
+  }
+  .story-view-card>header>div>small,
+  .story-views summary,
+  .story-views b,
+  .story-reaction,
+  .story-desktop-shortcuts{
+    font-size:.64rem!important;
+  }
+  .story-views small{
+    font-size:.57rem!important;
+  }
+
+  /* Meu Canto volta a ter peso visual proporcional ao nome. */
+  .desktop-profile-enhanced .profile-control-hero{
+    min-height:278px!important;
+    grid-template-columns:190px minmax(0,1fr)!important;
+    gap:30px!important;
+    padding:30px 34px!important;
+  }
+  .desktop-profile-enhanced .profile-avatar-large{
+    width:180px!important;
+    height:180px!important;
+    flex:0 0 180px!important;
+  }
+  .desktop-profile-enhanced .profile-name-listening-row h2{
+    font-size:clamp(2.8rem,4.6vw,5.15rem)!important;
+  }
+  .desktop-profile-enhanced .profile-hero-identity>p{
+    font-size:.82rem!important;
+  }
+  .desktop-profile-presence{
+    min-height:28px!important;
+    padding:5px 9px!important;
+    font-size:.61rem!important;
+  }
+  .desktop-profile-summary p{
+    font-size:.86rem!important;
+  }
+  .desktop-profile-summary small{
+    font-size:.8rem!important;
+  }
+  .desktop-profile-actions button{
+    min-height:38px!important;
+    padding:8px 12px!important;
+    font-size:.65rem!important;
+  }
+  .desktop-profile-jump-nav{
+    padding:8px!important;
+    gap:7px!important;
+  }
+  .desktop-profile-jump-nav button{
+    min-height:38px!important;
+    padding:7px 10px!important;
+    font-size:.62rem!important;
+  }
+  .desktop-profile-jump-nav button>span{
+    width:26px!important;
+    height:26px!important;
+    font-size:.8rem!important;
+  }
+  .desktop-profile-jump-nav button>small{
+    font-size:.56rem!important;
+  }
+  .desktop-profile-main .profile-story-section h2,
+  .desktop-profile-main .profile-posts-control h2,
+  .desktop-profile-main .profile-album-control h2,
+  .desktop-profile-main .profile-media-control h2,
+  .desktop-profile-social h2{
+    font-size:1.45rem!important;
+    line-height:1.2!important;
+  }
+
+  body.avesso-public-corner .public-profile>header{
+    grid-template-columns:190px minmax(0,1fr)!important;
+    gap:28px!important;
+  }
+  body.avesso-public-corner .public-profile-avatar{
+    width:180px!important;
+    height:180px!important;
+  }
+  body.avesso-public-corner .public-profile h1{
+    font-size:clamp(2.8rem,4.6vw,5rem)!important;
+  }
+  body.avesso-public-corner .public-profile .status-line{
+    font-size:.78rem!important;
+  }
+}
+
+@media (min-width:821px) and (max-width:1280px){
+  body{
+    --desktop-nav-track-w:210px;
+    --desktop-nav-w:210px;
+    --desktop-aside-w:270px;
+  }
+  body.desktop-nav-collapsed{
+    --desktop-nav-w:92px;
+  }
+  #app-view.app-shell{
+    grid-template-columns:var(--desktop-nav-track-w) minmax(0,1fr) var(--desktop-aside-w)!important;
+    gap:18px!important;
+    padding-inline:14px!important;
+  }
+  .desktop-profile-enhanced .profile-control-hero{
+    grid-template-columns:168px minmax(0,1fr)!important;
+  }
+  .desktop-profile-enhanced .profile-avatar-large{
+    width:158px!important;
+    height:158px!important;
+    flex-basis:158px!important;
+  }
+}
+
+@media (min-width:821px) and (max-width:1050px){
+  body{
+    --desktop-nav-track-w:190px;
+    --desktop-nav-w:190px;
+  }
+  body.desktop-nav-collapsed{
+    --desktop-nav-w:88px;
+  }
+  #app-view.app-shell{
+    grid-template-columns:var(--desktop-nav-track-w) minmax(0,1fr)!important;
+  }
+  .app-aside{display:none!important}
+}
