@@ -3877,15 +3877,18 @@ async function runGlobalSearch(term){
   host.querySelectorAll('[data-discovery-profile]').forEach(b=>b.onclick=()=>{ensureDiscoveryDialog().close();openPublicProfile(b.dataset.discoveryProfile);});
   host.querySelectorAll('[data-discovery-post]').forEach(b=>b.onclick=()=>{ensureDiscoveryDialog().close();openFeedPostFromNotification(b.dataset.discoveryPost);});
 }
-function openGlobalSearch(){
+function openGlobalSearch(event={}){
   if(!state.profile)return;
+  const initialQuery=String(event?.detail?.query||'').trim().slice(0,80);
   const dialog=ensureDiscoveryDialog();
   const host=$('#avesso-discovery-content');
   host.innerHTML='<header class="discovery-head"><span>BUSCAR.EXE</span><h2>Procure pessoas e publicações</h2><p>Busca direta. Sem transformar curiosidade em perfil publicitário.</p></header><label class="global-search-box"><span>⌕</span><input id="global-search-input" type="search" autocomplete="off" placeholder="nome, @ ou texto"><button type="button" id="global-search-clear">×</button></label><div id="global-search-results"><p class="discovery-empty">A busca começa quando você digitar.</p></div>';
   let timer=null;
   const input=$('#global-search-input');
+  if(initialQuery)input.value=initialQuery;
   input.oninput=e=>{clearTimeout(timer);timer=setTimeout(()=>runGlobalSearch(e.target.value),220);};
   $('#global-search-clear').onclick=()=>{input.value='';runGlobalSearch('');input.focus();};
+  if(initialQuery.length>=2)runGlobalSearch(initialQuery);
   if(!dialog.open)dialog.showModal();
   setTimeout(()=>input.focus(),40);
 }
@@ -3945,16 +3948,21 @@ window.addEventListener('avesso:desktop-summary-request',async()=>{
   const nowIso=new Date().toISOString();
   const since=new Date(Date.now()-2*60*60*1000).toISOString();
   try{
-    const [onlineRes,postsRes,unreadRes,pendingRes]=await Promise.all([
+    const [onlineRes,postsRes,unreadRes,pendingRes,plazaRes,storiesRes]=await Promise.all([
       supabase.from('profiles').select('id,display_name,handle,avatar_url,online_until,presence_mode').neq('presence_mode','invisible').gt('online_until',nowIso).limit(24),
       supabase.from('feed_attention').select('id,author_id,author_name,author_handle,body,created_at,response_count,visibility').eq('visibility','publico').gt('created_at',since).order('created_at',{ascending:false}).limit(4),
       supabase.from('direct_messages').select('id',{count:'exact',head:true}).eq('recipient_id',state.profile.id).is('read_at',null),
-      supabase.from('friendships').select('id',{count:'exact',head:true}).eq('addressee_id',state.profile.id).eq('status','pending')
+      supabase.from('friendships').select('id',{count:'exact',head:true}).eq('addressee_id',state.profile.id).eq('status','pending'),
+      supabase.from('plaza_messages').select('id,user_id,body,created_at,message_kind').gt('created_at',since).order('created_at',{ascending:false}).limit(4),
+      supabase.from('stories').select('id,author_id,body,created_at,expires_at,visibility').eq('visibility','publico').gt('expires_at',nowIso).order('created_at',{ascending:false}).limit(6)
     ]);
     const online=(onlineRes.data||[]).filter(p=>p.id!==state.profile.id&&!isPeerBlocked(p.id));
     const posts=(postsRes.data||[]).filter(p=>!isPeerBlocked(p.author_id));
+    const plaza=(plazaRes.data||[]).filter(p=>!isPeerBlocked(p.user_id));
+    const stories=(storiesRes.data||[]).filter(p=>p.author_id!==state.profile.id&&!isPeerBlocked(p.author_id));
     window.dispatchEvent(new CustomEvent('avesso:desktop-summary',{detail:{
-      online,posts,unread:Number(unreadRes.count||0),pending:Number(pendingRes.count||0),at:Date.now()
+      online,posts,plaza,stories,
+      unread:Number(unreadRes.count||0),pending:Number(pendingRes.count||0),at:Date.now()
     }}));
   }catch(error){console.error('desktop summary',error);}
 });
@@ -4944,6 +4952,14 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   installChatScrollContainment(win);
   pinChatToLatest(win);
   repairLegacyVoicePlayers(win);
+  try{
+    window.dispatchEvent(new CustomEvent('avesso:chat-opened',{detail:{
+      peerId,
+      displayName:peer.display_name||'',
+      handle:peer.handle||'',
+      avatar:peer.avatar_url||''
+    }}));
+  }catch{}
 }
 function bindChatControl(button,action){
   if(!button||typeof action!=='function')return;
@@ -5055,7 +5071,6 @@ function toggleChatMinimize(){
   }
   applyChatGeometry();
   if(!state.chatWindowMinimized)setTimeout(()=>$('#dm-input')?.focus(),80);
-  try{window.dispatchEvent(new CustomEvent('avesso:chat-opened',{detail:{peerId,displayName:peer.display_name||'',handle:peer.handle||'',avatar:peer.avatar_url||''}}));}catch{}
 }
 function autoMinimizeChat(){
   if(!state.chatWindowOpen||state.chatWindowMinimized)return;
