@@ -465,3 +465,340 @@
   .app-aside{display:none!important}
   .desktop-chat-shelf{max-width:420px;left:auto;right:16px;transform:none}
 }
+
+
+/* Desktop suite v2: search permanente, AGORA.EXE expandido, notificações agrupadas e trilho de chats */
+@media (min-width:821px){
+  .desktop-command-bar{
+    align-items:center;
+  }
+  .desktop-quick-search{
+    flex:1 1 390px;
+    min-width:240px;
+    max-width:520px;
+    height:36px;
+    display:grid;
+    grid-template-columns:auto minmax(0,1fr) 30px auto;
+    align-items:center;
+    gap:7px;
+    padding:0 8px 0 10px;
+    border:1px solid #2d4145;
+    border-radius:6px;
+    background:#080d0f;
+    box-shadow:inset 0 0 0 1px #050809;
+  }
+  .desktop-quick-search:focus-within{
+    border-color:var(--cyan);
+    box-shadow:0 0 0 2px color-mix(in srgb,var(--cyan) 16%,transparent),inset 0 0 0 1px #050809;
+  }
+  .desktop-quick-search>span{
+    color:var(--acid);
+    font:800 .8rem var(--mono);
+  }
+  .desktop-quick-search input{
+    width:100%;
+    min-width:0;
+    border:0;
+    outline:0;
+    background:transparent;
+    color:#dce7e4;
+    font:650 .56rem var(--mono);
+  }
+  .desktop-quick-search input::placeholder{color:#61706d}
+  .desktop-quick-search button{
+    height:24px;
+    border:1px solid #31464a;
+    border-radius:4px;
+    background:#0f1719;
+    color:var(--cyan);
+    cursor:pointer;
+    font:800 .65rem var(--mono);
+  }
+  .desktop-quick-search button:hover{border-color:var(--acid);color:var(--acid)}
+  .desktop-quick-search kbd{
+    color:#667571;
+    font:650 .43rem var(--mono);
+    white-space:nowrap;
+  }
+
+  .desktop-live-card{
+    max-height:calc(100vh - 74px);
+    overflow:auto;
+    scrollbar-width:thin;
+  }
+  .desktop-live-section{
+    padding-top:10px;
+    margin-top:10px;
+    border-top:1px solid #223236;
+  }
+  .desktop-live-section-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:6px;
+    color:#73817e;
+    font:800 .43rem var(--mono);
+    letter-spacing:.06em;
+  }
+  .desktop-live-online{
+    display:grid;
+    gap:4px;
+  }
+  .desktop-live-online>button{
+    width:100%;
+    min-width:0;
+    display:grid;
+    grid-template-columns:28px minmax(0,1fr);
+    gap:7px;
+    align-items:center;
+    padding:5px 6px;
+    border:1px solid transparent;
+    border-radius:5px;
+    background:#0a1012;
+    color:#cbd5d2;
+    text-align:left;
+    cursor:pointer;
+  }
+  .desktop-live-online>button:hover{
+    border-color:#355157;
+    background:#0d1517;
+  }
+  .desktop-live-avatar{
+    width:28px;
+    height:28px;
+    display:grid;
+    place-items:center;
+    overflow:hidden;
+    border:1px solid #385057;
+    border-radius:4px;
+    background:#05090a;
+    color:#79dc91;
+    font-size:.58rem;
+  }
+  .desktop-live-avatar img{width:100%;height:100%;object-fit:cover}
+  .desktop-live-online b,
+  .desktop-live-online small{
+    display:block;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .desktop-live-online b{font:700 .52rem var(--sans)}
+  .desktop-live-online small{margin-top:1px;color:#697975;font:600 .42rem var(--mono)}
+
+  .desktop-live-posts,
+  .desktop-live-plaza,
+  .desktop-live-stories{
+    display:grid;
+    gap:4px;
+  }
+  .desktop-live-posts>button,
+  .desktop-live-plaza>button,
+  .desktop-live-stories>button{
+    width:100%;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:2px 6px;
+    padding:7px 8px;
+    border:1px solid transparent;
+    border-radius:5px;
+    background:#090f11;
+    color:#bfcac7;
+    text-align:left;
+    cursor:pointer;
+  }
+  .desktop-live-posts>button:hover,
+  .desktop-live-plaza>button:hover,
+  .desktop-live-stories>button:hover{
+    border-color:#304a50;
+    background:#0c1416;
+  }
+  .desktop-live-posts b,
+  .desktop-live-plaza b,
+  .desktop-live-stories b{
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    color:#dce7e4;
+    font:700 .47rem var(--mono);
+  }
+  .desktop-live-posts small,
+  .desktop-live-plaza small,
+  .desktop-live-stories small{
+    color:#61716d;
+    font:600 .39rem var(--mono);
+  }
+  .desktop-live-posts p,
+  .desktop-live-plaza p,
+  .desktop-live-stories p{
+    grid-column:1/-1;
+    margin:2px 0 0;
+    color:#899793;
+    font:500 .46rem/1.35 var(--sans);
+  }
+
+  .desktop-notification-item{
+    position:relative;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 34px;
+    align-items:stretch;
+    border-bottom:1px solid #1f2e31;
+    background:#090e10;
+  }
+  .desktop-notification-item.unread{
+    background:linear-gradient(90deg,#132227 0,#0a1012 58%);
+    box-shadow:inset 3px 0 0 var(--acid);
+  }
+  .desktop-notification-open{
+    min-width:0;
+    display:grid;
+    grid-template-columns:28px minmax(0,1fr);
+    gap:8px;
+    align-items:start;
+    padding:10px 8px 10px 11px;
+    border:0;
+    background:transparent;
+    color:inherit;
+    text-align:left;
+    cursor:pointer;
+  }
+  .desktop-notification-open>i{
+    width:26px;height:26px;
+    display:grid;place-items:center;
+    border:1px solid #304248;
+    background:#060a0c;
+    color:var(--cyan);
+    font-style:normal;
+  }
+  .desktop-notification-open span{min-width:0}
+  .desktop-notification-open b,
+  .desktop-notification-open em,
+  .desktop-notification-open small{display:block}
+  .desktop-notification-open b{
+    color:#dbe5e2;
+    font:750 .52rem var(--sans);
+  }
+  .desktop-notification-open em{
+    margin-top:3px;
+    color:#8d9b97;
+    font:500 .47rem/1.35 var(--sans);
+    font-style:normal;
+  }
+  .desktop-notification-open small{
+    margin-top:4px;
+    color:#586763;
+    font:600 .4rem var(--mono);
+  }
+  .desktop-notification-read{
+    border:0;
+    border-left:1px solid #1e2c30;
+    background:transparent;
+    color:#5f716c;
+    cursor:pointer;
+    font:800 .58rem var(--mono);
+  }
+  .desktop-notification-read:hover{
+    background:#102025;
+    color:var(--acid);
+  }
+  .desktop-notification-count{
+    display:inline-grid;
+    min-width:18px;
+    height:18px;
+    place-items:center;
+    margin-left:5px;
+    padding:0 4px;
+    border:1px solid #3e5257;
+    border-radius:9px;
+    color:var(--acid);
+    font:800 .38rem var(--mono);
+    vertical-align:middle;
+  }
+
+  .dm-floating-window{
+    container-type:inline-size;
+  }
+  #desktop-chat-search-head{
+    color:#15515f;
+    font-size:.72rem;
+  }
+  .dm-window-body{
+    position:relative;
+  }
+  .desktop-chat-recents{
+    display:none;
+  }
+  .dm-floating-window.desktop-chat-rail-active:not(.minimized) .desktop-chat-recents{
+    position:absolute;
+    z-index:8;
+    left:0;
+    top:0;
+    bottom:88px;
+    width:92px;
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    padding:8px 6px;
+    border-right:1px solid #8db1b9;
+    background:linear-gradient(180deg,#d6e9ed,#bdd8de);
+    overflow:auto;
+  }
+  .desktop-chat-recents>span{
+    color:#57757c;
+    font:800 .4rem var(--mono);
+    letter-spacing:.06em;
+    text-align:center;
+  }
+  .desktop-chat-recents>div{
+    display:grid;
+    gap:5px;
+  }
+  .desktop-chat-recents button{
+    min-width:0;
+    display:grid;
+    grid-template-columns:28px minmax(0,1fr);
+    gap:5px;
+    align-items:center;
+    padding:4px;
+    border:1px solid #9ab9c0;
+    border-radius:4px;
+    background:#eaf5f7;
+    color:#24444b;
+    text-align:left;
+    cursor:pointer;
+  }
+  .desktop-chat-recents button:hover,
+  .desktop-chat-recents button.active{
+    border-color:#39889a;
+    background:#fff;
+  }
+  .desktop-chat-recents i{
+    width:28px;height:28px;
+    display:grid;place-items:center;
+    overflow:hidden;
+    border:1px solid #89adb5;
+    background:#102429;
+    color:#d8ff3e;
+    font-style:normal;
+  }
+  .desktop-chat-recents img{width:100%;height:100%;object-fit:cover}
+  .desktop-chat-recents b{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font:700 .45rem Arial,sans-serif;
+  }
+  .dm-floating-window.desktop-chat-rail-active:not(.minimized) .dm-msn-conversation{
+    margin-left:92px;
+  }
+}
+
+@container (max-width:500px){
+  .desktop-chat-recents{display:none!important}
+  .dm-msn-conversation{margin-left:0!important}
+}
+
+@media (min-width:821px) and (max-width:1180px){
+  .desktop-quick-search kbd{display:none}
+  .desktop-quick-search{min-width:190px}
+}
