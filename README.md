@@ -32,6 +32,7 @@ Princípio técnico: personagens podem interferir na apresentação, mas nunca f
 - Backend: Supabase (Auth, PostgreSQL, Realtime e RLS).
 - Hospedagem: GitHub Pages pelo workflow em `.github/workflows/pages.yml`.
 - Projeto Supabase: `AVESSO`, região `sa-east-1`.
+- [Modelo de segurança](SECURITY.md): RLS, papéis, antiabuso, Storage e Edge Functions.
 
 ## Desenvolvimento local
 
@@ -50,4 +51,4 @@ A chave em `config.js` é publicável e foi criada para uso no navegador. Nunca 
 2. Definir política de confirmação de e-mail e SMTP próprio.
 3. Concluir moderação e painel administrativo.
 4. Revisar Política de Privacidade e Termos de Uso para LGPD.
-5. Realizar teste de abuso, rate limiting e recuperação de conta.
+5. Reexecutar testes de abuso, rate limiting, permissões de staff e recuperação de conta antes de cada abertura maior ao público.
