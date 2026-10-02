@@ -3679,6 +3679,7 @@ function applyAppTabLayout(){
   const worldOpen=['residents','plaza','tower','profile','public_profile','messages','admin'].includes(state.tab);
   document.body.classList.toggle('avesso-feed-home',state.tab==='feed');
   document.body.classList.toggle('avesso-own-corner',state.tab==='profile');
+  document.body.classList.toggle('avesso-public-corner',state.tab==='public_profile');
   $('#app-view')?.classList.toggle('inhabitants-open',worldOpen);
   $('.composer')?.classList.toggle('hidden',worldOpen||state.tab==='profile');
   $('#stories-zone')?.classList.toggle('hidden',state.tab!=='feed');
