@@ -555,7 +555,7 @@
         <span><b>${esc(chat.displayName)}</b><small>@${esc(chat.handle||'...')}</small></span>
       </button>`).join('');
     qa('[data-desktop-chat-peer]',list).forEach(button=>button.onclick=()=>window.dispatchEvent(
-      new CustomEvent('avesso:open-target',{detail:{target:{type:'chat',id:button.dataset.desktopChatPeer}}})
+      new CustomEvent('avesso:desktop-open-chat',{detail:{peerId:button.dataset.desktopChatPeer}})
     ));
   }
 
@@ -595,7 +595,7 @@
         <b>${esc(chat.displayName)}</b>
       </button>`).join('')+'</div>';
     qa('[data-desktop-rail-chat]',rail).forEach(button=>button.onclick=()=>window.dispatchEvent(
-      new CustomEvent('avesso:open-target',{detail:{target:{type:'chat',id:button.dataset.desktopRailChat}}})
+      new CustomEvent('avesso:desktop-open-chat',{detail:{peerId:button.dataset.desktopRailChat}})
     ));
     win.classList.toggle('desktop-chat-rail-active',recentChats.length>1);
   }
