@@ -1906,6 +1906,7 @@ async function enterApp(){
     loadStoriesStrip()
   ]);
   coreLoad();
+  setTimeout(()=>handleAvessoDeepLink().catch(error=>console.error('deep link',error)),260);
 
   // Se algum subsistema externo travar, o feed continua funcionando.
   (async()=>{
@@ -3341,6 +3342,95 @@ async function renderAdminDashboard(){
   $('#admin-refresh')?.addEventListener('click',renderAdminDashboard);
   host.querySelectorAll('[data-staff-section]').forEach(b=>b.onclick=()=>{state.staffSection=b.dataset.staffSection;renderAdminDashboard();});
   bindDashboardSection(state.staffSection,data);
+}
+
+
+function avessoShareUrl(type,id){
+  const url=new URL(window.location.href);
+  url.search='';
+  url.hash='';
+  url.searchParams.set('open',String(type||''));
+  url.searchParams.set('id',String(id||''));
+  return url.toString();
+}
+async function copyAvessoText(text,success='copiado.'){
+  const value=String(text||'');
+  if(!value)return false;
+  try{
+    await navigator.clipboard.writeText(value);
+    toast(success);
+    return true;
+  }catch{
+    const input=document.createElement('textarea');
+    input.value=value;input.style.position='fixed';input.style.opacity='0';input.style.pointerEvents='none';
+    document.body.appendChild(input);input.select();
+    let ok=false;
+    try{ok=document.execCommand('copy');}catch{}
+    input.remove();
+    if(ok)toast(success);
+    else toast('Não consegui copiar. O clipboard decidiu exercer autonomia.');
+    return ok;
+  }
+}
+function desktopContextMessageAction(messageId,action){
+  const bubble=document.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
+  if(!bubble)return;
+  const selectors={
+    reply:'[data-dm-reply]',
+    react:'[data-dm-react-menu]',
+    edit:'[data-dm-edit]',
+    delete:'[data-dm-delete]'
+  };
+  bubble.querySelector(selectors[action]||'')?.click();
+}
+window.addEventListener('avesso:desktop-context-action',event=>{
+  const detail=event.detail||{};
+  const id=String(detail.id||'');
+  const action=String(detail.action||'');
+  if(!action)return;
+  if(action==='post-reply')document.querySelector(`[data-reply-toggle="${CSS.escape(id)}"]`)?.click();
+  else if(action==='post-turn')document.querySelector(`[data-turn-post="${CSS.escape(id)}"]`)?.click();
+  else if(action==='post-edit')document.querySelector(`[data-post-edit="${CSS.escape(id)}"]`)?.click();
+  else if(action==='post-delete')document.querySelector(`[data-post-delete="${CSS.escape(id)}"]`)?.click();
+  else if(action==='post-report'&&detail.authorId)reportUser(detail.authorId);
+  else if(action==='post-copy-link')copyAvessoText(avessoShareUrl('post',id),'Link da publicação copiado.');
+  else if(action==='photo-open')openAlbumPhotoViewer(id);
+  else if(action==='photo-edit')document.querySelector(`[data-photo-edit="${CSS.escape(id)}"]`)?.click();
+  else if(action==='photo-delete')document.querySelector(`[data-photo-delete="${CSS.escape(id)}"]`)?.click();
+  else if(action==='photo-copy-link')copyAvessoText(avessoShareUrl('photo',id),'Link da foto copiado.');
+  else if(action==='message-reply')desktopContextMessageAction(id,'reply');
+  else if(action==='message-react')desktopContextMessageAction(id,'react');
+  else if(action==='message-edit')desktopContextMessageAction(id,'edit');
+  else if(action==='message-delete')desktopContextMessageAction(id,'delete');
+  else if(action==='message-copy')copyAvessoText(detail.text||'','Mensagem copiada.');
+  else if(action==='user-open'&&id){
+    if(id===state.profile?.id)document.querySelector('[data-app-tab="profile"]')?.click();
+    else openPublicProfile(id);
+  }
+  else if(action==='user-message'&&id)openFriendChat(id);
+  else if(action==='user-report'&&id&&id!==state.profile?.id)reportUser(id);
+  else if(action==='user-copy-link'&&id)copyAvessoText(avessoShareUrl('profile',id),'Link do Canto copiado.');
+});
+async function handleAvessoDeepLink(){
+  if(!state.profile)return;
+  const params=new URLSearchParams(window.location.search);
+  const type=params.get('open');
+  const id=params.get('id');
+  if(!type||!id)return;
+  if(type==='profile'){
+    if(id===state.profile.id)document.querySelector('[data-app-tab="profile"]')?.click();
+    else await openPublicProfile(id);
+  }else if(type==='photo'){
+    await openAlbumPhotoViewer(id);
+  }else if(type==='post'){
+    state.tab='feed';
+    applyAppTabLayout();
+    document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x.dataset.appTab==='feed'));
+    await loadFeed();
+    await openFeedPostFromNotification(id);
+  }else if(type==='story'){
+    await openStory(id);
+  }
 }
 
 function applyAppTabLayout(){
