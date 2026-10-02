@@ -544,7 +544,9 @@
     const shelf=ensureChatShelf();
     const list=q('.desktop-chat-shelf-list',shelf);
     const signature=JSON.stringify(recentChats.map(x=>[x.peerId,x.displayName,x.handle,x.avatar]));
-    shelf.classList.toggle('hidden',recentChats.length===0);
+    const activeChat=q('#dm-floating-window');
+    const chatVisible=Boolean(activeChat&&!activeChat.classList.contains('hidden'));
+    shelf.classList.toggle('hidden',recentChats.length===0||chatVisible);
     if(list.dataset.signature===signature)return;
     list.dataset.signature=signature;
     list.innerHTML=recentChats.map(chat=>`
@@ -1221,8 +1223,10 @@
     window.addEventListener('avesso:desktop-summary',e=>renderSummary(e.detail||{}));
     window.addEventListener('avesso:chat-opened',e=>{
       rememberChat(e.detail||{});
-      setTimeout(()=>{bindChatDrop();ensureChatDesktopEnhancements();},0);
+      renderChatShelf();
+      setTimeout(()=>{bindChatDrop();ensureChatDesktopEnhancements();renderChatShelf();},0);
     });
+    window.addEventListener('avesso:chat-closed',()=>setTimeout(renderChatShelf,0));
     window.addEventListener('avesso:notification',event=>{
       rememberDesktopNotification(event.detail||{});
       setTimeout(()=>{
