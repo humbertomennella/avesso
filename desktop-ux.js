@@ -66,6 +66,7 @@
     const kind=String(detail.kind||'interaction');
     const title=String(detail.title||'AVESSO').slice(0,140);
     const body=String(detail.body||'').slice(0,260);
+    const avatar=String(detail.avatar||'').slice(0,1200);
     const target=detail.target||notificationTargetFromUrl(detail.url)||null;
     const targetKey=target?.type&&target?.id?`${target.type}:${target.id}`:'';
     const dedupeKey=String(detail.dedupeKey||[kind,targetKey,title,body].join('|')).toLowerCase();
@@ -82,14 +83,14 @@
       rows.splice(existingIndex,1);
       rows.unshift({
         ...existing,
-        kind,title,body,target,dedupeKey,createdAt,
+        kind,title,body,avatar,target,dedupeKey,createdAt,
         read:false,
         repeat:Math.max(1,Number(existing.repeat||1))+1
       });
     }else{
       rows.unshift({
         id:String(createdAt)+'-'+Math.random().toString(36).slice(2,7),
-        kind,title,body,createdAt,target,dedupeKey,
+        kind,title,body,avatar,createdAt,target,dedupeKey,
         read:false,repeat:1
       });
     }
@@ -373,12 +374,16 @@
     list.innerHTML=groups.map(group=>{
       const row=group.latest||{};
       const badge=group.count>1?`<strong class="desktop-notification-count">×${group.count}</strong>`:'';
-      return `<article class="desktop-notification-item ${group.unread?'unread':''}">
+      const visual=row.avatar
+        ?`<i class="has-avatar"><img src="${esc(row.avatar)}" alt="" loading="lazy" decoding="async"></i>`
+        :`<i>${icons[row.kind]||'•'}</i>`;
+      const categoryLabel={messages:'mensagens',reactions:'interações',people:'pessoas',system:'sistema',other:'atividade'}[group.category]||'atividade';
+      return `<article class="desktop-notification-item ${group.unread?'unread':'read'}" data-notification-category="${esc(group.category)}">
         <button type="button" class="desktop-notification-open" data-desktop-notification-group="${esc(group.id)}">
-          <i>${icons[row.kind]||'•'}</i>
-          <span><b>${esc(row.title||'AVESSO')} ${badge}</b><em>${esc(row.body||'')}</em><small>${timeAgo(row.createdAt)}</small></span>
+          ${visual}
+          <span><b>${esc(row.title||'AVESSO')} ${badge}</b><em>${esc(row.body||'')}</em><small>${esc(categoryLabel)} · ${timeAgo(row.createdAt)}</small></span>
         </button>
-        <button type="button" class="desktop-notification-read" data-desktop-mark-one="${esc(group.id)}" title="Marcar como lida" aria-label="Marcar como lida">✓</button>
+        ${group.unread?`<button type="button" class="desktop-notification-read" data-desktop-mark-one="${esc(group.id)}" title="Marcar como lida" aria-label="Marcar como lida">✓</button>`:'<span class="desktop-notification-read-state" aria-label="Lida">✓</span>'}
       </article>`;
     }).join('');
   }
