@@ -1,4 +1,11 @@
 /* AVESSO Desktop UX 2026-10-02 */
+.desktop-nav-collapse,
+.desktop-command-bar,
+.desktop-notification-drawer,
+.desktop-chat-shelf{
+  display:none;
+}
+
 @media (min-width:821px){
   body{
     --desktop-nav-w:248px;
