@@ -9,6 +9,46 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, staffSection:'overview', staffInternalChannel:null, staffDirectory:{}, staffByHandle:{}, userBadges:{}, badgeCatalog:{}, customAssets:[], customAssetBySlug:{}, customEmoticons:[], suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, feedLoadedPosts:[], feedCursor:null, feedHasMore:true, feedLoadingMore:false, directHistoryCursor:null, directHistoryHasMore:false, typingTimer:null, typingPeerId:null, replyingTo:null, editingMessage:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
 function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
+
+let connectionBannerTimer=null;
+function ensureConnectionBanner(){
+  let banner=$('#connection-status-banner');
+  if(banner)return banner;
+  banner=document.createElement('div');
+  banner.id='connection-status-banner';
+  banner.className='connection-status-banner hidden';
+  banner.setAttribute('role','status');
+  banner.setAttribute('aria-live','polite');
+  banner.setAttribute('aria-atomic','true');
+  document.body.appendChild(banner);
+  return banner;
+}
+function setConnectionHealth(mode='online',message=''){
+  const banner=ensureConnectionBanner();
+  clearTimeout(connectionBannerTimer);
+  document.body.dataset.networkState=mode;
+  banner.className='connection-status-banner '+mode;
+  const labels={
+    offline:'SEM REDE // você está offline. O que já carregou continua aqui.',
+    reconnecting:'REDE INSTÁVEL // realtime reconectando...',
+    syncing:'CONEXÃO RESTAURADA // sincronizando mudanças...',
+    online:'CONEXÃO OK'
+  };
+  banner.textContent=message||labels[mode]||labels.online;
+  banner.classList.toggle('hidden',mode==='online');
+  if(mode==='syncing'){
+    connectionBannerTimer=setTimeout(()=>{
+      if(navigator.onLine)setConnectionHealth('online');
+    },1800);
+  }
+}
+window.addEventListener('offline',()=>setConnectionHealth('offline'));
+window.addEventListener('online',()=>{
+  setConnectionHealth('syncing');
+  if(typeof scheduleFeedRefresh==='function')scheduleFeedRefresh(80);
+  if(typeof pollDirectInbox==='function')pollDirectInbox();
+});
+
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
 function ago(date){ const s=Math.floor((Date.now()-new Date(date))/1000); if(s<60)return'agora'; if(s<3600)return`${Math.floor(s/60)}min`; if(s<86400)return`${Math.floor(s/3600)}h`; return`${Math.floor(s/86400)}d`; }
 function escapeHtml(value=''){ const d=document.createElement('div'); d.textContent=value; return d.innerHTML; }
@@ -1878,6 +1918,7 @@ async function enterApp(){
   $('.site-header').classList.add('hidden');
   $('.site-footer').classList.add('hidden');
   $('#app-view').classList.remove('hidden');
+  setConnectionHealth(navigator.onLine?'online':'offline');
 
   const profileResult=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();
   const data=profileResult.data;
@@ -2548,7 +2589,8 @@ async function loadFeed({append=false}={}){
       renderFeed(cached.posts,cached.threadData||{responses:{},characters:{},reactions:{}});
       return;
     }
-    status.textContent='O feed falhou. Até o anti-algoritmo tem segunda-feira.';
+    status.textContent=navigator.onLine?'O feed falhou. Até o anti-algoritmo tem segunda-feira.':'SEM REDE // mostrando o que já estava salvo quando possível.';
+    if(!navigator.onLine)setConnectionHealth('offline');
     algoSay('feed_error');
     return;
   }
@@ -3599,6 +3641,8 @@ function startPlazaRealtime(){
     .subscribe(status=>{
       const dot=$('#plaza-realtime-status');
       if(dot)dot.textContent=status==='SUBSCRIBED'?'● realtime':'○ conectando';
+      if(status==='SUBSCRIBED'&&navigator.onLine)setConnectionHealth('online');
+      else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)&&navigator.onLine)setConnectionHealth('reconnecting');
     });
 }
 async function loadPlazaMessages(){
@@ -4524,8 +4568,14 @@ function startDirectRealtime(){
   channel.subscribe(status=>{
     if(state.directChannel!==channel)return;
     state.directChannelStatus=status;
-    if(status==='SUBSCRIBED')pollDirectInbox();
-    if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))scheduleDirectReconnect();
+    if(status==='SUBSCRIBED'){
+      if(navigator.onLine)setConnectionHealth('online');
+      pollDirectInbox();
+    }
+    if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){
+      if(navigator.onLine)setConnectionHealth('reconnecting');
+      scheduleDirectReconnect();
+    }
   });
 }
 
@@ -6442,7 +6492,10 @@ function subscribeRealtime(){
       if(c?.slug==='rei_engajamento'&&row.trigger_type==='king_broadcast')return;
       if(c)showEncounter({character:c,interaction:{id:row.id,body:row.body,source:row.source}});
     })
-    .subscribe();
+    .subscribe(status=>{
+      if(status==='SUBSCRIBED'&&navigator.onLine)setConnectionHealth('online');
+      else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)&&navigator.onLine)setConnectionHealth('reconnecting');
+    });
 }
 
 function showAuthLinkError(){
