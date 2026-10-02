@@ -243,6 +243,12 @@
         <button type="button" data-desktop-clear-read>limpar lidas</button>
         <button type="button" data-desktop-clear-notifications>limpar tudo</button>
       </footer>`;
+    const backdrop=document.createElement('div');
+    backdrop.id='desktop-notification-backdrop';
+    backdrop.className='desktop-notification-backdrop';
+    backdrop.setAttribute('aria-hidden','true');
+    backdrop.onclick=closeNotificationDrawer;
+    document.body.appendChild(backdrop);
     document.body.appendChild(drawer);
     q('[data-desktop-notification-close]',drawer).onclick=closeNotificationDrawer;
     qa('[data-desktop-notification-filter]',drawer).forEach((button,index)=>button.setAttribute('aria-pressed',String(index===0)));
@@ -411,6 +417,7 @@
     renderNotificationDrawer();
     drawer.classList.add('open');
     drawer.setAttribute('aria-hidden','false');
+    q('#desktop-notification-backdrop')?.classList.add('open');
     document.body.classList.add('desktop-notifications-open');
     q('[data-desktop-notification-close]',drawer)?.focus({preventScroll:true});
   }
@@ -419,6 +426,7 @@
     const wasOpen=drawer?.classList.contains('open');
     drawer?.classList.remove('open');
     drawer?.setAttribute('aria-hidden','true');
+    q('#desktop-notification-backdrop')?.classList.remove('open');
     document.body.classList.remove('desktop-notifications-open');
     if(wasOpen){
       const opener=notificationOpener;
