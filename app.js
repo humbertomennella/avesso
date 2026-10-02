@@ -3940,6 +3940,24 @@ async function openHealthSurface(){
 window.addEventListener('avesso:open-search',openGlobalSearch);
 window.addEventListener('avesso:open-now',openNowSurface);
 window.addEventListener('avesso:open-health',openHealthSurface);
+window.addEventListener('avesso:desktop-summary-request',async()=>{
+  if(!state.profile)return;
+  const nowIso=new Date().toISOString();
+  const since=new Date(Date.now()-2*60*60*1000).toISOString();
+  try{
+    const [onlineRes,postsRes,unreadRes,pendingRes]=await Promise.all([
+      supabase.from('profiles').select('id,display_name,handle,avatar_url,online_until,presence_mode').neq('presence_mode','invisible').gt('online_until',nowIso).limit(24),
+      supabase.from('feed_attention').select('id,author_id,author_name,author_handle,body,created_at,response_count,visibility').eq('visibility','publico').gt('created_at',since).order('created_at',{ascending:false}).limit(4),
+      supabase.from('direct_messages').select('id',{count:'exact',head:true}).eq('recipient_id',state.profile.id).is('read_at',null),
+      supabase.from('friendships').select('id',{count:'exact',head:true}).eq('addressee_id',state.profile.id).eq('status','pending')
+    ]);
+    const online=(onlineRes.data||[]).filter(p=>p.id!==state.profile.id&&!isPeerBlocked(p.id));
+    const posts=(postsRes.data||[]).filter(p=>!isPeerBlocked(p.author_id));
+    window.dispatchEvent(new CustomEvent('avesso:desktop-summary',{detail:{
+      online,posts,unread:Number(unreadRes.count||0),pending:Number(pendingRes.count||0),at:Date.now()
+    }}));
+  }catch(error){console.error('desktop summary',error);}
+});
 async function openFeedPostFromNotification(postId){
   document.querySelector('[data-app-tab="feed"]')?.click();
   setTimeout(()=>document.querySelector(`[data-post-card="${CSS.escape(String(postId))}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),520);
@@ -4680,6 +4698,18 @@ function ensureChatResizeHandles(win){
     win.appendChild(handle);
   });
 }
+function snapChatGeometry(geometry){
+  if(!geometry||!chatDesktopEnabled())return geometry;
+  const snap=18;
+  const g={...geometry};
+  const maxLeft=Math.max(6,window.innerWidth-g.width-6);
+  const maxTop=Math.max(6,window.innerHeight-g.height-6);
+  if(g.left<=snap)g.left=6;
+  if(Math.abs((g.left+g.width)-window.innerWidth)<=snap)g.left=maxLeft;
+  if(g.top<=snap)g.top=6;
+  if(Math.abs((g.top+g.height)-window.innerHeight)<=snap)g.top=maxTop;
+  return clampChatGeometry(g);
+}
 function startChatPointerAction(event,mode){
   if(!chatDesktopEnabled()||event.button!==0)return;
   if(state.chatMaximized)return;
@@ -4716,7 +4746,7 @@ function startChatPointerAction(event,mode){
     window.removeEventListener('pointermove',move);
     window.removeEventListener('pointerup',up);
     document.documentElement.classList.remove('dm-window-interacting');
-    state.chatGeometry=clampChatGeometry(state.chatGeometry||start);
+    state.chatGeometry=snapChatGeometry(state.chatGeometry||start);
     saveChatGeometry();
     applyChatGeometry();
   };
@@ -4808,6 +4838,10 @@ async function openChatWindow(peerId,{keepMinimized=false,markRead=true}={}){
   const theme=state.profile?.chat_theme||'bbs_cyan';
   const chatWallpaper=state.profile?.chat_wallpaper||'none';
   const win=ensureChatWindow();
+  win.dataset.peerId=peerId;
+  win.dataset.peerName=peer.display_name||'';
+  win.dataset.peerHandle=peer.handle||'';
+  win.dataset.peerAvatar=peer.avatar_url||'';
   win.className=`dm-floating-window ${chatThemeClass(theme)} ${state.chatWindowMinimized?'minimized':''}`;
   win.style.setProperty('--dm-chat-wallpaper',chatWallpaperCss(chatWallpaper));
   win.dataset.chatTheme=theme;
@@ -5021,6 +5055,7 @@ function toggleChatMinimize(){
   }
   applyChatGeometry();
   if(!state.chatWindowMinimized)setTimeout(()=>$('#dm-input')?.focus(),80);
+  try{window.dispatchEvent(new CustomEvent('avesso:chat-opened',{detail:{peerId,displayName:peer.display_name||'',handle:peer.handle||'',avatar:peer.avatar_url||''}}));}catch{}
 }
 function autoMinimizeChat(){
   if(!state.chatWindowOpen||state.chatWindowMinimized)return;
