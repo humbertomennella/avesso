@@ -732,7 +732,7 @@ async function publishStory(){
 
 async function loadProfileStories(userId,selector){
   const host=$(selector);if(!host||!userId)return;
-  const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,media_type,visibility,created_at,expires_at').eq('author_id',userId).gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(20);
+  const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,media_type,visibility,created_at,expires_at').eq('author_id',userId).gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
   if(error){host.innerHTML='<p class="story-empty">Os stories se perderam no cache.</p>';return;}
   const stories=await hydrateStories(data||[]);
   host.innerHTML=stories.map(s=>storyCardHtml(s)).join('')||'<p class="story-empty">Nenhum story ativo. A internet sobreviveu.</p>';
@@ -4327,7 +4327,7 @@ async function notifyPendingFriendRequests(){
 window.addEventListener('avesso:open-target',event=>{
   const target=event.detail?.target||event.detail||{};
   if(!target?.type||!target?.id)return;
-  if(target.type==='chat')openFriendChat(target.id);
+  if(target.type==='chat')openQuickFriendChat(target.id);
   else if(target.type==='profile')openPublicProfile(target.id);
   else if(target.type==='post')openFeedPostFromNotification(target.id);
   else if(target.type==='story')openStory(target.id);
@@ -5818,6 +5818,7 @@ function closeChatWindow(silent=false){
   clearTimeout(state.typingTimer);state.typingTimer=null;state.typingPeerId=null;state.replyingTo=null;
   state.chatWindowOpen=false;state.chatWindowMinimized=false;state.directPeerId=null;
   if(win){win.classList.remove('incoming-pulse');win.classList.add('hidden');}
+  try{window.dispatchEvent(new CustomEvent('avesso:chat-closed'));}catch{}
   if(!silent)toast('Conversa fechada. Nenhum “tchau” automático foi enviado.');
 }
 function triggerScreenNudge(){
