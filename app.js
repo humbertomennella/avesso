@@ -1050,6 +1050,11 @@ async function registerNotificationWorker(){
   try{
     state.notificationRegistration=await navigator.serviceWorker.register(new URL('sw.js',SITE_URL).href,{scope:new URL('./',SITE_URL).pathname,updateViaCache:'none'});
     const registration=state.notificationRegistration;
+    let controllerSeen=Boolean(navigator.serviceWorker.controller);
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(controllerSeen)window.dispatchEvent(new CustomEvent('avesso:update-ready'));
+      controllerSeen=true;
+    });
     const watchInstalling=worker=>{
       if(!worker)return;
       worker.addEventListener('statechange',()=>{
@@ -1657,7 +1662,7 @@ async function reportUser(userId){
     if(details.length<5)return toast('Inclua mais contexto.');
     const {error}=await supabase.from('reports').insert({reporter_id:state.profile.id,reported_profile_id:userId,reason,details});
     if(error){console.error('report user',error);return toast('A denuncia nao foi enviada.');}
-    dialog.close();
+    closeCompatDialog(dialog);
     toast('Denuncia enviada para a equipe.');
   };
   openCompatDialog(dialog);
