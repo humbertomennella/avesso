@@ -3389,12 +3389,14 @@ window.addEventListener('avesso:desktop-context-action',event=>{
   const action=String(detail.action||'');
   if(!action)return;
   if(action==='post-reply')document.querySelector(`[data-reply-toggle="${CSS.escape(id)}"]`)?.click();
+  else if(action==='post-react')document.querySelector(`[data-reaction-toggle="${CSS.escape(id)}"]`)?.click();
   else if(action==='post-turn')document.querySelector(`[data-turn-post="${CSS.escape(id)}"]`)?.click();
   else if(action==='post-edit')document.querySelector(`[data-post-edit="${CSS.escape(id)}"]`)?.click();
   else if(action==='post-delete')document.querySelector(`[data-post-delete="${CSS.escape(id)}"]`)?.click();
   else if(action==='post-report'&&detail.authorId)reportUser(detail.authorId);
   else if(action==='post-copy-link')copyAvessoText(avessoShareUrl('post',id),'Link da publicação copiado.');
   else if(action==='photo-open')openAlbumPhotoViewer(id);
+  else if(action==='photo-turn')turnPhotoToFeed(id);
   else if(action==='photo-edit')document.querySelector(`[data-photo-edit="${CSS.escape(id)}"]`)?.click();
   else if(action==='photo-delete')document.querySelector(`[data-photo-delete="${CSS.escape(id)}"]`)?.click();
   else if(action==='photo-copy-link')copyAvessoText(avessoShareUrl('photo',id),'Link da foto copiado.');
