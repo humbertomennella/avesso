@@ -798,6 +798,10 @@
     });
   }
 
+  function desktopPresenceLabel(value){
+    return value==='away'?'ausente':value==='invisible'?'invisível':'online';
+  }
+
   function enhanceProfileDesktop(){
     if(!isDesktop()||!document.body.classList.contains('avesso-own-corner'))return;
     const root=q('.profile-control');
@@ -806,10 +810,16 @@
     if(root.classList.contains('desktop-profile-enhanced')){
       const status=q('#profile-status')?.value||'';
       const bio=q('#profile-bio')?.value||'';
+      const presence=q('#profile-presence')?.value||'online';
       const statusEl=q('[data-desktop-profile-status]',hero);
       const bioEl=q('[data-desktop-profile-bio]',hero);
+      const presenceEl=q('[data-desktop-profile-presence]',hero);
       if(statusEl)statusEl.textContent=status||'sem status definido';
       if(bioEl)bioEl.textContent=bio||'Sem bio. Um raro caso de contenção editorial.';
+      if(presenceEl){
+        presenceEl.className='desktop-profile-presence '+presence;
+        presenceEl.innerHTML='<i></i>'+desktopPresenceLabel(presence);
+      }
       return;
     }
 
@@ -819,12 +829,16 @@
     if(identity&&!q('#desktop-profile-tools',hero)){
       const status=q('#profile-status')?.value||'';
       const bio=q('#profile-bio')?.value||'';
+      const presence=q('#profile-presence')?.value||'online';
       const tools=document.createElement('div');
       tools.id='desktop-profile-tools';
       tools.className='desktop-profile-tools';
       tools.innerHTML=`
         <div class="desktop-profile-summary">
-          <p data-desktop-profile-status>${esc(status||'sem status definido')}</p>
+          <div class="desktop-profile-state-row">
+            <span class="desktop-profile-presence ${esc(presence)}" data-desktop-profile-presence><i></i>${esc(desktopPresenceLabel(presence))}</span>
+            <p data-desktop-profile-status>${esc(status||'sem status definido')}</p>
+          </div>
           <small data-desktop-profile-bio>${esc(bio||'Sem bio. Um raro caso de contenção editorial.')}</small>
         </div>
         <div class="desktop-profile-actions">
@@ -842,6 +856,14 @@
         if(open)setTimeout(()=>q('#desktop-profile-settings-panel')?.scrollIntoView({behavior:'smooth',block:'start'}),30);
       };
       q('[data-desktop-profile-avatar]',tools).onclick=()=>q('#open-avatar-picker')?.click();
+      q('#profile-presence')?.addEventListener('change',event=>{
+        const value=event.target?.value||'online';
+        const presenceEl=q('[data-desktop-profile-presence]',hero);
+        if(presenceEl){
+          presenceEl.className='desktop-profile-presence '+value;
+          presenceEl.innerHTML='<i></i>'+desktopPresenceLabel(value);
+        }
+      });
       q('#open-avatar-picker',identity)?.classList.add('desktop-profile-original-avatar');
     }
 
