@@ -92,6 +92,7 @@
     const kind=String(detail.kind||'interaction');
     const title=String(detail.title||'AVESSO').slice(0,140);
     const body=String(detail.body||'').slice(0,260);
+    const avatar=String(detail.avatar||'').slice(0,1200);
     const target=detail.target||targetFromUrl(detail.url)||null;
     const targetKey=target?.type&&target?.id?`${target.type}:${target.id}`:'';
     const dedupeKey=String(detail.dedupeKey||[kind,targetKey,title,body].join('|')).toLowerCase();
@@ -103,7 +104,7 @@
       const existing=notificationRows.splice(existingIndex,1)[0];
       notificationRows.unshift({
         ...existing,
-        kind,title,body,target,dedupeKey,
+        kind,title,body,avatar,target,dedupeKey,
         createdAt,
         read:false,
         repeat:Number(existing.repeat||1)+1
@@ -111,7 +112,7 @@
     }else{
       notificationRows.unshift({
         id:String(createdAt)+'-'+Math.random().toString(36).slice(2,7),
-        kind,title,body,createdAt,target,dedupeKey,
+        kind,title,body,avatar,createdAt,target,dedupeKey,
         read:false,
         repeat:1
       });
