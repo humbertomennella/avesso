@@ -3018,3 +3018,74 @@
   }
   .app-aside{display:none!important}
 }
+
+
+/* Desktop floating UI readability: chat + notifications */
+@media (min-width:821px){
+  .dm-floating-window{
+    font-size:16px;
+  }
+  .dm-floating-window .dm-peer-name,
+  .dm-floating-window .dm-title-peer{
+    font-size:.92rem!important;
+  }
+  .dm-floating-window .dm-msn-peer>b,
+  .dm-floating-window .dm-msn-self>b{
+    font-size:.72rem!important;
+  }
+  .dm-floating-window .dm-msn-presence,
+  .dm-floating-window .dm-conversation-label,
+  .dm-floating-window .dm-floating-head small{
+    font-size:.65rem!important;
+    line-height:1.4!important;
+  }
+  .dm-floating-window .dm-bubble p{
+    font-size:.88rem!important;
+    line-height:1.55!important;
+  }
+  .dm-floating-window .dm-bubble small,
+  .dm-floating-window .dm-message-meta,
+  .dm-floating-window .dm-reply-preview small{
+    font-size:.66rem!important;
+    line-height:1.4!important;
+  }
+  .dm-floating-window .dm-tools>button,
+  .dm-floating-window .dm-window-controls button,
+  .dm-floating-window .dm-options-menu button,
+  .dm-floating-window .dm-form button{
+    font-size:.7rem!important;
+  }
+  .dm-floating-window input,
+  .dm-floating-window textarea,
+  .dm-floating-window select{
+    font-size:.86rem!important;
+  }
+
+  .desktop-notification-drawer{
+    font-size:16px;
+  }
+  .desktop-notification-drawer>header b{
+    font-size:.82rem!important;
+  }
+  .desktop-notification-drawer>header small,
+  .desktop-notification-drawer>nav button,
+  .desktop-notification-drawer>footer button{
+    font-size:.66rem!important;
+  }
+  .desktop-notification-item b{
+    font-size:.74rem!important;
+  }
+  .desktop-notification-item em{
+    font-size:.68rem!important;
+    line-height:1.45!important;
+  }
+  .desktop-notification-item small{
+    font-size:.61rem!important;
+  }
+  .desktop-notification-summary span{
+    font-size:.55rem!important;
+  }
+  .desktop-notification-summary b{
+    font-size:.68rem!important;
+  }
+}
