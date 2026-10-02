@@ -9203,3 +9203,51 @@ body[data-network-state="offline"] #refresh-feed{
     margin-right:30px;
   }
 }
+
+
+/* AVESSO Accessibility Navigation Pass 2026-10-02 */
+.skip-link{
+  position:fixed;
+  z-index:30000;
+  top:10px;
+  left:10px;
+  transform:translateY(-160%);
+  padding:9px 12px;
+  border:1px solid var(--cyan);
+  border-radius:5px;
+  background:#071012;
+  color:var(--cyan);
+  box-shadow:5px 5px 0 #020405;
+  font:800 .56rem var(--mono);
+  text-decoration:none;
+  transition:transform .14s ease;
+}
+.skip-link:focus{
+  transform:translateY(0);
+}
+.sr-only{
+  position:absolute!important;
+  width:1px!important;
+  height:1px!important;
+  padding:0!important;
+  margin:-1px!important;
+  overflow:hidden!important;
+  clip:rect(0,0,0,0)!important;
+  white-space:nowrap!important;
+  border:0!important;
+}
+#app-primary-content:focus{
+  outline:none;
+}
+#app-primary-content:focus-visible{
+  outline:2px solid var(--cyan);
+  outline-offset:6px;
+}
+.discovery-result-row:focus-visible,
+.discovery-person:focus-visible,
+.discovery-post:focus-visible{
+  position:relative;
+  z-index:2;
+  border-color:var(--acid)!important;
+  box-shadow:0 0 0 2px #071012,0 0 0 4px var(--acid)!important;
+}
