@@ -884,30 +884,30 @@
   function boot(){
     bindKeyboard();
     bindDesktopContextMenus();
-    const observer=new MutationObserver(mutations=>{
+    const childObserver=new MutationObserver(mutations=>{
       let needsSync=false;
       for(const mutation of mutations){
-        if(mutation.type==='childList'){
-          mutation.addedNodes.forEach(node=>{
-            if(node.nodeType===1)enhanceContextButtonsIn(node);
-          });
-          const target=mutation.target;
-          if(
-            target===document.body||
-            target?.id==='app-view'||
-            target?.id==='feed-list'||
-            target?.classList?.contains('feed-column')||
-            target?.classList?.contains('profile-control')
-          )needsSync=true;
-        }else if(mutation.type==='attributes'){
-          const target=mutation.target;
-          if(target===document.body||target?.id==='app-view')needsSync=true;
-        }
+        mutation.addedNodes.forEach(node=>{
+          if(node.nodeType===1)enhanceContextButtonsIn(node);
+        });
+        const target=mutation.target;
+        if(
+          target===document.body||
+          target?.id==='app-view'||
+          target?.id==='feed-list'||
+          target?.classList?.contains('feed-column')||
+          target?.classList?.contains('profile-control')
+        )needsSync=true;
       }
       if(isDesktop()&&!document.body.classList.contains('avesso-own-corner')&&q('.profile-control.desktop-profile-enhanced'))restoreProfileDesktop();
       if(needsSync)scheduleDesktopSync();
     });
-    observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+    childObserver.observe(document.body,{subtree:true,childList:true});
+
+    const layoutObserver=new MutationObserver(()=>scheduleDesktopSync());
+    layoutObserver.observe(document.body,{attributes:true,attributeFilter:['class']});
+    const appView=q('#app-view');
+    if(appView)layoutObserver.observe(appView,{attributes:true,attributeFilter:['class']});
     window.addEventListener('avesso:desktop-summary',e=>renderSummary(e.detail||{}));
     window.addEventListener('avesso:chat-opened',e=>{
       rememberChat(e.detail||{});
