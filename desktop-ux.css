@@ -2582,12 +2582,19 @@
     background:#190d0e;
   }
 
-  body.desktop-notifications-open::before{
-    content:"";
+  .desktop-notification-backdrop{
     position:fixed;
     z-index:50040;
     inset:0;
-    background:#0002;
+    display:block;
+    background:#0000;
+    opacity:0;
     pointer-events:none;
+    transition:background .18s ease,opacity .18s ease;
+  }
+  .desktop-notification-backdrop.open{
+    background:#0003;
+    opacity:1;
+    pointer-events:auto;
   }
 }
