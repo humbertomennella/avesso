@@ -821,13 +821,21 @@
     if(root.matches?.('.post-card[data-post-card],.album-photo[data-album-photo],.dm-bubble[data-dm-id]:not(.deleted),.friend-row,.public-profile-hero'))nodes.push(root);
     root.querySelectorAll?.('.post-card[data-post-card],.album-photo[data-album-photo],.dm-bubble[data-dm-id]:not(.deleted),.friend-row,.public-profile-hero').forEach(node=>nodes.push(node));
     nodes.forEach(node=>{
-      if(q(':scope > .desktop-context-trigger',node))return;
-      if(node.matches('.post-card[data-post-card]'))node.appendChild(contextButton('post',node.dataset.postCard));
-      else if(node.matches('.album-photo[data-album-photo]'))node.appendChild(contextButton('photo',node.dataset.albumPhoto));
-      else if(node.matches('.dm-bubble[data-dm-id]:not(.deleted)'))node.appendChild(contextButton('message',node.dataset.dmId));
+      if(q(':scope > .desktop-context-trigger',node)){
+        node.classList.add('has-desktop-context');
+        return;
+      }
+      let button=null;
+      if(node.matches('.post-card[data-post-card]'))button=contextButton('post',node.dataset.postCard);
+      else if(node.matches('.album-photo[data-album-photo]'))button=contextButton('photo',node.dataset.albumPhoto);
+      else if(node.matches('.dm-bubble[data-dm-id]:not(.deleted)'))button=contextButton('message',node.dataset.dmId);
       else{
         const id=q('[data-profile-id]',node)?.dataset.profileId;
-        if(id)node.appendChild(contextButton('user',id));
+        if(id)button=contextButton('user',id);
+      }
+      if(button){
+        node.classList.add('has-desktop-context');
+        node.appendChild(button);
       }
     });
   }
