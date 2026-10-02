@@ -1442,7 +1442,7 @@ async function blockChatPeer(peerId){
   delete state.mutedPeers[peerId];
   delete state.friendPresence[peerId];
   closeChatWindow(true);
-  if(state.tab==='messages')renderMessagesPage();
+  if(state.tab==='messages')scheduleMessagesRefresh();
   if(isFeedTab()){loadFeed();if(state.tab==='feed')loadStoriesStrip();}
   toast(`${peer?.display_name||'Usuário'} foi bloqueado. Ele também saiu do seu feed.`);
 }
@@ -1870,6 +1870,7 @@ async function loadAdminAccess(){
 }
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden&&typeof navigator.clearAppBadge==='function')navigator.clearAppBadge().catch(()=>{});
+  if(!document.hidden&&feedRealtimeDirty)scheduleFeedRefresh(80);
 });
 
 async function enterApp(){
@@ -2433,6 +2434,45 @@ $('#publish-post').onclick=async()=>{
   if(createdPost?.id)setTimeout(()=>askAlgoFeedReview(image_url?'image_posted':'post_created',createdPost.id),900);
 };
 
+
+const PROFILE_CACHE_TTL=45000;
+const profileLookupCache=new Map();
+const profileLiteCache=new Map();
+
+function cacheProfileLite(profile){
+  if(!profile?.id)return;
+  profileLiteCache.set(profile.id,{value:{
+    id:profile.id,
+    display_name:profile.display_name,
+    handle:profile.handle,
+    avatar_url:profile.avatar_url
+  },expiresAt:Date.now()+PROFILE_CACHE_TTL});
+}
+function primeProfileLookup(profile){
+  if(!profile?.id)return;
+  profileLookupCache.set(profile.id,{value:profile,expiresAt:Date.now()+PROFILE_CACHE_TTL});
+  cacheProfileLite(profile);
+}
+async function liteProfilesByIds(ids=[]){
+  const unique=[...new Set(ids.filter(Boolean))];
+  const out={};
+  const missing=[];
+  const now=Date.now();
+  for(const id of unique){
+    const cached=profileLiteCache.get(id);
+    if(cached&&cached.expiresAt>now)out[id]=cached.value;
+    else missing.push(id);
+  }
+  if(missing.length){
+    const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',missing);
+    for(const profile of data||[]){
+      cacheProfileLite(profile);
+      out[profile.id]=profile;
+    }
+  }
+  return out;
+}
+
 async function loadThreadData(posts){
   const ids=posts.map(p=>p.id);
   if(!ids.length)return{responses:{},characters:{},reactions:{}};
@@ -2445,17 +2485,29 @@ async function loadThreadData(posts){
   const reactions=(reactionsRes.data||[]).filter(r=>!isPeerBlocked(r.user_id));
   const characterReplies=(characterRes.data||[]).filter(x=>x.post_id);
   const profileIds=[...new Set(responses.map(r=>r.author_id).filter(Boolean))];
-  let profiles={};
-  if(profileIds.length){
-    const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',profileIds);
-    profiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));
-  }
+  const profiles=await liteProfilesByIds(profileIds);
   const byPost={},charactersByPost={},reactionsByPost={};
   for(const r of responses)(byPost[r.post_id]??=[]).push({...r,author:profiles[r.author_id]});
   for(const x of characterReplies)(charactersByPost[x.post_id]??=[]).push({...x,character:state.world.charactersById[x.character_id]});
   for(const x of reactions)(reactionsByPost[x.post_id]??=[]).push(x);
   return{responses:byPost,characters:charactersByPost,reactions:reactionsByPost};
 }
+
+let feedRealtimeRefreshTimer=null;
+let feedRealtimeDirty=false;
+function scheduleFeedRefresh(delay=220){
+  if(!isFeedTab())return;
+  feedRealtimeDirty=true;
+  if(document.hidden)return;
+  clearTimeout(feedRealtimeRefreshTimer);
+  feedRealtimeRefreshTimer=setTimeout(()=>{
+    feedRealtimeRefreshTimer=null;
+    if(!isFeedTab())return;
+    feedRealtimeDirty=false;
+    loadFeed();
+  },Math.max(60,Number(delay)||220));
+}
+
 async function loadFeed({append=false}={}){
   if(!isFeedTab())return;
   if(append&&(!state.feedHasMore||state.feedLoadingMore))return;
@@ -2508,11 +2560,7 @@ async function loadFeed({append=false}={}){
   state.feedLoadedPosts=merged;
 
   const profileIds=[...new Set(merged.flatMap(p=>[p.author_id,p.recipient_id]).filter(Boolean))];
-  let feedProfiles={};
-  if(profileIds.length){
-    const {data:profiles}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',profileIds);
-    feedProfiles=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
-  }
+  const feedProfiles=await liteProfilesByIds(profileIds);
   merged.forEach(p=>{p.author_avatar_url=feedProfiles[p.author_id]?.avatar_url||null;p.recipient_avatar_url=feedProfiles[p.recipient_id]?.avatar_url||null;});
   const threadData=await loadThreadData(merged);
 
@@ -3690,8 +3738,13 @@ async function acceptedFriendProfiles(){
   }
   return data||[];
 }
-async function profileById(id){
+async function profileById(id,{fresh=false}={}){
+  if(!id)return null;
+  if(!fresh&&id===state.profile?.id)return state.profile;
+  const cached=profileLookupCache.get(id);
+  if(!fresh&&cached&&cached.expiresAt>Date.now())return cached.value;
   const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url,status_message,presence_mode,last_seen,online_until,listening_visible,chat_listening_visible,now_playing_title,now_playing_artist,now_playing_source,now_playing_url,now_playing_updated_at,now_playing_manual,away_after_minutes').eq('id',id).maybeSingle();
+  if(data)primeProfileLookup(data);
   return data||null;
 }
 function cachedPresenceEntry(profile){
@@ -4250,18 +4303,19 @@ function startDirectRealtime(){
         renderOnlineFriendsDock();
         socialNotify({title:'Amizade aceita',body:`${who?.display_name||'Alguém'} aceitou. Nenhum contador público foi ferido.`,avatar:who?.avatar_url||'',kind:'friend',target:{type:'chat',id:f.addressee_id},action:()=>openFriendChat(f.addressee_id)});
       }
-      if(state.tab==='messages')renderMessagesPage();
+      if(state.tab==='messages')scheduleMessagesRefresh();
       if(state.tab==='profile')loadFriendPanel();
     })
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'profiles'},payload=>{
       const p=payload.new||{};
+      primeProfileLookup(p);
       if(p.id!==me)noteFriendPresence(p);
       if(p.id===me){
         state.profile={...state.profile,...p};
         refreshOwnNowPlayingPreview();
         updateOwnListeningInChat();
       }
-      if(state.tab==='messages')renderMessagesPage();
+      if(state.tab==='messages')scheduleMessagesRefresh();
       if(state.chatWindowOpen&&state.directPeerId===p.id)updateChatPeerHeader(p);
       if(state.tab==='public_profile'&&state.publicProfileId===p.id){
         const host=$('#public-now-playing');
@@ -4561,6 +4615,17 @@ function updateChatPeerHeader(peer){
   if(listening)listening.innerHTML=chatNowPlayingHtml(peer,{compact:true});
   const orb=$('.dm-msn-status-orb');
   if(orb){orb.className=`dm-msn-status-orb ${p.mode}`;orb.title=p.label;}
+}
+
+
+let messagesRefreshTimer=null;
+function scheduleMessagesRefresh(delay=180){
+  if(state.tab!=='messages')return;
+  clearTimeout(messagesRefreshTimer);
+  messagesRefreshTimer=setTimeout(()=>{
+    messagesRefreshTimer=null;
+    if(state.tab==='messages')scheduleMessagesRefresh();
+  },Math.max(60,Number(delay)||180));
 }
 
 async function renderMessagesPage(){
@@ -6155,8 +6220,8 @@ document.addEventListener('click',e=>{
 
 function subscribeRealtime(){
   supabase.channel('avesso-feed')
-    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>{if(isFeedTab())loadFeed();})
-    .on('postgres_changes',{event:'*',schema:'public',table:'responses'},()=>{if(isFeedTab())loadFeed();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>scheduleFeedRefresh())
+    .on('postgres_changes',{event:'*',schema:'public',table:'responses'},()=>scheduleFeedRefresh())
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'world_settings'},payload=>{
       state.world.settings=payload.new||state.world.settings;
       setWorldModeLabel();
@@ -6175,7 +6240,7 @@ function subscribeRealtime(){
       }
       if(event.config?.importance==='important')toast(`EVENTO DO MUNDO // ${event.title}`);
     })
-    .on('postgres_changes',{event:'*',schema:'public',table:'post_reactions'},()=>{if(isFeedTab())loadFeed();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'post_reactions'},()=>scheduleFeedRefresh())
     .on('postgres_changes',{event:'*',schema:'public',table:'profile_media'},payload=>{
       const row=payload.new?.user_id?payload.new:(payload.old||{});
       if(state.tab==='profile'&&row.user_id===state.profile?.id)loadProfileMedia(state.profile.id,true,'#profile-media-list');
