@@ -89,7 +89,7 @@ function openCompatDialog(dialog){
   if(dialog.open)return true;
   try{
     if(typeof dialog.showModal==='function'){
-      openCompatDialog(dialog);
+      dialog.showModal();
       return true;
     }
   }catch{}
