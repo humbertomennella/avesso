@@ -79,9 +79,9 @@
       const parsed=new URL(url,location.href);
       const open=parsed.searchParams.get('open');
       const id=parsed.searchParams.get('id');
-      if(open&&id&&/^(post|story|photo|chat|profile)$/i.test(open))return{type:open.toLowerCase(),id};
+      if(open&&id&&/^(post|story|photo|chat|profile|tab)$/i.test(open))return{type:open.toLowerCase(),id};
       const hash=parsed.hash.replace(/^#/,'');
-      const match=hash.match(/^(post|story|photo|chat|profile)\/([^/?#]+)/i);
+      const match=hash.match(/^(post|story|photo|chat|profile|tab)\/([^/?#]+)/i);
       return match?{type:match[1].toLowerCase(),id:decodeURIComponent(match[2])}:null;
     }catch{return null;}
   }
