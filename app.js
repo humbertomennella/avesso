@@ -100,13 +100,20 @@ function openCompatDialog(dialog){
 }
 function closeCompatDialog(dialog){
   if(!dialog)return;
+  const fallback=dialog.classList.contains('dialog-fallback-open');
+  if(fallback){
+    const wasOpen=dialog.hasAttribute('open')||dialog.open;
+    dialog.removeAttribute('open');
+    dialog.classList.remove('dialog-fallback-open');
+    if(!document.querySelector('dialog.dialog-fallback-open'))document.body.classList.remove('dialog-fallback-lock');
+    if(wasOpen)dialog.dispatchEvent(new Event('close'));
+    return;
+  }
   if(typeof dialog.close==='function'){
     try{dialog.close();return;}catch{}
   }
   const wasOpen=dialog.hasAttribute('open')||dialog.open;
   dialog.removeAttribute('open');
-  dialog.classList.remove('dialog-fallback-open');
-  if(!document.querySelector('dialog.dialog-fallback-open'))document.body.classList.remove('dialog-fallback-lock');
   if(wasOpen)dialog.dispatchEvent(new Event('close'));
 }
 async function decodeImageForCanvas(file){
