@@ -2495,6 +2495,7 @@ async function loadThreadData(posts){
 
 let feedRealtimeRefreshTimer=null;
 let feedRealtimeDirty=false;
+let feedThreadSnapshot={responses:{},characters:{},reactions:{}};
 function scheduleFeedRefresh(delay=220){
   if(!isFeedTab())return;
   feedRealtimeDirty=true;
@@ -2516,6 +2517,7 @@ async function loadFeed({append=false}={}){
   const status=$('#feed-status');
   if(!append){
     state.feedLoadedPosts=[];state.feedCursor=null;state.feedHasMore=true;
+    feedThreadSnapshot={responses:{},characters:{},reactions:{}};
     status.classList.remove('hidden');
     status.textContent='carregando o que acabou de acontecer...';
     algoSay('feed_loading');
@@ -2556,13 +2558,23 @@ async function loadFeed({append=false}={}){
   const page=raw.slice(0,configured).filter(p=>!isPeerBlocked(p.author_id)&&!isPeerBlocked(p.recipient_id));
   if(page.length)state.feedCursor=page[page.length-1].created_at;
   const known=new Set(state.feedLoadedPosts.map(p=>p.id));
-  const merged=append?[...state.feedLoadedPosts,...page.filter(p=>!known.has(p.id))]:page;
+  const newPage=append?page.filter(p=>!known.has(p.id)):page;
+  const merged=append?[...state.feedLoadedPosts,...newPage]:page;
   state.feedLoadedPosts=merged;
 
   const profileIds=[...new Set(merged.flatMap(p=>[p.author_id,p.recipient_id]).filter(Boolean))];
   const feedProfiles=await liteProfilesByIds(profileIds);
   merged.forEach(p=>{p.author_avatar_url=feedProfiles[p.author_id]?.avatar_url||null;p.recipient_avatar_url=feedProfiles[p.recipient_id]?.avatar_url||null;});
-  const threadData=await loadThreadData(merged);
+
+  const freshThreadData=await loadThreadData(append?newPage:merged);
+  if(append){
+    feedThreadSnapshot={
+      responses:{...feedThreadSnapshot.responses,...freshThreadData.responses},
+      characters:{...feedThreadSnapshot.characters,...freshThreadData.characters},
+      reactions:{...feedThreadSnapshot.reactions,...freshThreadData.reactions}
+    };
+  }else feedThreadSnapshot=freshThreadData;
+  const threadData=feedThreadSnapshot;
 
   if(viewVersion!==state.viewVersion||state.tab!==requestedTab||!isFeedTab()){state.feedLoadingMore=false;return;}
   state.feedLoadingMore=false;
