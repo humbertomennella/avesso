@@ -9050,3 +9050,17 @@ img[src*="assets/avatars/robo-avesso.webp"]{
     max-width:160px!important;
   }
 }
+
+/* AVESSO AVATAR HQ 2026-10-02 */
+.avatar-choice img,
+.avatar-choice-modal img,
+.avatar img,
+.mini-avatar img,
+.profile-avatar-large img,
+.public-profile-avatar img,
+.friend-avatar img,
+.plaza-avatar img{
+  image-rendering:auto!important;
+  object-fit:cover!important;
+  object-position:center!important;
+}
