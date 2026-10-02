@@ -77,9 +77,10 @@
     );
     if(existingIndex>=0){
       const existing=rows[existingIndex];
-      // mobile-ux e desktop-ux compartilham o mesmo histórico. Se o mesmo evento
-      // já foi persistido com o mesmo timestamp, não conte novamente.
-      if(Number(existing.createdAt||0)===createdAt)return;
+      // mobile-ux, desktop-ux e Service Worker podem observar o mesmo evento.
+      // Uma janela curtíssima elimina duplicação de transporte sem esconder
+      // eventos humanos realmente repetidos.
+      if(Math.abs(createdAt-Number(existing.createdAt||0))<1000)return;
       rows.splice(existingIndex,1);
       rows.unshift({
         ...existing,
@@ -318,11 +319,13 @@
     });
   }
   function notificationCounts(rows=readNotifications()){
-    const counts={all:rows.length,unread:0,messages:0,reactions:0,people:0,system:0};
+    const counts={all:0,unread:0,messages:0,reactions:0,people:0,system:0};
     for(const row of rows){
-      if(!row.read)counts.unread+=Math.max(1,Number(row.repeat||1));
+      const weight=Math.max(1,Number(row.repeat||1));
+      counts.all+=weight;
+      if(!row.read)counts.unread+=weight;
       const category=notificationCategory(row);
-      if(counts[category]!==undefined)counts[category]+=Math.max(1,Number(row.repeat||1));
+      if(counts[category]!==undefined)counts[category]+=weight;
     }
     return counts;
   }
@@ -335,7 +338,8 @@
       const category=notificationCategory(row);
       const targetKey=target.type&&target.id?`${target.type}:${target.id}`:'';
       const fallbackKey=String(row.dedupeKey||row.title||row.kind||'other').toLowerCase();
-      const key=[category,targetKey||fallbackKey].join('|');
+      const semantic=category==='messages'?'conversation':String(row.kind||'other');
+      const key=[category,semantic,targetKey||fallbackKey].join('|');
       let group=byKey.get(key);
       if(!group){
         group={id:'g'+index,key,latest:row,rows:[],ids:[],count:0,unread:false,category,target:targetKey?target:null};
@@ -364,8 +368,10 @@
     const summary=q('.desktop-notification-summary',drawer);
     if(summary){
       const shown=groups.reduce((sum,group)=>sum+group.count,0);
-      summary.innerHTML=`<span><b>${counts.unread}</b> não lida${counts.unread===1?'':'s'}</span><span><b>${shown}</b> neste filtro</span><span><b>${allRows.length}</b> eventos salvos</span>`;
+      summary.innerHTML=`<span><b>${counts.unread}</b> não lida${counts.unread===1?'':'s'}</span><span><b>${shown}</b> neste filtro</span><span><b>${counts.all}</b> eventos</span>`;
     }
+    const clearRead=q('[data-desktop-clear-read]',drawer);
+    if(clearRead)clearRead.disabled=!allRows.some(row=>row.read);
     const icons={message:'↔',attention:'⚡',friend:'+',guestbook:'▤',story:'◫',photo:'▧',interaction:'♥',online:'●',staff:'⚑',world:'♛',system:'◉'};
     if(!groups.length){
       list.innerHTML='<div class="desktop-notification-empty">Nada aqui. O desktop está estranhamente civilizado.</div>';
