@@ -298,7 +298,10 @@
     readRecentChats();
     const shelf=ensureChatShelf();
     const list=q('.desktop-chat-shelf-list',shelf);
+    const signature=JSON.stringify(recentChats.map(x=>[x.peerId,x.displayName,x.handle,x.avatar]));
     shelf.classList.toggle('hidden',recentChats.length===0);
+    if(list.dataset.signature===signature)return;
+    list.dataset.signature=signature;
     list.innerHTML=recentChats.map(chat=>`
       <button type="button" data-desktop-chat-peer="${esc(chat.peerId)}" title="${esc(chat.displayName)}">
         <span class="desktop-chat-avatar">${chat.avatar?'<img src="'+esc(chat.avatar)+'" alt="">':'↔'}</span>
@@ -366,6 +369,7 @@
       closeNotificationDrawer();
       document.body.classList.remove('desktop-nav-collapsed');
       restoreNav();
+      q('#desktop-nav-collapse')?.setAttribute('hidden','');
       q('#desktop-command-bar')?.classList.add('desktop-hidden');
       q('#desktop-chat-shelf')?.classList.add('hidden');
       clearInterval(summaryTimer);summaryTimer=null;
@@ -373,6 +377,7 @@
     }
     decorateNav();
     ensureCollapseButton();
+    q('#desktop-nav-collapse')?.removeAttribute('hidden');
     syncCollapseButton();
     ensureCommandBar();
     q('#desktop-command-bar')?.classList.remove('desktop-hidden');
