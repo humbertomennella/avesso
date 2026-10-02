@@ -1433,9 +1433,6 @@
     background:#080e10;
     box-shadow:3px 3px 0 #020405;
   }
-  .desktop-profile-main .profile-post-card:has(.post-embed){
-    grid-column:1/-1;
-  }
   .desktop-profile-main .profile-post-image img{
     aspect-ratio:16/9;
     max-height:360px;
