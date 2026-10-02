@@ -1,0 +1,111 @@
+name: Corrigir qualidade dos avatares
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/upscale-avatars.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upscale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar Pillow
+        run: python -m pip install --quiet pillow
+
+      - name: Gerar avatares 512x512
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageFilter
+
+          files = [
+              'mago-avesso.webp',
+              'guerreiro-avesso.webp',
+              'paladina-avesso.webp',
+              'barda-avesso.webp',
+              'robo-crt-avesso.webp',
+              'ciborgue-avesso.webp',
+              'entidade-avesso.webp',
+              'anao-avesso.webp',
+              'alienigena-avesso.webp',
+              'lich-avesso.webp',
+              'engenheira-avesso.webp',
+              'robo-avesso.webp',
+          ]
+
+          root = Path('assets/avatars')
+          for name in files:
+              path = root / name
+              with Image.open(path) as source:
+                  img = source.convert('RGBA')
+                  if img.size == (512, 512):
+                      continue
+                  img = img.resize((512, 512), Image.Resampling.LANCZOS)
+                  img = img.filter(ImageFilter.UnsharpMask(radius=1.1, percent=125, threshold=2))
+                  img.save(path, 'WEBP', quality=96, method=6, lossless=False)
+                  print(name, '->', img.size)
+          PY
+
+      - name: Ajustar renderização e cache
+        shell: bash
+        run: |
+          cat >> styles.css <<'CSS'
+
+          /* AVESSO AVATAR HQ 2026-10-02 */
+          .avatar-choice img,
+          .avatar-choice-modal img,
+          .avatar img,
+          .mini-avatar img,
+          .profile-avatar-large img,
+          .public-profile-avatar img,
+          .friend-avatar img,
+          .plaza-avatar img{
+            image-rendering:auto!important;
+            object-fit:cover!important;
+            object-position:center!important;
+          }
+          CSS
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          s = p.read_text()
+          s = re.sub(r'styles\.css\?v=[^"\']+', 'styles.css?v=20261002-avatar-hq', s)
+          p.write_text(s)
+
+          p = Path('sw.js')
+          s = p.read_text()
+          s = re.sub(r"const SHELL_CACHE='avesso-shell-v\d+';", "const SHELL_CACHE='avesso-shell-v5';", s)
+          p.write_text(s)
+          PY
+
+      - name: Publicar arquivos corrigidos
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/avatars styles.css index.html sw.js
+          if git diff --cached --quiet; then
+            echo "Nada para atualizar."
+            exit 0
+          fi
+          git commit -m "fix: substitui avatares 64x64 por versões 512x512"
+          git push origin HEAD:main
