@@ -1977,3 +1977,44 @@
     display:none!important;
   }
 }
+
+
+/* AVESSO Desktop Performance Pass 2026-10-02
+   Avatares ficam intocados: otimização aqui é layout/pintura, não imagem. */
+@media (min-width:821px){
+  .post-card{
+    content-visibility:auto;
+    contain-intrinsic-size:auto 420px;
+  }
+  .album-photo{
+    content-visibility:auto;
+    contain-intrinsic-size:auto 300px;
+  }
+  .profile-media-card{
+    content-visibility:auto;
+    contain-intrinsic-size:auto 360px;
+  }
+  .guestbook-card{
+    content-visibility:auto;
+    contain-intrinsic-size:auto 180px;
+  }
+  .conversation-item{
+    content-visibility:auto;
+    contain-intrinsic-size:auto 110px;
+  }
+
+  /* Áreas longas isolam sua pintura sem forçar novas camadas em tudo. */
+  #feed-list,
+  .profile-album-grid,
+  .profile-media-grid,
+  .guestbook-list,
+  .desktop-notification-list{
+    contain:layout style;
+  }
+
+  /* Iframes já usam lazy loading; o navegador pode adiar a pintura do contêiner. */
+  .post-embed{
+    content-visibility:auto;
+    contain-intrinsic-size:auto 360px;
+  }
+}
