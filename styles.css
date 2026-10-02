@@ -9132,3 +9132,74 @@ body[data-network-state="offline"] #refresh-feed{
     scroll-behavior:auto!important;
   }
 }
+
+
+/* AVESSO PWA update notice 2026-10-02 */
+.app-update-banner{
+  position:fixed;
+  z-index:20060;
+  right:16px;
+  bottom:max(16px,env(safe-area-inset-bottom));
+  width:min(430px,calc(100vw - 32px));
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  gap:9px;
+  align-items:center;
+  padding:10px;
+  border:1px solid #466066;
+  border-radius:7px;
+  background:#091113f7;
+  color:#dce5e2;
+  box-shadow:8px 8px 0 #020405,0 18px 42px #0009;
+  backdrop-filter:blur(10px);
+}
+.app-update-banner.hidden{display:none}
+.app-update-banner span{min-width:0}
+.app-update-banner b,
+.app-update-banner small{display:block}
+.app-update-banner b{
+  color:var(--acid);
+  font:800 .52rem/1.35 var(--mono);
+}
+.app-update-banner small{
+  margin-top:3px;
+  color:#8c9995;
+  font:550 .48rem/1.4 var(--mono);
+}
+.app-update-banner button{
+  min-height:34px;
+  border:1px solid #3f565c;
+  border-radius:5px;
+  background:#0d1719;
+  color:#c7d3cf;
+  cursor:pointer;
+  padding:6px 9px;
+  font:750 .47rem var(--mono);
+}
+.app-update-banner button:hover{
+  border-color:var(--acid);
+  color:var(--acid);
+}
+.app-update-banner [data-app-update-later]{
+  width:32px;
+  padding:0;
+}
+
+@media(max-width:760px){
+  .app-update-banner{
+    left:10px;
+    right:10px;
+    bottom:calc(82px + env(safe-area-inset-bottom));
+    width:auto;
+    grid-template-columns:minmax(0,1fr) auto;
+  }
+  .app-update-banner [data-app-update-later]{
+    position:absolute;
+    top:6px;
+    right:6px;
+  }
+  .app-update-banner [data-app-update-reload]{
+    grid-column:2;
+    margin-right:30px;
+  }
+}
