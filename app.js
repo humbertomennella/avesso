@@ -84,6 +84,20 @@ function ago(date){ const s=Math.floor((Date.now()-new Date(date))/1000); if(s<6
 function escapeHtml(value=''){ const d=document.createElement('div'); d.textContent=value; return d.innerHTML; }
 function escapeAttr(value=''){return String(value).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll("'",'&#39;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
 
+function isRateLimitError(error){
+  return Boolean(error&&(
+    error.code==='P0001'||
+    /rate_limit_exceeded/i.test(String(error.message||''))||
+    /espere um pouco/i.test(String(error.hint||''))
+  ));
+}
+function rateLimitToast(error,fallback){
+  return toast(isRateLimitError(error)
+    ?'Muitas ações em pouco tempo. Espere um pouco e tente novamente.'
+    :fallback);
+}
+
+
 function openCompatDialog(dialog){
   if(!dialog)return false;
   if(dialog.open)return true;
@@ -937,7 +951,7 @@ async function toggleStoryReaction(storyId,reaction){
   const result=existing?.reaction===reaction
     ?await supabase.from('story_reactions').delete().eq('story_id',storyId).eq('user_id',state.profile.id)
     :await supabase.from('story_reactions').upsert({story_id:storyId,user_id:state.profile.id,reaction},{onConflict:'story_id,user_id'});
-  if(result.error)return toast('A reação ao story teve uma reação adversa.');
+  if(result.error)return rateLimitToast(result.error,'A reação ao story teve uma reação adversa.');
   if(existing?.reaction!==reaction)dispatchPush('story_reaction',storyId);
   trackAction('story_reaction','stories',{story_id:storyId,reaction});
   openStory(storyId,{sequence:state.storySequence});
@@ -947,7 +961,7 @@ async function sendStoryComment(storyId){
   const input=$('#story-comment-body'),body=String(input?.value||'').trim().slice(0,420);
   if(!body)return toast('Resposta vazia é só telepatia com interface.');
   const {data:commentRow,error}=await supabase.from('story_comments').insert({story_id:storyId,user_id:state.profile.id,body}).select('id').single();
-  if(error)return toast('A resposta não chegou ao story.');
+  if(error)return rateLimitToast(error,'A resposta não chegou ao story.');
   dispatchPush('story_comment',commentRow?.id);
   input.value='';trackAction('story_reply','stories',{story_id:storyId});openStory(storyId,{sequence:state.storySequence});
 }
@@ -1661,7 +1675,7 @@ async function reportUser(userId){
     const details=String($('#report-user-details').value||'').trim();
     if(details.length<5)return toast('Inclua mais contexto.');
     const {error}=await supabase.from('reports').insert({reporter_id:state.profile.id,reported_profile_id:userId,reason,details});
-    if(error){console.error('report user',error);return toast('A denuncia nao foi enviada.');}
+    if(error){console.error('report user',error);return rateLimitToast(error,'A denuncia nao foi enviada.');}
     closeCompatDialog(dialog);
     toast('Denuncia enviada para a equipe.');
   };
@@ -2982,7 +2996,7 @@ async function toggleReaction(postId,reaction,active){
   }
   if(error){
     optimisticPostReaction(postId,reaction,!active);
-    return toast('A reação teve uma reação adversa.');
+    return rateLimitToast(error,'A reação teve uma reação adversa.');
   }
   if(!active)dispatchPush('post_reaction',postId);
   trackAction('acid_reaction','feed',{post_id:postId,reaction:active?'remove':reaction});
@@ -3825,7 +3839,7 @@ async function sendPlazaMessage(body,forceNpc=false){
   const text=String(body||'').trim().slice(0,280);
   if(!text)return;
   const {data,error}=await supabase.from('plaza_messages').insert({user_id:state.profile.id,body:text}).select('id').single();
-  if(error)return toast('A mensagem caiu entre os bancos da praça.');
+  if(error)return rateLimitToast(error,'A mensagem caiu entre os bancos da praça.');
   trackAction('plaza_chat','plaza',{message:text.slice(0,90)});
   await loadPlazaMessages();
   const mentionNpc=/@?npc\b/i.test(text);
@@ -4925,7 +4939,7 @@ async function toggleDirectMessageReaction(messageId,reaction){
   const result=existing?.reaction===reaction
     ?await supabase.from('direct_message_reactions').delete().eq('message_id',messageId).eq('user_id',state.profile.id)
     :await supabase.from('direct_message_reactions').upsert({message_id:messageId,user_id:state.profile.id,reaction,updated_at:new Date().toISOString()},{onConflict:'message_id,user_id'});
-  if(result.error)return toast('A reação não atravessou a conversa.');
+  if(result.error)return rateLimitToast(result.error,'A reação não atravessou a conversa.');
   refreshDirectMessageBubble(messageId);
 }
 function bindDirectMessageActions(root=document){
@@ -6115,7 +6129,7 @@ async function uploadAlbumPhoto(){
   if(upErr){btn.disabled=false;btn.textContent='adicionar foto';return toast('A foto não conseguiu entrar no álbum.');}
   const {error}=await supabase.from('profile_photos').insert({user_id:state.profile.id,storage_path:path,caption});
   btn.disabled=false;btn.textContent='adicionar foto';
-  if(error){await supabase.storage.from('avesso-albums').remove([path]);return toast('A foto chegou, o álbum fingiu que não conhece.');}
+  if(error){await supabase.storage.from('avesso-albums').remove([path]);return rateLimitToast(error,'A foto chegou, o álbum fingiu que não conhece.');}
   $('#album-file').value='';$('#album-caption').value='';delete state.albumDataCache[state.profile.id];toast('Foto adicionada. Nenhum filtro de pôr do sol obrigatório.');loadAlbum(state.profile.id,true);
 }
 async function saveAlbumPhotoCaption(id){
@@ -6228,7 +6242,7 @@ async function sendPhotoViewerComment(photoId){
   const body=String(input?.value||'').trim();
   if(body.length<2)return toast('Comentário curto demais até para 56K.');
   const {data:commentRow,error}=await supabase.from('photo_comments').insert({photo_id:photoId,user_id:state.profile.id,body}).select('id').single();
-  if(error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'O comentário caiu atrás da imagem.');
+  if(error)return state.suspended?toast('Sua conta está suspensa para novas interações.'):rateLimitToast(error,'O comentário caiu atrás da imagem.');
   dispatchPush('photo_comment',commentRow?.id);
   await openAlbumPhotoViewer(photoId);
 }
@@ -6243,7 +6257,7 @@ async function toggleViewerPhotoReaction(photoId,reaction){
   let result;
   if(existing?.reaction===reaction)result=await supabase.from('photo_reactions').delete().eq('photo_id',photoId).eq('user_id',state.profile.id);
   else result=await supabase.from('photo_reactions').upsert({photo_id:photoId,user_id:state.profile.id,reaction},{onConflict:'photo_id,user_id'});
-  if(result.error)return toast(state.suspended?'Sua conta está suspensa para novas interações.':'A reação tropeçou.');
+  if(result.error)return state.suspended?toast('Sua conta está suspensa para novas interações.'):rateLimitToast(result.error,'A reação tropeçou.');
   if(existing?.reaction!==reaction)dispatchPush('photo_reaction',photoId);
   await openAlbumPhotoViewer(photoId);
 }
@@ -6550,7 +6564,7 @@ async function sendGuestbookEntry(profileId){
   if(error){
     if(imagePath)await supabase.storage.from('avesso-recados').remove([imagePath]);
     if(btn){btn.disabled=false;btn.textContent='deixar recado';}
-    return toast('O recado não foi deixado. Confirme se vocês ainda são amigos.');
+    return rateLimitToast(error,'O recado não foi deixado. Confirme se vocês ainda são amigos.');
   }
   if($('#guestbook-body'))$('#guestbook-body').value='';
   if($('#guestbook-image'))$('#guestbook-image').value='';
