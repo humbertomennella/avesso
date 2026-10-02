@@ -3338,3 +3338,18 @@
     grid-template-columns:var(--desktop-nav-track-w) minmax(0,1fr)!important;
   }
 }
+
+
+/* Perfil/Canto preserva duas colunas mesmo com sidebar recolhida. */
+@media (min-width:821px){
+  body.avesso-own-corner #app-view.app-shell,
+  body.avesso-public-corner #app-view.app-shell,
+  body.avesso-own-corner.desktop-nav-collapsed #app-view.app-shell,
+  body.avesso-public-corner.desktop-nav-collapsed #app-view.app-shell{
+    grid-template-columns:var(--desktop-nav-track-w) minmax(0,1fr)!important;
+  }
+  body.avesso-own-corner .app-aside,
+  body.avesso-public-corner .app-aside{
+    display:none!important;
+  }
+}
