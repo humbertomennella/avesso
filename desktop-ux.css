@@ -2437,3 +2437,157 @@
     grid-template-columns:1fr;
   }
 }
+
+
+/* AVESSO Notification Center Desktop 2026-10-02 */
+@media (min-width:821px){
+  .desktop-notification-drawer{
+    width:min(430px,calc(100vw - 24px));
+  }
+  .desktop-notification-drawer>nav{
+    scrollbar-width:thin;
+  }
+  .desktop-notification-drawer>nav button{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+  }
+  .desktop-notification-drawer>nav button small{
+    min-width:18px;
+    height:18px;
+    display:inline-grid;
+    place-items:center;
+    padding:0 4px;
+    border:1px solid #33464b;
+    border-radius:99px;
+    color:#6f7f7b;
+    background:#070b0d;
+    font:800 .38rem/1 var(--mono);
+  }
+  .desktop-notification-drawer>nav button.active small{
+    border-color:#d8ff3e55;
+    color:var(--acid);
+    background:#10170b;
+  }
+
+  .desktop-notification-summary{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:1px;
+    border-bottom:1px solid #233034;
+    background:#1d2a2d;
+  }
+  .desktop-notification-summary span{
+    min-width:0;
+    padding:7px 8px;
+    background:#080e10;
+    color:#667570;
+    text-align:center;
+    font:700 .4rem var(--mono);
+  }
+  .desktop-notification-summary b{
+    display:block;
+    margin-bottom:2px;
+    color:#dce6e3;
+    font:850 .58rem var(--mono);
+  }
+
+  .desktop-notification-list{
+    padding:7px 8px 10px;
+    scroll-behavior:smooth;
+  }
+  .desktop-notification-item{
+    margin-bottom:4px;
+    overflow:hidden;
+    border:1px solid #1f2e31;
+    border-radius:5px;
+    background:#080d0f;
+  }
+  .desktop-notification-item:last-child{
+    margin-bottom:0;
+  }
+  .desktop-notification-item.read{
+    opacity:.72;
+  }
+  .desktop-notification-item:hover{
+    border-color:#385058;
+  }
+  .desktop-notification-item.unread{
+    border-color:#34505a;
+  }
+
+  .desktop-notification-open>i.has-avatar{
+    width:30px;
+    height:30px;
+    overflow:hidden;
+    border-color:#49636a;
+    border-radius:4px;
+    background:#030607;
+  }
+  .desktop-notification-open>i.has-avatar img{
+    width:100%;
+    height:100%;
+    display:block;
+    object-fit:cover;
+  }
+  .desktop-notification-open:hover{
+    background:#0d1517;
+  }
+  .desktop-notification-open:focus-visible{
+    outline:2px solid var(--cyan);
+    outline-offset:-2px;
+  }
+
+  .desktop-notification-item[data-notification-category="messages"].unread{
+    box-shadow:inset 3px 0 0 var(--cyan);
+  }
+  .desktop-notification-item[data-notification-category="reactions"].unread{
+    box-shadow:inset 3px 0 0 var(--acid);
+  }
+  .desktop-notification-item[data-notification-category="people"].unread{
+    box-shadow:inset 3px 0 0 var(--violet);
+  }
+  .desktop-notification-item[data-notification-category="system"].unread{
+    box-shadow:inset 3px 0 0 var(--coral);
+  }
+
+  .desktop-notification-read-state{
+    display:grid;
+    place-items:center;
+    border-left:1px solid #1e2c30;
+    color:#354943;
+    font:800 .56rem var(--mono);
+  }
+
+  .desktop-notification-drawer>footer{
+    display:grid;
+    grid-template-columns:1.2fr 1fr 1fr;
+  }
+  .desktop-notification-drawer>footer button{
+    min-width:0;
+    padding-inline:7px;
+  }
+  .desktop-notification-drawer>footer button:disabled{
+    opacity:.35;
+    cursor:not-allowed;
+  }
+  .desktop-notification-drawer>footer button:not(:disabled):hover{
+    border-color:#4c646a;
+    color:#dce6e3;
+    background:#11191b;
+  }
+  .desktop-notification-drawer>footer [data-desktop-clear-notifications]:not(:disabled):hover{
+    border-color:#764544;
+    color:#ff9b95;
+    background:#190d0e;
+  }
+
+  body.desktop-notifications-open::before{
+    content:"";
+    position:fixed;
+    z-index:50040;
+    inset:0;
+    background:#0002;
+    pointer-events:none;
+  }
+}
