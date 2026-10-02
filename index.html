@@ -70,7 +70,62 @@
   </main>
 
 
-  <dialog id="auth-dialog"><button class="dialog-close" aria-label="Fechar">×</button><div class="auth-brand"><span class="brand-mark">▼</span><h2>Vire do Avesso</h2><p>Leva menos tempo que escolher uma bio “autêntica”.</p></div><div class="auth-tabs"><button class="active" data-auth-mode="signup">criar conta</button><button data-auth-mode="login">já caí aqui antes</button></div><form id="auth-form"><div id="signup-fields"><label>como chamamos você<input name="display_name" minlength="1" maxlength="80" placeholder="† Humberto.exe // ocupado †" /></label><label>seu @<input name="handle" minlength="3" maxlength="24" pattern="[a-z0-9_]+" placeholder="humano_1994" /></label></div><label>e-mail<input name="email" type="email" required placeholder="voce@internet.com" /></label><label>senha<input name="password" type="password" minlength="8" required placeholder="8+ caracteres. 123456 não, pelo amor." /></label><button class="btn btn-acid" type="submit" id="auth-submit">criar meu canto</button><button class="resend-button hidden" type="button" id="resend-confirmation">reenviar confirmação de e-mail</button><p class="form-message" id="auth-message"></p></form></dialog>
+  <dialog id="auth-dialog" class="auth-dialog-v2">
+  <button class="dialog-close auth-dialog-close" aria-label="Fechar autenticação">×</button>
+  <div class="auth-shell">
+    <aside class="auth-intro" aria-hidden="true">
+      <div class="auth-intro-brand"><span class="brand-mark">▼</span><strong>AVESSO</strong></div>
+      <div class="auth-intro-copy">
+        <span class="section-code">ACESSO // OUTRO LADO</span>
+        <h2>Menos palco.<br>Mais presença.</h2>
+        <p>Entre para conversar, construir seu Canto e existir sem virar métrica pública.</p>
+      </div>
+      <div class="auth-intro-grid">
+        <article><b>◒</b><span>feed sem ranking de popularidade</span></article>
+        <article><b>⌂</b><span>Praça para conversa em tempo real</span></article>
+        <article><b>◎</b><span>perfil, álbum, Stories e identidade</span></article>
+      </div>
+      <small>AVESSO://HUMANOS_CONECTADOS</small>
+    </aside>
+    <section class="auth-panel">
+      <div class="auth-brand">
+        <span class="section-code">CONTA // ACESSO</span>
+        <h2 id="auth-title">Crie seu Canto</h2>
+        <p id="auth-mode-note">Você escolhe um nome e um @. Avatar, bio e o resto entram logo depois.</p>
+      </div>
+
+      <div class="auth-tabs" role="tablist" aria-label="Modo de acesso">
+        <button class="active" type="button" role="tab" aria-selected="true" data-auth-mode="signup">criar conta</button>
+        <button type="button" role="tab" aria-selected="false" data-auth-mode="login">entrar</button>
+      </div>
+
+      <form id="auth-form">
+        <div id="signup-fields" class="auth-field-grid">
+          <label><span>como chamamos você</span><input name="display_name" minlength="1" maxlength="80" autocomplete="nickname" placeholder="† Humberto.exe // ocupado †" /></label>
+          <label><span>seu @</span><input name="handle" minlength="3" maxlength="24" pattern="[a-z0-9_]+" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="humano_1994" /></label>
+        </div>
+
+        <label class="auth-field"><span>e-mail</span><input name="email" type="email" required autocomplete="email" inputmode="email" placeholder="voce@internet.com" /></label>
+
+        <label class="auth-field"><span>senha</span>
+          <div class="auth-password-wrap">
+            <input id="auth-password" name="password" type="password" minlength="8" required autocomplete="current-password" placeholder="8+ caracteres. 123456 não, pelo amor." />
+            <button type="button" id="auth-password-toggle" class="auth-password-toggle" aria-pressed="false" aria-label="Mostrar senha">mostrar</button>
+          </div>
+        </label>
+
+        <div class="auth-context" id="auth-context">
+          <span>depois do cadastro</span>
+          <p>Você escolhe avatar, ajusta sua identidade e recebe uma introdução rápida sobre Feed, Praça, Amigos & Cúmplices e Meu Canto.</p>
+        </div>
+
+        <button class="btn btn-acid auth-submit" type="submit" id="auth-submit">criar meu canto</button>
+        <button class="resend-button hidden" type="button" id="resend-confirmation">reenviar confirmação de e-mail</button>
+        <p class="form-message" id="auth-message" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+  </div>
+</dialog>
   <aside id="world-encounter" class="world-encounter-float hidden" aria-live="polite"><button id="encounter-close" aria-label="Fechar encontro">×</button><div class="encounter-head"><span id="encounter-image" class="encounter-image character-sprite" role="img"></span><div><span id="encounter-source" class="section-code">MUNDO // AO VIVO</span><h3 id="encounter-name">...</h3><small id="encounter-role"></small></div></div><p id="encounter-line">...</p></aside>
   <dialog id="avatar-dialog" class="avatar-dialog"><button class="dialog-close avatar-dialog-close" aria-label="Fechar">×</button><div class="avatar-modal-head"><span class="section-code">IDENTIDADE // PIXEL</span><h2>Escolha seu rosto no AVESSO</h2><p>Mais pixels, menos foto de elevador.</p></div><div id="avatar-modal-grid" class="avatar-modal-grid"></div></dialog>
   <dialog id="wallpaper-dialog" class="wallpaper-dialog"><button class="dialog-close wallpaper-dialog-close" aria-label="Fechar">×</button><span class="section-code">AMBIENTE // ESCOLHA SUA REALIDADE</span><h2 id="wallpaper-dialog-title">Papel de parede</h2><p>Dez opções. Nenhuma bege corporativo.</p><div id="wallpaper-modal-grid" class="wallpaper-modal-grid"></div></dialog>
