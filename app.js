@@ -1431,7 +1431,19 @@ async function loadBlockedPanel(){
   $$('[data-unblock]').forEach(b=>b.onclick=()=>unblockPeer(b.dataset.unblock));
 }
 
-function avatarHtml(url,name='?'){ return url?`<img src="${escapeAttr(url)}" alt="" loading="lazy">`:escapeHtml(initials(name)); }
+function avatarAssetUrl(url=''){
+  const value=String(url||'');
+  if(!value)return '';
+  if(value.startsWith('assets/avatars/')){
+    const clean=value.split('?')[0];
+    return clean+'?v=20261002-native304-1';
+  }
+  return value;
+}
+function avatarHtml(url,name='?'){
+  const src=avatarAssetUrl(url);
+  return src?`<img src="${escapeAttr(src)}" alt="" loading="lazy">`:escapeHtml(initials(name));
+}
 function renderNavAvatar(){ const el=$('#nav-avatar'); if(el)el.innerHTML=avatarHtml(state.profile?.avatar_url,state.profile?.display_name||'?'); }
 function characterSpriteClass(character){ return ''; }
 function characterVisual(character,extra=''){
@@ -5345,7 +5357,7 @@ async function removeFriendship(id){
 }
 function openAvatarDialog(){
   const grid=$('#avatar-modal-grid');
-  grid.innerHTML=AVATAR_OPTIONS.map(([label,url,kind])=>`<button class="avatar-choice-modal ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${escapeAttr(url)}"><img src="${escapeAttr(url)}" alt="${escapeAttr(label)}"><b>${label}</b><small>${kind}</small></button>`).join('');
+  grid.innerHTML=AVATAR_OPTIONS.map(([label,url,kind])=>`<button class="avatar-choice-modal ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${escapeAttr(url)}"><img src="${escapeAttr(avatarAssetUrl(url))}" alt="${escapeAttr(label)}"><b>${label}</b><small>${kind}</small></button>`).join('');
   $$('[data-avatar-url]').forEach(b=>b.onclick=()=>saveAvatar(b.dataset.avatarUrl));
   $('#avatar-dialog').showModal();
 }
