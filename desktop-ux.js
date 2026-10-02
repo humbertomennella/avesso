@@ -31,11 +31,11 @@
   function readNotifications(){
     try{
       const rows=JSON.parse(localStorage.getItem(notificationKey())||'[]');
-      return Array.isArray(rows)?rows.slice(0,80):[];
+      return Array.isArray(rows)?rows.slice(0,100):[];
     }catch{return[];}
   }
   function saveNotifications(rows){
-    try{localStorage.setItem(notificationKey(),JSON.stringify(rows.slice(0,80)));}catch{}
+    try{localStorage.setItem(notificationKey(),JSON.stringify(rows.slice(0,100)));}catch{}
   }
   function readRecentChats(){
     try{
