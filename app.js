@@ -2107,6 +2107,7 @@ async function enterApp(){
   const profileResult=await supabase.from('profiles').select('*').eq('id',state.session.user.id).single();
   const data=profileResult.data;
   state.profile=data;
+  if(data&&onboardingNeeded())document.body.classList.add('avesso-onboarding-open');
   if(profileResult.error||!data){
     const status=$('#feed-status');
     if(status){
