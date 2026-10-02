@@ -6405,8 +6405,8 @@ async function loadProfilePosts(profileId,selector='#profile-posts-list'){
   const host=$(selector);
   if(!host||!profileId)return;
   host.setAttribute('aria-busy','true');
-  const {data:posts,error}=await supabase.from('posts')
-    .select('id,author_id,recipient_id,body,image_url,media_url,media_kind,visibility,created_at,reshare_post_id,reshare_photo_id')
+  const {data:posts,error,count}=await supabase.from('posts')
+    .select('id,author_id,recipient_id,body,image_url,media_url,media_kind,visibility,created_at,reshare_post_id,reshare_photo_id',{count:'exact'})
     .eq('author_id',profileId)
     .eq('visibility','publico')
     .order('created_at',{ascending:false})
@@ -6469,7 +6469,7 @@ async function loadProfilePosts(profileId,selector='#profile-posts-list'){
   }).join('');
 
   host.removeAttribute('aria-busy');
-  updateProfilePostCounter(selector,rows.length);
+  updateProfilePostCounter(selector,Number.isFinite(count)?count:rows.length);
   host.querySelectorAll('[data-profile-open-post]').forEach(button=>{
     button.onclick=()=>openFeedPostFromNotification(button.dataset.profileOpenPost);
   });
