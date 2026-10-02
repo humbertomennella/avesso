@@ -75,7 +75,11 @@
       Math.abs(createdAt-Number(row.createdAt||0))<15000
     );
     if(existingIndex>=0){
-      const existing=rows.splice(existingIndex,1)[0];
+      const existing=rows[existingIndex];
+      // mobile-ux e desktop-ux compartilham o mesmo histórico. Se o mesmo evento
+      // já foi persistido com o mesmo timestamp, não conte novamente.
+      if(Number(existing.createdAt||0)===createdAt)return;
+      rows.splice(existingIndex,1);
       rows.unshift({
         ...existing,
         kind,title,body,target,dedupeKey,createdAt,
