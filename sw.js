@@ -48,15 +48,24 @@ self.addEventListener('push',event=>{
       return;
     }
     const title=payload.title||'AVESSO';
+    let targetUrl=payload.url||self.registration.scope;
+    if(!payload.url&&payload.target?.type&&payload.target?.id){
+      try{
+        const target=new URL(self.registration.scope);
+        target.searchParams.set('open',String(payload.target.type));
+        target.searchParams.set('id',String(payload.target.id));
+        targetUrl=target.href;
+      }catch{}
+    }
     const options={
       body:payload.body||'Algo aconteceu no seu Canto.',
       icon:payload.icon||new URL('assets/avatars/robo-01.svg',self.registration.scope).href,
       badge:payload.badge||new URL('assets/avatars/robo-01.svg',self.registration.scope).href,
-      tag:payload.tag||'avesso-social',
+      tag:String(payload.tag||payload.dedupeKey||'avesso-social').slice(0,180),
       renotify:true,
       silent:false,
       vibrate:[90,45,90],
-      data:{url:payload.url||self.registration.scope,kind:payload.kind||'interaction'}
+      data:{url:targetUrl,kind:payload.kind||'interaction',target:payload.target||null}
     };
     await self.registration.showNotification(title,options);
   })());
