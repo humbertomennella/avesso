@@ -37,14 +37,15 @@
     currentNotificationKey=key;
     try{
       const parsed=JSON.parse(localStorage.getItem(key)||'[]');
-      notificationRows=Array.isArray(parsed)?parsed.slice(0,60):[];
+      const cutoff=Date.now()-30*24*60*60*1000;
+      notificationRows=Array.isArray(parsed)?parsed.filter(row=>Number(row?.createdAt||0)>=cutoff).slice(0,100):[];
     }catch{notificationRows=[];}
     renderNotificationBadge();
     renderNotificationCenter();
   }
 
   function persistNotifications(){
-    try{localStorage.setItem(currentNotificationKey||userKey(),JSON.stringify(notificationRows.slice(0,60)));}catch{}
+    try{localStorage.setItem(currentNotificationKey||userKey(),JSON.stringify(notificationRows.slice(0,100)));}catch{}
   }
 
   function unreadCount(){
@@ -83,16 +84,35 @@
 
   function rememberNotification(detail={}){
     loadNotifications();
-    notificationRows.unshift({
-      id:String(Date.now())+'-'+Math.random().toString(36).slice(2,7),
-      kind:String(detail.kind||'interaction'),
-      title:String(detail.title||'AVESSO').slice(0,140),
-      body:String(detail.body||'').slice(0,260),
-      createdAt:Number(detail.createdAt||Date.now()),
-      target:detail.target||targetFromUrl(detail.url)||null,
-      read:false
-    });
-    notificationRows=notificationRows.slice(0,60);
+    const createdAt=Number(detail.createdAt||Date.now());
+    const kind=String(detail.kind||'interaction');
+    const title=String(detail.title||'AVESSO').slice(0,140);
+    const body=String(detail.body||'').slice(0,260);
+    const target=detail.target||targetFromUrl(detail.url)||null;
+    const targetKey=target?.type&&target?.id?`${target.type}:${target.id}`:'';
+    const dedupeKey=String(detail.dedupeKey||[kind,targetKey,title,body].join('|')).toLowerCase();
+    const existingIndex=notificationRows.findIndex(row=>
+      row.dedupeKey===dedupeKey&&
+      createdAt-Number(row.createdAt||0)<15000
+    );
+    if(existingIndex>=0){
+      const existing=notificationRows.splice(existingIndex,1)[0];
+      notificationRows.unshift({
+        ...existing,
+        kind,title,body,target,dedupeKey,
+        createdAt,
+        read:false,
+        repeat:Number(existing.repeat||1)+1
+      });
+    }else{
+      notificationRows.unshift({
+        id:String(createdAt)+'-'+Math.random().toString(36).slice(2,7),
+        kind,title,body,createdAt,target,dedupeKey,
+        read:false,
+        repeat:1
+      });
+    }
+    notificationRows=notificationRows.slice(0,100);
     persistNotifications();
     renderNotificationBadge();
     renderNotificationCenter();
@@ -104,6 +124,9 @@
     sheet=document.createElement('section');
     sheet.id='mobile-ux-notification-center';
     sheet.className='mobile-ux-notification-center hidden';
+    sheet.setAttribute('role','region');
+    sheet.setAttribute('aria-label','Central de notificações');
+    sheet.setAttribute('aria-hidden','true');
     sheet.innerHTML=`
       <header>
         <div><small>AVESSO // NOTIFICAÇÕES</small><b>aconteceu enquanto você tinha uma vida</b></div>
@@ -116,14 +139,25 @@
         <button type="button" data-notification-filter="people">pessoas</button>
       </nav>
       <div class="mobile-ux-notification-list"></div>
-      <footer><button type="button" data-mobile-center-clear>limpar histórico</button></footer>`;
+      <footer><button type="button" data-mobile-center-read>marcar tudo como lido</button><button type="button" data-mobile-center-clear>limpar histórico</button></footer>`;
     document.body.appendChild(sheet);
     q('[data-mobile-center-close]',sheet).onclick=closeNotificationCenter;
+    qa('[data-notification-filter]',sheet).forEach((button,index)=>button.setAttribute('aria-pressed',String(index===0)));
     qa('[data-notification-filter]',sheet).forEach(button=>button.onclick=()=>{
       notificationFilter=button.dataset.notificationFilter||'all';
-      qa('[data-notification-filter]',sheet).forEach(x=>x.classList.toggle('active',x===button));
+      qa('[data-notification-filter]',sheet).forEach(x=>{
+        const active=x===button;
+        x.classList.toggle('active',active);
+        x.setAttribute('aria-pressed',String(active));
+      });
       renderNotificationCenter();
     });
+    q('[data-mobile-center-read]',sheet).onclick=()=>{
+      notificationRows.forEach(row=>row.read=true);
+      persistNotifications();
+      renderNotificationCenter();
+      renderNotificationBadge();
+    };
     q('[data-mobile-center-clear]',sheet).onclick=()=>{
       notificationRows=[];
       persistNotifications();
@@ -607,8 +641,13 @@
     requestAnimationFrame(()=>{syncQueued=false;syncAll();});
   }
   function installObservers(){
-    const observer=new MutationObserver(scheduleSync);
-    observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+    const childObserver=new MutationObserver(scheduleSync);
+    childObserver.observe(document.body,{subtree:true,childList:true});
+
+    const layoutObserver=new MutationObserver(scheduleSync);
+    layoutObserver.observe(document.body,{attributes:true,attributeFilter:['class']});
+    const appView=q('#app-view');
+    if(appView)layoutObserver.observe(appView,{attributes:true,attributeFilter:['class']});
 
     const handle=q('#nav-handle');
     if(handle)new MutationObserver(()=>loadNotifications()).observe(handle,{childList:true,characterData:true,subtree:true});
