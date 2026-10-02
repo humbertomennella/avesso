@@ -6400,6 +6400,88 @@ async function deleteProfileMedia(id,path){
   loadProfileMedia(state.profile.id,true,'#profile-media-list');
 }
 
+
+async function loadProfilePosts(profileId,selector='#profile-posts-list'){
+  const host=$(selector);
+  if(!host||!profileId)return;
+  host.setAttribute('aria-busy','true');
+  const {data:posts,error}=await supabase.from('posts')
+    .select('id,author_id,recipient_id,body,image_url,media_url,media_kind,visibility,created_at,reshare_post_id,reshare_photo_id')
+    .eq('author_id',profileId)
+    .eq('visibility','publico')
+    .order('created_at',{ascending:false})
+    .limit(12);
+
+  if(error){
+    console.error('profile posts',error);
+    host.removeAttribute('aria-busy');
+    host.innerHTML='<p class="profile-posts-empty">As publicações públicas não quiseram sair do arquivo agora.</p>';
+    return;
+  }
+
+  const rows=posts||[];
+  if(!rows.length){
+    host.removeAttribute('aria-busy');
+    host.innerHTML='<p class="profile-posts-empty">Nenhuma publicação pública aqui ainda. O silêncio também ocupa espaço.</p>';
+    updateProfilePostCounter(selector,0);
+    return;
+  }
+
+  const ids=rows.map(row=>row.id);
+  const recipientIds=[...new Set(rows.map(row=>row.recipient_id).filter(Boolean))];
+  const [recipients,reactionRes,responseRes]=await Promise.all([
+    liteProfilesByIds(recipientIds),
+    supabase.from('post_reactions').select('post_id').in('post_id',ids),
+    supabase.from('responses').select('post_id').in('post_id',ids)
+  ]);
+
+  const reactionCounts={};
+  for(const row of reactionRes.data||[])reactionCounts[row.post_id]=(reactionCounts[row.post_id]||0)+1;
+  const responseCounts={};
+  for(const row of responseRes.data||[])responseCounts[row.post_id]=(responseCounts[row.post_id]||0)+1;
+
+  host.innerHTML=rows.map((post,index)=>{
+    const recipient=post.recipient_id?recipients[post.recipient_id]:null;
+    const route=recipient
+      ? `→ <button type="button" class="profile-post-recipient" data-profile-id="${post.recipient_id}">@${escapeHtml(recipient?.handle||'alguém')}</button>`
+      : '→ comunidade';
+    const reactionCount=reactionCounts[post.id]||0;
+    const responseCount=responseCounts[post.id]||0;
+    const image=post.image_url?postImageSrc(post.image_url):'';
+    const turned=Boolean(post.reshare_post_id||post.reshare_photo_id);
+    return `<article class="profile-post-card" data-profile-post="${post.id}">
+      <header>
+        <div>
+          <span>${turned?'↻ VIRADO':'PUBLICAÇÃO'} // ${ago(post.created_at)}</span>
+          <small>${route}</small>
+        </div>
+        <button type="button" class="profile-post-open" data-profile-open-post="${post.id}" aria-label="Abrir publicação completa">↗ abrir</button>
+      </header>
+      ${post.body?`<p class="profile-post-body">${renderEmoticonText(post.body)}</p>`:''}
+      ${image?`<figure class="profile-post-image"><img src="${escapeAttr(image)}" alt="Imagem da publicação" loading="${index<3?'eager':'lazy'}" decoding="async"></figure>`:''}
+      ${feedMediaHtml(post.media_url,post.media_kind)}
+      <footer>
+        <span>♥ ${reactionCount}</span>
+        <span>↩ ${responseCount}</span>
+        <span>${turned?'conteúdo virado':'público'}</span>
+      </footer>
+    </article>`;
+  }).join('');
+
+  host.removeAttribute('aria-busy');
+  updateProfilePostCounter(selector,rows.length);
+  host.querySelectorAll('[data-profile-open-post]').forEach(button=>{
+    button.onclick=()=>openFeedPostFromNotification(button.dataset.profileOpenPost);
+  });
+}
+function updateProfilePostCounter(selector,count){
+  const publicView=String(selector||'').includes('public');
+  const navId=publicView?'public-posts':'posts';
+  document.querySelectorAll(`[data-profile-jump="${navId}"] [data-profile-jump-count]`).forEach(el=>{
+    el.textContent=String(count);
+  });
+}
+
 async function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
@@ -6413,6 +6495,10 @@ async function renderProfile(){
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
       <button id="profile-story-create">＋ postar story</button>
       <div id="profile-story-list" class="profile-story-list"><p class="story-empty">procurando coisas que ainda não expiraram...</p></div>
+    </section>
+    <section class="profile-posts-control">
+      <div class="profile-posts-heading"><div><span class="section-code">PUBLICAÇÕES // SUA VOZ NO AVESSO</span><h2>Do feed para o seu Canto</h2><p>As últimas publicações públicas também moram aqui. O perfil finalmente lembra que você fala, não só configura coisas.</p></div><button type="button" class="profile-posts-feed-link" data-profile-go-feed>↗ abrir feed</button></div>
+      <div id="profile-posts-list" class="profile-posts-list"><p class="profile-posts-empty">procurando o que você publicou sem esconder atrás de configurações...</p></div>
     </section>
     <div class="profile-settings-grid">
       <section class="profile-settings-card"><span class="section-code">PERFIL</span><label>Nome exibido <small>livre como nickname de MSN; símbolos e emojis são bem-vindos</small><input id="profile-display-name" maxlength="80" value="${escapeAttr(state.profile.display_name)}"></label><label>Status ao lado do nome <small>aparece de forma compacta nas conversas</small><input id="profile-status" maxlength="140" value="${escapeAttr(state.profile.status_message||'')}" placeholder="online, mas discutivelmente disponível"></label><label>Aparecer como<select id="profile-presence"><option value="online">● online</option><option value="away">◐ ausente</option><option value="invisible">○ invisível</option></select></label><label>Bio<textarea id="profile-bio" maxlength="300">${escapeHtml(state.profile.bio||'')}</textarea></label><button id="save-profile-settings">salvar alterações</button></section>
@@ -6465,6 +6551,8 @@ async function renderProfile(){
   loadFriendPanel();
   loadBlockedPanel();
   loadProfileStories(state.profile.id,'#profile-story-list');
+  loadProfilePosts(state.profile.id,'#profile-posts-list');
+  $('[data-profile-go-feed]')?.addEventListener('click',()=>document.querySelector('[data-app-tab="feed"]')?.click());
   loadAlbum(state.profile.id,true);
   loadProfileMedia(state.profile.id,true,'#profile-media-list');
   loadGuestbook(state.profile.id,'#profile-guestbook');
@@ -6610,6 +6698,10 @@ async function openPublicProfile(userId){
       <h2>Stories de ${identityNameHtml(p.id,p.display_name)}</h2>
       <div id="public-story-list" class="profile-story-list"><p class="story-empty">checando o relógio...</p></div>
     </section>
+    <section class="public-posts profile-posts-control">
+      <div class="profile-posts-heading"><div><span class="section-code">PUBLICAÇÕES // O QUE DEIXOU NO FEED</span><h2>Publicações de ${identityNameHtml(p.id,p.display_name)}</h2><p>Somente o que foi publicado para a comunidade aparece aqui.</p></div></div>
+      <div id="public-posts-list" class="profile-posts-list"><p class="profile-posts-empty">procurando publicações públicas...</p></div>
+    </section>
     <section class="guestbook-section public-guestbook">
       <span class="section-code">RECADOS // ESCREVA NA PAREDE DE ALGUÉM</span>
       <h2>Recados para ${identityNameHtml(p.id,p.display_name)}</h2>
@@ -6631,6 +6723,7 @@ async function openPublicProfile(userId){
   loadAlbum(userId,false);
   loadProfileMedia(userId,false,'#public-media-list');
   loadProfileStories(userId,'#public-story-list');
+  loadProfilePosts(userId,'#public-posts-list');
   startCornerMusic(p);
   if(p.corner_music_url&&!p.corner_music_title){
     resolveMediaMetadata(p.corner_music_url).then(metadata=>{
