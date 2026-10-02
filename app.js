@@ -6029,6 +6029,13 @@ function openQuickFriendChat(peerId){
   }
   openChatWindow(peerId,{keepMinimized:false,markRead:true});
 }
+if(!window.__avessoDesktopChatRestoreBound){
+  window.__avessoDesktopChatRestoreBound=true;
+  window.addEventListener('avesso:desktop-open-chat',event=>{
+    const peerId=event.detail?.peerId;
+    if(peerId)openQuickFriendChat(peerId);
+  });
+}
 function openFriendChat(peerId){
   state.tab='messages';bumpView();applyAppTabLayout();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x.dataset.appTab==='messages'));
