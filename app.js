@@ -3618,10 +3618,10 @@ async function loadPlazaMessages(){
   log.innerHTML=messages.map(m=>{
     if(m.character_id){
       const c=state.world.charactersById[m.character_id]||state.world.characters.npc;
-      return `<article class="plaza-message npc-message">${characterVisual(c,'plaza-msg-avatar')}<div><header><strong>${escapeHtml(c?.name||'NPC')}</strong><span>HABITANTE · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
+      return `<article class="plaza-message npc-message" data-plaza-message="${m.id}">${characterVisual(c,'plaza-msg-avatar')}<div><header><strong>${escapeHtml(c?.name||'NPC')}</strong><span>HABITANTE · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
     }
     const p=profiles[m.user_id]||{};
-    return `<article class="plaza-message"><button class="plaza-avatar" data-profile-id="${m.user_id}">${avatarHtml(p.avatar_url,p.display_name||'?')}</button><div><header><button class="user-link" data-profile-id="${m.user_id}">${identityNameHtml(m.user_id,p.display_name||'alguém')}</button><span>@${escapeHtml(p.handle||'...')} · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
+    return `<article class="plaza-message" data-plaza-message="${m.id}"><button class="plaza-avatar" data-profile-id="${m.user_id}">${avatarHtml(p.avatar_url,p.display_name||'?')}</button><div><header><button class="user-link" data-profile-id="${m.user_id}">${identityNameHtml(m.user_id,p.display_name||'alguém')}</button><span>@${escapeHtml(p.handle||'...')} · ${ago(m.created_at)}</span></header><p>${escapeHtml(m.body)}</p></div></article>`;
   }).join('')||'<div class="plaza-empty">A praça está vazia. O NPC está fingindo que isso era parte do planejamento urbano.</div>';
   bindProfileLinks();
   log.scrollTop=log.scrollHeight;
@@ -4110,34 +4110,202 @@ function ensureDiscoveryDialog(){
   dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
   return dialog;
 }
-async function runGlobalSearch(term){
-  const host=$('#global-search-results');if(!host)return;
-  const q=String(term||'').trim().replace(/[%,()]/g,' ').slice(0,80);
-  if(q.length<2){host.innerHTML='<p class="discovery-empty">Digite pelo menos 2 caracteres. Adivinhação continua fora do escopo.</p>';return;}
-  host.innerHTML='<div class="discovery-loading">procurando gente e coisas...</div>';
-  const [peopleRes,postsRes]=await Promise.all([
-    supabase.from('profiles').select('id,display_name,handle,avatar_url,bio,presence_mode,online_until').or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`).limit(12),
-    supabase.from('feed_attention').select('id,author_id,author_name,author_handle,author_avatar,body,created_at,response_count,visibility').eq('visibility','publico').ilike('body',`%${q}%`).order('created_at',{ascending:false}).limit(16)
-  ]);
-  const people=(peopleRes.data||[]).filter(p=>!isPeerBlocked(p.id));
-  const posts=(postsRes.data||[]).filter(p=>!isPeerBlocked(p.author_id));
-  host.innerHTML=`<section class="discovery-group"><h3>PESSOAS <b>${people.length}</b></h3><div class="discovery-people">${people.map(p=>`<button type="button" class="discovery-person" data-discovery-profile="${p.id}"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name)}</span><span><b>${identityNameHtml(p.id,p.display_name)}</b><small>@${escapeHtml(p.handle)}${p.bio?' · '+escapeHtml(p.bio.slice(0,70)):''}</small></span></button>`).join('')||'<p class="discovery-empty">Ninguém com esse nome. Talvez seja saudável.</p>'}</div></section><section class="discovery-group"><h3>PUBLICAÇÕES <b>${posts.length}</b></h3><div class="discovery-posts">${posts.map(p=>`<button type="button" class="discovery-post" data-discovery-post="${p.id}"><span><b>${escapeHtml(p.author_name||'alguém')} · @${escapeHtml(p.author_handle||'...')}</b><small>${ago(p.created_at)} · ${p.response_count||0} respostas</small></span><p>${escapeHtml(String(p.body||'').slice(0,180))}</p></button>`).join('')||'<p class="discovery-empty">Nenhuma publicação encontrou coragem para aparecer.</p>'}</div></section>`;
+
+function globalSearchHistoryKey(){
+  return `avesso_search_history_v1:${state.profile?.id||'anon'}`;
+}
+function readGlobalSearchHistory(){
+  try{
+    const rows=JSON.parse(localStorage.getItem(globalSearchHistoryKey())||'[]');
+    return Array.isArray(rows)?rows.filter(Boolean).slice(0,7):[];
+  }catch{return[];}
+}
+function rememberGlobalSearch(term){
+  const q=String(term||'').trim().slice(0,80);
+  if(q.length<2)return;
+  try{
+    const next=[q,...readGlobalSearchHistory().filter(x=>x.toLowerCase()!==q.toLowerCase())].slice(0,7);
+    localStorage.setItem(globalSearchHistoryKey(),JSON.stringify(next));
+  }catch{}
+}
+function globalSearchEmpty(label){
+  return `<p class="discovery-empty">${escapeHtml(label)}</p>`;
+}
+async function openSearchConversation(peerId,messageId){
+  if(!peerId)return;
+  const dialog=$('#avesso-discovery-dialog');if(dialog?.open)dialog.close();
+  openFriendChat(peerId);
+  if(!messageId)return;
+  setTimeout(()=>{
+    const bubble=document.querySelector(`[data-dm-id="${CSS.escape(String(messageId))}"]`);
+    if(bubble){
+      bubble.scrollIntoView({behavior:'smooth',block:'center'});
+      bubble.classList.add('dm-highlight');
+      setTimeout(()=>bubble.classList.remove('dm-highlight'),1500);
+    }else toast('Conversa aberta. A mensagem é mais antiga que o trecho carregado.');
+  },700);
+}
+function openSearchPlazaMessage(messageId){
+  const dialog=$('#avesso-discovery-dialog');if(dialog?.open)dialog.close();
+  document.querySelector('[data-app-tab="plaza"]')?.click();
+  if(!messageId)return;
+  setTimeout(()=>{
+    const row=document.querySelector(`[data-plaza-message="${CSS.escape(String(messageId))}"]`);
+    if(row){
+      row.scrollIntoView({behavior:'smooth',block:'center'});
+      row.classList.add('discovery-target-highlight');
+      setTimeout(()=>row.classList.remove('discovery-target-highlight'),1600);
+    }
+  },650);
+}
+function bindGlobalSearchResults(host){
   host.querySelectorAll('[data-discovery-profile]').forEach(b=>b.onclick=()=>{ensureDiscoveryDialog().close();openPublicProfile(b.dataset.discoveryProfile);});
   host.querySelectorAll('[data-discovery-post]').forEach(b=>b.onclick=()=>{ensureDiscoveryDialog().close();openFeedPostFromNotification(b.dataset.discoveryPost);});
+  host.querySelectorAll('[data-discovery-story]').forEach(b=>b.onclick=()=>{ensureDiscoveryDialog().close();openStory(b.dataset.discoveryStory);});
+  host.querySelectorAll('[data-discovery-photo]').forEach(b=>b.onclick=()=>{ensureDiscoveryDialog().close();openAlbumPhotoViewer(b.dataset.discoveryPhoto);});
+  host.querySelectorAll('[data-discovery-chat]').forEach(b=>openSearchConversation && (b.onclick=()=>openSearchConversation(b.dataset.discoveryChat,b.dataset.discoveryMessage)));
+  host.querySelectorAll('[data-discovery-plaza]').forEach(b=>b.onclick=()=>openSearchPlazaMessage(b.dataset.discoveryPlaza));
+}
+async function runGlobalSearch(term){
+  const host=$('#global-search-results');if(!host)return;
+  const q=String(term||'').trim().replace(/[%,()]/g,' ').replace(/\s+/g,' ').slice(0,80);
+  if(q.length<2){
+    host.innerHTML='<p class="discovery-empty">Digite pelo menos 2 caracteres. Adivinhação continua fora do escopo.</p>';
+    return;
+  }
+  host.setAttribute('aria-busy','true');
+  host.innerHTML='<div class="discovery-loading">BUSCAR.EXE // procurando em seis cantos da rede...</div>';
+  const nowIso=new Date().toISOString();
+  const me=state.profile.id;
+  const queries=[
+    supabase.from('profiles')
+      .select('id,display_name,handle,avatar_url,bio,presence_mode,online_until')
+      .or(`handle.ilike.%${q}%,display_name.ilike.%${q}%,bio.ilike.%${q}%`).limit(10),
+    supabase.from('feed_attention')
+      .select('id,author_id,author_name,author_handle,author_avatar,body,created_at,response_count,visibility')
+      .eq('visibility','publico').ilike('body',`%${q}%`).order('created_at',{ascending:false}).limit(10),
+    supabase.from('direct_messages')
+      .select('id,sender_id,recipient_id,body,created_at,message_kind,deleted_at')
+      .or(`sender_id.eq.${me},recipient_id.eq.${me}`)
+      .eq('message_kind','text').is('deleted_at',null).ilike('body',`%${q}%`)
+      .order('created_at',{ascending:false}).limit(10),
+    supabase.from('stories')
+      .select('id,author_id,body,media_type,created_at,expires_at,visibility')
+      .eq('visibility','publico').gt('expires_at',nowIso).ilike('body',`%${q}%`)
+      .order('created_at',{ascending:false}).limit(8),
+    supabase.from('profile_photos')
+      .select('id,user_id,caption,storage_path,created_at')
+      .ilike('caption',`%${q}%`).order('created_at',{ascending:false}).limit(8),
+    supabase.from('plaza_messages')
+      .select('id,user_id,character_id,body,created_at')
+      .is('character_id',null).ilike('body',`%${q}%`)
+      .order('created_at',{ascending:false}).limit(8)
+  ];
+  const settled=await Promise.allSettled(queries);
+  if(!document.body.contains(host))return;
+  const value=i=>settled[i]?.status==='fulfilled'?(settled[i].value?.data||[]):[];
+  const failures=settled.filter(x=>x.status==='rejected'||x.value?.error).length;
+
+  const people=value(0).filter(p=>!isPeerBlocked(p.id));
+  const posts=value(1).filter(p=>!isPeerBlocked(p.author_id));
+  const messages=value(2).filter(m=>!isPeerBlocked(m.sender_id)&&!isPeerBlocked(m.recipient_id));
+  const stories=value(3).filter(row=>!isPeerBlocked(row.author_id));
+  const photos=value(4).filter(row=>!isPeerBlocked(row.user_id));
+  const plaza=value(5).filter(row=>!isPeerBlocked(row.user_id));
+
+  const profileIds=[
+    ...people.map(x=>x.id),
+    ...messages.flatMap(x=>[x.sender_id,x.recipient_id]),
+    ...stories.map(x=>x.author_id),
+    ...photos.map(x=>x.user_id),
+    ...plaza.map(x=>x.user_id)
+  ].filter(Boolean);
+  const profiles=await liteProfilesByIds(profileIds);
+  rememberGlobalSearch(q);
+
+  const peopleHtml=people.map(p=>`
+    <button type="button" class="discovery-person" data-discovery-profile="${p.id}">
+      <span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name)}</span>
+      <span><b>${identityNameHtml(p.id,p.display_name)}</b><small>@${escapeHtml(p.handle)}${p.bio?' · '+escapeHtml(p.bio.slice(0,70)):''}</small></span>
+    </button>`).join('')||globalSearchEmpty('Nenhuma pessoa encontrada.');
+
+  const postsHtml=posts.map(p=>`
+    <button type="button" class="discovery-post" data-discovery-post="${p.id}">
+      <span><b>${escapeHtml(p.author_name||'alguém')} · @${escapeHtml(p.author_handle||'...')}</b><small>${ago(p.created_at)} · ${p.response_count||0} respostas</small></span>
+      <p>${escapeHtml(String(p.body||'').slice(0,180))}</p>
+    </button>`).join('')||globalSearchEmpty('Nenhuma publicação encontrou coragem para aparecer.');
+
+  const messagesHtml=messages.map(m=>{
+    const peerId=m.sender_id===me?m.recipient_id:m.sender_id;
+    const p=profiles[peerId]||{};
+    return `<button type="button" class="discovery-result-row" data-discovery-chat="${peerId}" data-discovery-message="${m.id}">
+      <i>↔</i><span><b>${escapeHtml(p.display_name||p.handle||'conversa')} · @${escapeHtml(p.handle||'...')}</b><small>${ago(m.created_at)}</small><p>${escapeHtml(String(m.body||'').slice(0,150))}</p></span>
+    </button>`;
+  }).join('')||globalSearchEmpty('Nada encontrado nas suas conversas.');
+
+  const storiesHtml=stories.map(row=>{
+    const p=profiles[row.author_id]||{};
+    return `<button type="button" class="discovery-result-row" data-discovery-story="${row.id}">
+      <i>◫</i><span><b>${escapeHtml(p.display_name||p.handle||'story')} · @${escapeHtml(p.handle||'...')}</b><small>${ago(row.created_at)} · expira em ${storyTimeLeft(row.expires_at)}</small><p>${escapeHtml(String(row.body||'Story com mídia').slice(0,150))}</p></span>
+    </button>`;
+  }).join('')||globalSearchEmpty('Nenhum Story público ativo com esse texto.');
+
+  const photosHtml=photos.map(row=>{
+    const p=profiles[row.user_id]||{};
+    return `<button type="button" class="discovery-result-row discovery-photo-result" data-discovery-photo="${row.id}">
+      <span class="discovery-photo-thumb"><img src="${escapeAttr(publicAlbumUrl(row.storage_path))}" alt="" loading="lazy" decoding="async"></span>
+      <span><b>${escapeHtml(p.display_name||p.handle||'álbum')} · @${escapeHtml(p.handle||'...')}</b><small>${ago(row.created_at)}</small><p>${escapeHtml(String(row.caption||'foto sem legenda').slice(0,150))}</p></span>
+    </button>`;
+  }).join('')||globalSearchEmpty('Nenhuma foto com essa legenda.');
+
+  const plazaHtml=plaza.map(row=>{
+    const p=profiles[row.user_id]||{};
+    return `<button type="button" class="discovery-result-row" data-discovery-plaza="${row.id}">
+      <i>⌂</i><span><b>${escapeHtml(p.display_name||p.handle||'Praça Central')} · @${escapeHtml(p.handle||'...')}</b><small>${ago(row.created_at)}</small><p>${escapeHtml(String(row.body||'').slice(0,150))}</p></span>
+    </button>`;
+  }).join('')||globalSearchEmpty('Nada parecido apareceu na Praça.');
+
+  const total=people.length+posts.length+messages.length+stories.length+photos.length+plaza.length;
+  host.innerHTML=`
+    <div class="global-search-summary"><b>${total}</b><span>resultado${total===1?'':'s'} em até 6 áreas</span>${failures?'<em>'+failures+' fonte(s) indisponível(is)</em>':''}</div>
+    <div class="global-search-groups">
+      <section class="discovery-group"><h3>PESSOAS <b>${people.length}</b></h3><div class="discovery-people">${peopleHtml}</div></section>
+      <section class="discovery-group"><h3>PUBLICAÇÕES <b>${posts.length}</b></h3><div class="discovery-posts">${postsHtml}</div></section>
+      <section class="discovery-group"><h3>CONVERSAS <b>${messages.length}</b></h3><div class="discovery-result-list">${messagesHtml}</div></section>
+      <section class="discovery-group"><h3>STORIES <b>${stories.length}</b></h3><div class="discovery-result-list">${storiesHtml}</div></section>
+      <section class="discovery-group"><h3>FOTOS <b>${photos.length}</b></h3><div class="discovery-result-list">${photosHtml}</div></section>
+      <section class="discovery-group"><h3>PRAÇA <b>${plaza.length}</b></h3><div class="discovery-result-list">${plazaHtml}</div></section>
+    </div>`;
+  host.setAttribute('aria-busy','false');
+  bindGlobalSearchResults(host);
 }
 function openGlobalSearch(event={}){
   if(!state.profile)return;
   const initialQuery=String(event?.detail?.query||'').trim().slice(0,80);
   const dialog=ensureDiscoveryDialog();
   const host=$('#avesso-discovery-content');
-  host.innerHTML='<header class="discovery-head"><span>BUSCAR.EXE</span><h2>Procure pessoas e publicações</h2><p>Busca direta. Sem transformar curiosidade em perfil publicitário.</p></header><label class="global-search-box"><span>⌕</span><input id="global-search-input" type="search" autocomplete="off" placeholder="nome, @ ou texto"><button type="button" id="global-search-clear">×</button></label><div id="global-search-results"><p class="discovery-empty">A busca começa quando você digitar.</p></div>';
+  const history=readGlobalSearchHistory();
+  host.innerHTML=`<header class="discovery-head"><span>BUSCAR.EXE // UNIVERSAL</span><h2>Procure pela rede inteira</h2><p>Pessoas, posts, conversas, Stories, fotos e Praça. A curiosidade continua sem precisar virar anúncio.</p></header>
+    <label class="global-search-box" for="global-search-input"><span aria-hidden="true">⌕</span><input id="global-search-input" type="search" autocomplete="off" spellcheck="false" aria-label="Pesquisar no AVESSO" placeholder="nome, @, texto, legenda ou conversa"><button type="button" id="global-search-clear" aria-label="Limpar busca">×</button></label>
+    <div class="global-search-history ${history.length?'':'hidden'}" aria-label="Buscas recentes"><small>RECENTES</small><div>${history.map(item=>`<button type="button" data-search-history="${escapeAttr(item)}">${escapeHtml(item)}</button>`).join('')}</div></div>
+    <div id="global-search-results" role="status" aria-live="polite"><p class="discovery-empty">A busca começa quando você digitar.</p></div>`;
   let timer=null;
   const input=$('#global-search-input');
   if(initialQuery)input.value=initialQuery;
-  input.oninput=e=>{clearTimeout(timer);timer=setTimeout(()=>runGlobalSearch(e.target.value),220);};
+  input.oninput=e=>{clearTimeout(timer);timer=setTimeout(()=>runGlobalSearch(e.target.value),240);};
+  input.onkeydown=e=>{
+    if(e.key==='Enter'){e.preventDefault();clearTimeout(timer);runGlobalSearch(input.value);}
+    if(e.key==='Escape'&&input.value){e.preventDefault();input.value='';runGlobalSearch('');}
+  };
   $('#global-search-clear').onclick=()=>{input.value='';runGlobalSearch('');input.focus();};
+  host.querySelectorAll('[data-search-history]').forEach(button=>button.onclick=()=>{
+    input.value=button.dataset.searchHistory||'';
+    runGlobalSearch(input.value);
+    input.focus();
+  });
   if(initialQuery.length>=2)runGlobalSearch(initialQuery);
   if(!dialog.open)dialog.showModal();
+  dialog.setAttribute('aria-label','Busca universal do AVESSO');
   setTimeout(()=>input.focus(),40);
 }
 async function openNowSurface(){
