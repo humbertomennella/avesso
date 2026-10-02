@@ -308,7 +308,7 @@
   }
 
   function requestSummary(){
-    if(!isDesktop()||q('#app-view')?.classList.contains('hidden'))return;
+    if(!isDesktop()||document.hidden||q('#app-view')?.classList.contains('hidden'))return;
     window.dispatchEvent(new CustomEvent('avesso:desktop-summary-request'));
   }
 
@@ -916,6 +916,12 @@
     window.addEventListener('avesso:notification',()=>setTimeout(refreshNotificationBadge,30));
     navigator.serviceWorker?.addEventListener?.('message',e=>{
       if(e.data?.type==='AVESSO_PUSH_WHILE_VISIBLE')setTimeout(refreshNotificationBadge,60);
+    });
+    document.addEventListener('visibilitychange',()=>{
+      if(!document.hidden&&isDesktop()){
+        requestSummary();
+        scheduleDesktopSync();
+      }
     });
     media.addEventListener?.('change',syncDesktop);
     let lastDesktopState=isDesktop();
