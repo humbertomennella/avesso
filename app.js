@@ -427,7 +427,7 @@ async function loadStaffNotifications(){
   if(!state.profile?.id)return;
   const {data}=await supabase.from('user_staff_notifications').select('id,title,body,severity,created_at').eq('user_id',state.profile.id).is('read_at',null).order('created_at',{ascending:true}).limit(20);
   for(const row of data||[]){
-    socialNotify({title:row.title,body:row.body,kind:'staff',sound:row.severity==='critico'});
+    socialNotify({title:row.title,body:row.body,kind:'staff',sound:row.severity==='critico',target:{type:'tab',id:'admin'}});
     await supabase.from('user_staff_notifications').update({read_at:new Date().toISOString()}).eq('id',row.id).eq('user_id',state.profile.id);
   }
 }
@@ -3688,6 +3688,8 @@ async function handleAvessoDeepLink(){
   if(type==='profile'){
     if(id===state.profile.id)document.querySelector('[data-app-tab="profile"]')?.click();
     else await openPublicProfile(id);
+  }else if(type==='tab'&&['feed','quiet','sent','plaza','residents','tower','messages','profile','admin'].includes(id)){
+    document.querySelector(`[data-app-tab="${CSS.escape(id)}"]`)?.click();
   }else if(type==='photo'){
     await openAlbumPhotoViewer(id);
   }else if(type==='post'){
@@ -4305,6 +4307,9 @@ window.addEventListener('avesso:open-target',event=>{
   else if(target.type==='post')openFeedPostFromNotification(target.id);
   else if(target.type==='story')openStory(target.id);
   else if(target.type==='photo')openAlbumPhotoViewer(target.id);
+  else if(target.type==='tab'&&['feed','quiet','sent','plaza','residents','tower','messages','profile','admin'].includes(target.id)){
+    document.querySelector(`[data-app-tab="${CSS.escape(target.id)}"]`)?.click();
+  }
 });
 
 let discoveryReturnFocus=null;
@@ -6774,7 +6779,7 @@ function subscribeRealtime(){
         renderTowerEventCard(event);
         if(state.tab==='tower')renderTowerPage();
         if(event.config?.importance==='important'){
-          socialNotify({title:'♛ Torre do Engajamento',body:event.title||'O Rei publicou algo que, contra as probabilidades, merece atenção.',kind:'world'});
+          socialNotify({title:'♛ Torre do Engajamento',body:event.title||'O Rei publicou algo que, contra as probabilidades, merece atenção.',kind:'world',target:{type:'tab',id:'tower'}});
         }
         return;
       }
