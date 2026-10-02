@@ -2018,3 +2018,249 @@
     contain-intrinsic-size:auto 360px;
   }
 }
+
+
+/* BUSCAR.EXE Universal + accessibility 2026-10-02 */
+@media (min-width:821px){
+  .avesso-discovery-dialog{
+    max-height:min(86dvh,900px)!important;
+    overflow:auto!important;
+    scrollbar-width:thin;
+  }
+  .global-search-box{
+    position:sticky;
+    top:0;
+    z-index:12;
+    display:grid;
+    grid-template-columns:auto minmax(0,1fr) 34px;
+    align-items:center;
+    gap:8px;
+    margin:12px 0 10px;
+    padding:8px 10px;
+    border:1px solid #34494e;
+    border-radius:7px;
+    background:#081013f5;
+    box-shadow:0 8px 22px #0005;
+    backdrop-filter:blur(10px);
+  }
+  .global-search-box:focus-within{
+    border-color:var(--cyan);
+    box-shadow:0 0 0 2px #22d9ee20,0 8px 22px #0005;
+  }
+  .global-search-box>span{
+    color:var(--acid);
+    font:900 .9rem var(--mono);
+  }
+  .global-search-box input{
+    min-width:0;
+    border:0!important;
+    outline:0!important;
+    background:transparent!important;
+    color:#e8efec!important;
+    padding:7px 2px!important;
+    font:650 .66rem var(--mono)!important;
+  }
+  .global-search-box button{
+    width:30px;
+    height:30px;
+    border:1px solid #3c5055;
+    border-radius:4px;
+    background:#0c1517;
+    color:#8e9c98;
+    cursor:pointer;
+  }
+  .global-search-history{
+    display:flex;
+    gap:8px;
+    align-items:flex-start;
+    margin:0 0 12px;
+    padding:9px 10px;
+    border:1px solid #243438;
+    border-radius:6px;
+    background:#080d0f;
+  }
+  .global-search-history.hidden{display:none}
+  .global-search-history>small{
+    flex:0 0 auto;
+    padding-top:6px;
+    color:#667470;
+    font:800 .41rem var(--mono);
+  }
+  .global-search-history>div{
+    display:flex;
+    flex-wrap:wrap;
+    gap:5px;
+  }
+  .global-search-history button{
+    border:1px solid #34484d;
+    border-radius:999px;
+    background:#0d1517;
+    color:#aebbb7;
+    padding:5px 8px;
+    cursor:pointer;
+    font:650 .45rem var(--mono);
+  }
+  .global-search-history button:hover{
+    border-color:var(--acid);
+    color:var(--acid);
+  }
+
+  .global-search-summary{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 10px;
+    margin-bottom:10px;
+    border:1px solid #2e4146;
+    background:#0a1012;
+  }
+  .global-search-summary>b{
+    color:var(--acid);
+    font:900 1rem var(--mono);
+  }
+  .global-search-summary>span{
+    color:#a9b5b1;
+    font:650 .5rem var(--mono);
+  }
+  .global-search-summary>em{
+    margin-left:auto;
+    color:#ffcb6b;
+    font:650 .43rem var(--mono);
+    font-style:normal;
+  }
+
+  .global-search-groups{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    align-items:start;
+  }
+  .global-search-groups .discovery-group{
+    min-width:0;
+    margin:0;
+    padding:10px;
+    border:1px solid #27393e;
+    border-radius:6px;
+    background:#091012;
+  }
+  .global-search-groups .discovery-group h3{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+    margin:0 0 8px;
+    color:var(--cyan);
+    font:800 .5rem var(--mono);
+  }
+  .global-search-groups .discovery-group h3 b{
+    min-width:24px;
+    height:22px;
+    display:grid;
+    place-items:center;
+    border:1px solid #34484d;
+    border-radius:999px;
+    color:#aeb9b6;
+    font-size:.42rem;
+  }
+  .discovery-result-list,
+  .discovery-people,
+  .discovery-posts{
+    display:grid;
+    gap:5px;
+  }
+  .discovery-result-row,
+  .discovery-person,
+  .discovery-post{
+    width:100%;
+    min-width:0;
+    display:grid;
+    grid-template-columns:34px minmax(0,1fr);
+    gap:8px;
+    align-items:start;
+    padding:8px;
+    border:1px solid #26383d;
+    border-radius:5px;
+    background:#070c0e;
+    color:#cbd5d2;
+    text-align:left;
+    cursor:pointer;
+  }
+  .discovery-post{
+    grid-template-columns:1fr;
+  }
+  .discovery-result-row:hover,
+  .discovery-person:hover,
+  .discovery-post:hover{
+    border-color:#4f6a70;
+    background:#0d1618;
+  }
+  .discovery-result-row>i{
+    width:32px;
+    height:32px;
+    display:grid;
+    place-items:center;
+    border:1px solid #32484e;
+    background:#081215;
+    color:var(--acid);
+    font:800 .75rem var(--mono);
+    font-style:normal;
+  }
+  .discovery-result-row span,
+  .discovery-person span:last-child,
+  .discovery-post span{
+    min-width:0;
+  }
+  .discovery-result-row b,
+  .discovery-person b,
+  .discovery-post b{
+    display:block;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    color:#e1e8e5;
+    font:750 .53rem var(--mono);
+  }
+  .discovery-result-row small,
+  .discovery-person small,
+  .discovery-post small{
+    display:block;
+    margin-top:2px;
+    color:#6e7c78;
+    font:600 .42rem var(--mono);
+  }
+  .discovery-result-row p,
+  .discovery-post p{
+    margin:4px 0 0;
+    color:#a7b2af;
+    font-size:.68rem;
+    line-height:1.4;
+  }
+  .discovery-photo-result{
+    grid-template-columns:48px minmax(0,1fr);
+  }
+  .discovery-photo-thumb{
+    width:48px;
+    height:48px;
+    overflow:hidden;
+    border:1px solid #34494e;
+    background:#030506;
+  }
+  .discovery-photo-thumb img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+  }
+  .global-search-groups .discovery-empty{
+    margin:0;
+    padding:9px;
+    border:1px dashed #26383d;
+    color:#6f7d79;
+    font:550 .5rem/1.4 var(--mono);
+  }
+}
+
+@media (min-width:821px) and (max-width:1050px){
+  .global-search-groups{
+    grid-template-columns:1fr;
+  }
+}
