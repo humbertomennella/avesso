@@ -220,7 +220,8 @@
     drawer=document.createElement('aside');
     drawer.id='desktop-notification-drawer';
     drawer.className='desktop-notification-drawer';
-    drawer.setAttribute('role','region');
+    drawer.setAttribute('role','dialog');
+    drawer.setAttribute('aria-modal','true');
     drawer.setAttribute('aria-label','Central de notificações');
     drawer.setAttribute('aria-hidden','true');
     drawer.innerHTML=`
@@ -1115,6 +1116,16 @@
     document.addEventListener('keydown',e=>{
       if(!isDesktop())return;
       const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||'');
+      const notificationDrawer=q('#desktop-notification-drawer');
+      if(e.key==='Tab'&&notificationDrawer?.classList.contains('open')){
+        const focusable=qa('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',notificationDrawer)
+          .filter(el=>el.offsetParent!==null);
+        if(focusable.length){
+          const first=focusable[0],last=focusable[focusable.length-1];
+          if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+          else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+        }
+      }
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){
         e.preventDefault();window.dispatchEvent(new CustomEvent('avesso:open-search'));return;
       }
