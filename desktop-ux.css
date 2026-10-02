@@ -1630,6 +1630,7 @@
   }
   .public-profile>.public-profile-hero{
     grid-area:hero;
+    position:relative;
     min-width:0;
     min-height:250px;
     display:grid!important;
