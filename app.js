@@ -332,7 +332,7 @@ function storyCardHtml(story,{compact=false}={}){
   const a=story.author||{};
   const isVideo=story.media_type==='video';
   const style=story.image_url&&!isVideo?'--story-thumb:url(\''+escapeAttr(story.image_url)+'\')':'';
-  const viewed=story.viewed?'viewed ':'unseen ';
+  const viewed=story.viewed===true?'viewed ':story.viewed===false?'unseen ':'';
   return '<button class="story-card '+viewed+(compact?'compact ':'')+(isVideo?'has-video':'')+'" data-story-open="'+escapeAttr(story.id)+'" style="'+style+'">'+
     '<span class="story-ring"><i>'+avatarHtml(a.avatar_url,a.display_name||'?')+'</i></span>'+
     (isVideo?'<em class="story-card-media">▶ vídeo</em>':'')+
