@@ -972,7 +972,8 @@
         scheduleDesktopSync();
       }
     });
-    media.addEventListener?.('change',syncDesktop);
+    if(typeof media.addEventListener==='function')media.addEventListener('change',syncDesktop);
+    else if(typeof media.addListener==='function')media.addListener(syncDesktop);
     let lastDesktopState=isDesktop();
     window.addEventListener('resize',()=>{
       const el=q('#desktop-command-bar small');if(el)el.textContent='desktop // '+window.innerWidth+'×'+window.innerHeight;
