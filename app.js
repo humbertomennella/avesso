@@ -8,7 +8,16 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, staffSection:'overview', staffInternalChannel:null, staffDirectory:{}, staffByHandle:{}, userBadges:{}, badgeCatalog:{}, customAssets:[], customAssetBySlug:{}, customEmoticons:[], suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, feedLoadedPosts:[], feedCursor:null, feedHasMore:true, feedLoadingMore:false, directHistoryCursor:null, directHistoryHasMore:false, typingTimer:null, typingPeerId:null, replyingTo:null, editingMessage:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
 
-function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
+function toast(message){
+  const el=$('#toast');
+  if(!el)return;
+  el.setAttribute('aria-live','polite');
+  el.setAttribute('aria-atomic','true');
+  el.textContent=message;
+  el.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer=setTimeout(()=>el.classList.remove('show'),2600);
+}
 
 let connectionBannerTimer=null;
 function ensureConnectionBanner(){
@@ -4189,6 +4198,7 @@ window.addEventListener('avesso:open-target',event=>{
   else if(target.type==='photo')openAlbumPhotoViewer(target.id);
 });
 
+let discoveryReturnFocus=null;
 function ensureDiscoveryDialog(){
   let dialog=$('#avesso-discovery-dialog');
   if(dialog)return dialog;
@@ -4199,6 +4209,11 @@ function ensureDiscoveryDialog(){
   document.body.appendChild(dialog);
   dialog.querySelector('.discovery-close').onclick=()=>dialog.close();
   dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+  dialog.addEventListener('close',()=>{
+    const target=discoveryReturnFocus;
+    discoveryReturnFocus=null;
+    if(target?.isConnected&&typeof target.focus==='function')requestAnimationFrame(()=>target.focus({preventScroll:true}));
+  });
   return dialog;
 }
 
@@ -4370,18 +4385,63 @@ async function runGlobalSearch(term){
   host.setAttribute('aria-busy','false');
   bindGlobalSearchResults(host);
 }
+
+function globalSearchFocusableResults(){
+  const host=$('#global-search-results');
+  if(!host)return[];
+  return [...host.querySelectorAll('button:not([disabled])')].filter(button=>button.offsetParent!==null);
+}
+function moveGlobalSearchFocus(direction=1){
+  const rows=globalSearchFocusableResults();
+  if(!rows.length)return false;
+  const active=document.activeElement;
+  const index=rows.indexOf(active);
+  const next=index<0?(direction>0?0:rows.length-1):(index+direction+rows.length)%rows.length;
+  rows[next]?.focus({preventScroll:false});
+  return true;
+}
+function bindGlobalSearchKeyboard(dialog,input){
+  if(!dialog||!input)return;
+  dialog.onkeydown=e=>{
+    if(e.key==='ArrowDown'){
+      const active=document.activeElement;
+      if(active===input||active?.closest?.('#global-search-results')){
+        e.preventDefault();
+        moveGlobalSearchFocus(1);
+      }
+    }else if(e.key==='ArrowUp'){
+      const active=document.activeElement;
+      if(active===input||active?.closest?.('#global-search-results')){
+        e.preventDefault();
+        if(active===input){
+          moveGlobalSearchFocus(-1);
+        }else{
+          const rows=globalSearchFocusableResults();
+          if(rows[0]===active)input.focus();
+          else moveGlobalSearchFocus(-1);
+        }
+      }
+    }else if(e.key==='/'&&document.activeElement!==input&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||'')){
+      e.preventDefault();input.focus();
+    }
+  };
+}
+
 function openGlobalSearch(event={}){
   if(!state.profile)return;
+  discoveryReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
   const initialQuery=String(event?.detail?.query||'').trim().slice(0,80);
   const dialog=ensureDiscoveryDialog();
   const host=$('#avesso-discovery-content');
   const history=readGlobalSearchHistory();
-  host.innerHTML=`<header class="discovery-head"><span>BUSCAR.EXE // UNIVERSAL</span><h2>Procure pela rede inteira</h2><p>Pessoas, posts, conversas, Stories, fotos e Praça. A curiosidade continua sem precisar virar anúncio.</p></header>
-    <label class="global-search-box" for="global-search-input"><span aria-hidden="true">⌕</span><input id="global-search-input" type="search" autocomplete="off" spellcheck="false" aria-label="Pesquisar no AVESSO" placeholder="nome, @, texto, legenda ou conversa"><button type="button" id="global-search-clear" aria-label="Limpar busca">×</button></label>
+  host.innerHTML=`<header class="discovery-head"><span>BUSCAR.EXE // UNIVERSAL</span><h2>Procure pela rede inteira</h2><p>Pessoas, posts, conversas, Stories, fotos e Praça. Use ↑/↓ para percorrer resultados e Enter para abrir.</p></header>
+    <label class="global-search-box" for="global-search-input"><span aria-hidden="true">⌕</span><input id="global-search-input" type="search" autocomplete="off" spellcheck="false" aria-label="Pesquisar no AVESSO" aria-describedby="global-search-help" placeholder="nome, @, texto, legenda ou conversa"><button type="button" id="global-search-clear" aria-label="Limpar busca">×</button></label>
+    <small id="global-search-help" class="sr-only">Digite pelo menos dois caracteres. Use as setas para navegar pelos resultados, Enter para abrir e Escape para limpar a busca.</small>
     <div class="global-search-history ${history.length?'':'hidden'}" aria-label="Buscas recentes"><small>RECENTES</small><div>${history.map(item=>`<button type="button" data-search-history="${escapeAttr(item)}">${escapeHtml(item)}</button>`).join('')}</div></div>
     <div id="global-search-results" role="status" aria-live="polite"><p class="discovery-empty">A busca começa quando você digitar.</p></div>`;
   let timer=null;
   const input=$('#global-search-input');
+  bindGlobalSearchKeyboard(dialog,input);
   if(initialQuery)input.value=initialQuery;
   input.oninput=e=>{clearTimeout(timer);timer=setTimeout(()=>runGlobalSearch(e.target.value),240);};
   input.onkeydown=e=>{
@@ -4401,6 +4461,7 @@ function openGlobalSearch(event={}){
 }
 async function openNowSurface(){
   if(!state.profile)return;
+  discoveryReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
   const dialog=ensureDiscoveryDialog();
   const host=$('#avesso-discovery-content');
   host.innerHTML='<div class="discovery-loading">AGORA.EXE // olhando o que realmente está acontecendo...</div>';
