@@ -83,6 +83,56 @@ function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).jo
 function ago(date){ const s=Math.floor((Date.now()-new Date(date))/1000); if(s<60)return'agora'; if(s<3600)return`${Math.floor(s/60)}min`; if(s<86400)return`${Math.floor(s/3600)}h`; return`${Math.floor(s/86400)}d`; }
 function escapeHtml(value=''){ const d=document.createElement('div'); d.textContent=value; return d.innerHTML; }
 function escapeAttr(value=''){return String(value).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll("'",'&#39;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
+
+function openCompatDialog(dialog){
+  if(!dialog)return false;
+  if(dialog.open)return true;
+  try{
+    if(typeof dialog.showModal==='function'){
+      openCompatDialog(dialog);
+      return true;
+    }
+  }catch{}
+  dialog.setAttribute('open','');
+  dialog.classList.add('dialog-fallback-open');
+  document.body.classList.add('dialog-fallback-lock');
+  return true;
+}
+function closeCompatDialog(dialog){
+  if(!dialog)return;
+  if(typeof dialog.close==='function'){
+    try{dialog.close();return;}catch{}
+  }
+  const wasOpen=dialog.hasAttribute('open')||dialog.open;
+  dialog.removeAttribute('open');
+  dialog.classList.remove('dialog-fallback-open');
+  if(!document.querySelector('dialog.dialog-fallback-open'))document.body.classList.remove('dialog-fallback-lock');
+  if(wasOpen)dialog.dispatchEvent(new Event('close'));
+}
+async function decodeImageForCanvas(file){
+  if(typeof createImageBitmap==='function'){
+    const bitmap=await createImageBitmap(file);
+    return {source:bitmap,width:bitmap.width,height:bitmap.height,close:()=>bitmap.close?.()};
+  }
+  const url=URL.createObjectURL(file);
+  try{
+    const image=new Image();
+    image.decoding='async';
+    const loaded=new Promise((resolve,reject)=>{
+      image.onload=()=>resolve();
+      image.onerror=()=>reject(new Error('image decode failed'));
+    });
+    image.src=url;
+    if(typeof image.decode==='function'){
+      try{await image.decode();}catch{await loaded;}
+    }else await loaded;
+    return {source:image,width:image.naturalWidth||image.width,height:image.naturalHeight||image.height,close:()=>URL.revokeObjectURL(url)};
+  }catch(error){
+    URL.revokeObjectURL(url);
+    throw error;
+  }
+}
+
 const clientErrorRecent=new Map();
 let clientErrorWindowStartedAt=0;
 let clientErrorWindowCount=0;
@@ -133,15 +183,16 @@ window.addEventListener('unhandledrejection',e=>logClientError(String(e.reason?.
 async function compressImageFile(file,{maxEdge=1600,quality=.82,minBytes=550*1024}={}){
   if(!file||!/^image\/(jpeg|png|webp)$/i.test(file.type||'')||file.size<minBytes)return file;
   try{
-    const bitmap=await createImageBitmap(file);
-    const scale=Math.min(1,maxEdge/Math.max(bitmap.width,bitmap.height));
-    const width=Math.max(1,Math.round(bitmap.width*scale));
-    const height=Math.max(1,Math.round(bitmap.height*scale));
+    const decoded=await decodeImageForCanvas(file);
+    const scale=Math.min(1,maxEdge/Math.max(decoded.width,decoded.height));
+    const width=Math.max(1,Math.round(decoded.width*scale));
+    const height=Math.max(1,Math.round(decoded.height*scale));
     const canvas=document.createElement('canvas');
     canvas.width=width;canvas.height=height;
     const ctx=canvas.getContext('2d');
-    ctx.drawImage(bitmap,0,0,width,height);
-    bitmap.close?.();
+    if(!ctx){decoded.close?.();return file;}
+    ctx.drawImage(decoded.source,0,0,width,height);
+    decoded.close?.();
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',quality));
     if(!blob||blob.size>=file.size)return file;
     const name=(file.name||'imagem').replace(/\.[^.]+$/,'')+'.webp';
@@ -609,7 +660,7 @@ function openStoryCreate(){
   $('#story-body').value='';
   $('#story-image').value='';
   $('#story-visibility').value='publico';
-  if(!dialog.open)dialog.showModal();
+  if(!dialog.open)openCompatDialog(dialog);
   setTimeout(()=>$('#story-body')?.focus(),40);
 }
 
@@ -642,7 +693,7 @@ async function publishStory(){
     stopStoryCamera();
     clearStoryPreview();
     state.storyCapturedFile=null;
-    $('#story-create-dialog')?.close();
+    closeCompatDialog($('#story-create-dialog'));
     toast(mediaType==='video'?'Vídeo no story. Ele tem 24 horas antes do esquecimento institucional.':'Story publicado. O relógio de 24h já está julgando.');
     trackAction('story_posted','stories',{visibility,media_type:mediaType||'text'});
     await loadStoriesStrip();
@@ -727,7 +778,7 @@ function closeStoryViewer(){
   clearStoryTimer();
   state.storyCurrentId=null;
   const dialog=$('#story-view-dialog');
-  if(dialog?.open)dialog.close();
+  if(dialog?.open)closeCompatDialog(dialog);
 }
 function scheduleStoryAdvance(){
   clearStoryTimer();
@@ -849,7 +900,7 @@ async function openStory(storyId,options={}){
     <div class="story-reactions">${reactionHtml}</div>
     <section class="story-comments"><h3>respostas // sem plateia</h3><div class="story-comment-list">${commentsHtml}</div><div class="story-comment-compose"><textarea id="story-comment-body" maxlength="420" placeholder="responda antes que isso desapareça..."></textarea><div><button id="story-comment-emoticons" type="button">☻ avessícones</button><button id="story-comment-send" type="button">responder</button></div><div id="story-comment-palette" class="feed-emoticon-palette hidden">${avessoEmoticonButtons('data-story-comment-emoticon')}</div></div></section>
   </article>`;
-  const dialog=$('#story-view-dialog');if(!dialog.open)dialog.showModal();
+  const dialog=$('#story-view-dialog');if(!dialog.open)openCompatDialog(dialog);
   ensureStoryDesktopKeyboard();
   if(storyDesktopEnabled()&&canDelete)host.querySelector('.story-views')?.setAttribute('open','');
   host.querySelector('.story-nav-prev')?.addEventListener('click',()=>openStoryOffset(-1));
@@ -1602,7 +1653,7 @@ async function reportUser(userId){
     dialog.close();
     toast('Denuncia enviada para a equipe.');
   };
-  dialog.showModal();
+  openCompatDialog(dialog);
 }
 async function unblockPeer(peerId){
   if(!peerId||!state.profile?.id)return;
@@ -1911,16 +1962,16 @@ async function saveWorldMode(mode){
   toast(messages[mode]);
 }
 
-document.querySelectorAll('[data-open-auth]').forEach(b=>b.addEventListener('click',()=>$('#auth-dialog').showModal()));
+document.querySelectorAll('[data-open-auth]').forEach(b=>b.addEventListener('click',()=>openCompatDialog($('#auth-dialog'))));
 $('#encounter-close').onclick=()=>dismissEncounter();
-$('.dialog-close').onclick=()=>$('#auth-dialog').close();
-$('.avatar-dialog-close').onclick=()=>$('#avatar-dialog').close();
-$('.wallpaper-dialog-close').onclick=()=>$('#wallpaper-dialog').close();
+$('.dialog-close').onclick=()=>closeCompatDialog($('#auth-dialog'));
+$('.avatar-dialog-close').onclick=()=>closeCompatDialog($('#avatar-dialog'));
+$('.wallpaper-dialog-close').onclick=()=>closeCompatDialog($('#wallpaper-dialog'));
 $('.story-create-close').onclick=()=>{
   stopStoryCamera();
   clearStoryPreview();
   state.storyCapturedFile=null;
-  $('#story-create-dialog').close();
+  closeCompatDialog($('#story-create-dialog'));
 };
 $('.story-view-close').onclick=closeStoryViewer;
 const storyViewDialog=$('#story-view-dialog');
@@ -1955,7 +2006,7 @@ $('#story-image').onchange=e=>{
 $$('[data-auth-mode]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authMode));
 function setAuthMode(mode){ state.mode=mode; $$('[data-auth-mode]').forEach(b=>b.classList.toggle('active',b.dataset.authMode===mode)); $('#signup-fields').classList.toggle('hidden',mode==='login'); $('#resend-confirmation').classList.add('hidden'); $('#auth-submit').textContent=mode==='login'?'entrar':'criar meu canto'; $('#auth-message').textContent=''; }
 
-$('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();if(state.mode==='signup'&&state.siteSettings?.login_settings?.registration_enabled===false){$('#auth-message').textContent='Novos cadastros estão temporariamente desativados pelo administrador.';return;}const f=new FormData(e.currentTarget);const email=f.get('email');const password=f.get('password');$('#auth-submit').disabled=true;$('#auth-message').textContent='conversando com os computadores...';let result;if(state.mode==='signup'){const handle=String(f.get('handle')||'').toLowerCase();const display_name=String(f.get('display_name')||'').trim().slice(0,80);if(!display_name){result={error:{message:'Escolha um nome exibido. Vale símbolo, emoji, drama e decisões questionáveis.'}}}else if(!/^[a-z0-9_]{3,24}$/.test(handle)){result={error:{message:'Seu @ precisa ter 3–24 letras minúsculas, números ou _.'}}}else{result=await supabase.auth.signUp({email,password,options:{data:{handle,display_name},emailRedirectTo:SITE_URL}});}}else result=await supabase.auth.signInWithPassword({email,password});$('#auth-submit').disabled=false;if(result.error){$('#auth-message').textContent=humanError(result.error.message);return}if(state.mode==='signup'&&!result.data.session){$('#auth-message').textContent='Confira seu e-mail e use o link mais recente. Se já confirmou a conta, abra a aba de entrar e use sua senha.';$('#resend-confirmation').classList.remove('hidden');return}$('#auth-dialog').close();toast('Você entrou. Tente não estragar tudo.');});
+$('#auth-form').addEventListener('submit',async(e)=>{e.preventDefault();if(state.mode==='signup'&&state.siteSettings?.login_settings?.registration_enabled===false){$('#auth-message').textContent='Novos cadastros estão temporariamente desativados pelo administrador.';return;}const f=new FormData(e.currentTarget);const email=f.get('email');const password=f.get('password');$('#auth-submit').disabled=true;$('#auth-message').textContent='conversando com os computadores...';let result;if(state.mode==='signup'){const handle=String(f.get('handle')||'').toLowerCase();const display_name=String(f.get('display_name')||'').trim().slice(0,80);if(!display_name){result={error:{message:'Escolha um nome exibido. Vale símbolo, emoji, drama e decisões questionáveis.'}}}else if(!/^[a-z0-9_]{3,24}$/.test(handle)){result={error:{message:'Seu @ precisa ter 3–24 letras minúsculas, números ou _.'}}}else{result=await supabase.auth.signUp({email,password,options:{data:{handle,display_name},emailRedirectTo:SITE_URL}});}}else result=await supabase.auth.signInWithPassword({email,password});$('#auth-submit').disabled=false;if(result.error){$('#auth-message').textContent=humanError(result.error.message);return}if(state.mode==='signup'&&!result.data.session){$('#auth-message').textContent='Confira seu e-mail e use o link mais recente. Se já confirmou a conta, abra a aba de entrar e use sua senha.';$('#resend-confirmation').classList.remove('hidden');return}closeCompatDialog($('#auth-dialog'));toast('Você entrou. Tente não estragar tudo.');});
 
 $('#resend-confirmation').onclick=async()=>{const email=new FormData($('#auth-form')).get('email');if(!email)return toast('Digite seu e-mail primeiro. Adivinhação ainda está em beta.');const button=$('#resend-confirmation');button.disabled=true;button.textContent='reenviando...';const {error}=await supabase.auth.resend({type:'signup',email,options:{emailRedirectTo:SITE_URL}});button.disabled=false;button.textContent='reenviar confirmação de e-mail';if(error){$('#auth-message').textContent=humanError(error.message);return}$('#auth-message').textContent='Se a conta ainda estiver pendente, você receberá um novo link. Se já confirmou, entre com sua senha.';toast('Solicitação recebida. Confira seu e-mail ou tente entrar.');};
 
@@ -4238,8 +4289,8 @@ function ensureDiscoveryDialog(){
   dialog.className='avesso-discovery-dialog';
   dialog.innerHTML='<button class="discovery-close" type="button" aria-label="Fechar">×</button><div id="avesso-discovery-content"></div>';
   document.body.appendChild(dialog);
-  dialog.querySelector('.discovery-close').onclick=()=>dialog.close();
-  dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+  dialog.querySelector('.discovery-close').onclick=()=>closeCompatDialog(dialog);
+  dialog.addEventListener('click',e=>{if(e.target===dialog)closeCompatDialog(dialog);});
   dialog.addEventListener('close',()=>{
     const target=discoveryReturnFocus;
     discoveryReturnFocus=null;
@@ -4270,7 +4321,7 @@ function globalSearchEmpty(label){
 }
 async function openSearchConversation(peerId,messageId){
   if(!peerId)return;
-  const dialog=$('#avesso-discovery-dialog');if(dialog?.open)dialog.close();
+  const dialog=$('#avesso-discovery-dialog');if(dialog?.open)closeCompatDialog(dialog);
   openFriendChat(peerId);
   if(!messageId)return;
   setTimeout(()=>{
@@ -4283,7 +4334,7 @@ async function openSearchConversation(peerId,messageId){
   },700);
 }
 function openSearchPlazaMessage(messageId){
-  const dialog=$('#avesso-discovery-dialog');if(dialog?.open)dialog.close();
+  const dialog=$('#avesso-discovery-dialog');if(dialog?.open)closeCompatDialog(dialog);
   document.querySelector('[data-app-tab="plaza"]')?.click();
   if(!messageId)return;
   setTimeout(()=>{
@@ -4296,10 +4347,10 @@ function openSearchPlazaMessage(messageId){
   },650);
 }
 function bindGlobalSearchResults(host){
-  host.querySelectorAll('[data-discovery-profile]').forEach(b=>b.onclick=()=>{ensureDiscoveryDialog().close();openPublicProfile(b.dataset.discoveryProfile);});
-  host.querySelectorAll('[data-discovery-post]').forEach(b=>b.onclick=()=>{ensureDiscoveryDialog().close();openFeedPostFromNotification(b.dataset.discoveryPost);});
-  host.querySelectorAll('[data-discovery-story]').forEach(b=>b.onclick=()=>{ensureDiscoveryDialog().close();openStory(b.dataset.discoveryStory);});
-  host.querySelectorAll('[data-discovery-photo]').forEach(b=>b.onclick=()=>{ensureDiscoveryDialog().close();openAlbumPhotoViewer(b.dataset.discoveryPhoto);});
+  host.querySelectorAll('[data-discovery-profile]').forEach(b=>b.onclick=()=>{closeCompatDialog(ensureDiscoveryDialog());openPublicProfile(b.dataset.discoveryProfile);});
+  host.querySelectorAll('[data-discovery-post]').forEach(b=>b.onclick=()=>{closeCompatDialog(ensureDiscoveryDialog());openFeedPostFromNotification(b.dataset.discoveryPost);});
+  host.querySelectorAll('[data-discovery-story]').forEach(b=>b.onclick=()=>{closeCompatDialog(ensureDiscoveryDialog());openStory(b.dataset.discoveryStory);});
+  host.querySelectorAll('[data-discovery-photo]').forEach(b=>b.onclick=()=>{closeCompatDialog(ensureDiscoveryDialog());openAlbumPhotoViewer(b.dataset.discoveryPhoto);});
   host.querySelectorAll('[data-discovery-chat]').forEach(b=>openSearchConversation && (b.onclick=()=>openSearchConversation(b.dataset.discoveryChat,b.dataset.discoveryMessage)));
   host.querySelectorAll('[data-discovery-plaza]').forEach(b=>b.onclick=()=>openSearchPlazaMessage(b.dataset.discoveryPlaza));
 }
@@ -4486,7 +4537,7 @@ function openGlobalSearch(event={}){
     input.focus();
   });
   if(initialQuery.length>=2)runGlobalSearch(initialQuery);
-  if(!dialog.open)dialog.showModal();
+  if(!dialog.open)openCompatDialog(dialog);
   dialog.setAttribute('aria-label','Busca universal do AVESSO');
   setTimeout(()=>input.focus(),40);
 }
@@ -4496,7 +4547,7 @@ async function openNowSurface(){
   const dialog=ensureDiscoveryDialog();
   const host=$('#avesso-discovery-content');
   host.innerHTML='<div class="discovery-loading">AGORA.EXE // olhando o que realmente está acontecendo...</div>';
-  if(!dialog.open)dialog.showModal();
+  if(!dialog.open)openCompatDialog(dialog);
   const since2h=new Date(Date.now()-2*60*60*1000).toISOString();
   const since1h=new Date(Date.now()-60*60*1000).toISOString();
   const nowIso=new Date().toISOString();
@@ -4512,16 +4563,16 @@ async function openNowSurface(){
   let plazaProfiles={};
   if(plazaIds.length){const {data}=await supabase.from('profiles').select('id,display_name,handle,avatar_url').in('id',plazaIds);plazaProfiles=Object.fromEntries((data||[]).map(p=>[p.id,p]));}
   host.innerHTML=`<header class="discovery-head"><span>AGORA.EXE // AO VIVO</span><h2>O que está acontecendo</h2><p>Atividade recente sem placar de popularidade.</p></header><section class="discovery-group now-online"><h3>ONLINE AGORA <b>${online.length}</b></h3><div class="now-online-strip">${online.map(p=>`<button type="button" data-discovery-profile="${p.id}"><span class="mini-avatar">${avatarHtml(p.avatar_url,p.display_name)}</span><b>${escapeHtml(p.display_name)}</b><small>@${escapeHtml(p.handle)}</small></button>`).join('')||'<p class="discovery-empty">Silêncio digital. Raro.</p>'}</div></section><section class="discovery-group"><h3>FEED // ÚLTIMAS 2H</h3><div class="now-stream">${posts.map(p=>`<button type="button" data-discovery-post="${p.id}"><i>◒</i><span><b>${escapeHtml(p.author_name||'alguém')} publicou</b><small>${ago(p.created_at)}</small><p>${escapeHtml(String(p.body||'').slice(0,140))}</p></span></button>`).join('')||'<p class="discovery-empty">O feed resolveu contemplar o teto.</p>'}</div></section><section class="discovery-group"><h3>PRAÇA // ÚLTIMA HORA</h3><div class="now-stream">${plaza.map(row=>{const p=plazaProfiles[row.user_id]||{};return `<button type="button" data-open-plaza-now="1"><i>⌂</i><span><b>${escapeHtml(p.display_name||'Praça Central')}</b><small>${ago(row.created_at)}</small><p>${escapeHtml(String(row.body||'').slice(0,140))}</p></span></button>`}).join('')||'<p class="discovery-empty">Ninguém gritando na praça. Suspeito.</p>'}</div></section>`;
-  host.querySelectorAll('[data-discovery-profile]').forEach(b=>b.onclick=()=>{dialog.close();openPublicProfile(b.dataset.discoveryProfile);});
-  host.querySelectorAll('[data-discovery-post]').forEach(b=>b.onclick=()=>{dialog.close();openFeedPostFromNotification(b.dataset.discoveryPost);});
-  host.querySelectorAll('[data-open-plaza-now]').forEach(b=>b.onclick=()=>{dialog.close();document.querySelector('[data-app-tab="plaza"]')?.click();});
+  host.querySelectorAll('[data-discovery-profile]').forEach(b=>b.onclick=()=>{closeCompatDialog(dialog);openPublicProfile(b.dataset.discoveryProfile);});
+  host.querySelectorAll('[data-discovery-post]').forEach(b=>b.onclick=()=>{closeCompatDialog(dialog);openFeedPostFromNotification(b.dataset.discoveryPost);});
+  host.querySelectorAll('[data-open-plaza-now]').forEach(b=>b.onclick=()=>{closeCompatDialog(dialog);document.querySelector('[data-app-tab="plaza"]')?.click();});
 }
 async function openHealthSurface(){
   if(!state.isAdmin)return toast('Saúde do sistema é território administrativo.');
   const dialog=ensureDiscoveryDialog();
   const host=$('#avesso-discovery-content');
   host.innerHTML='<div class="discovery-loading">HEALTH.EXE // perguntando aos servidores se eles ainda respiram...</div>';
-  if(!dialog.open)dialog.showModal();
+  if(!dialog.open)openCompatDialog(dialog);
   const started=performance.now();
   const {data,error}=await supabase.rpc('avesso_health_snapshot');
   const latency=Math.round(performance.now()-started);
@@ -5898,7 +5949,7 @@ function openWallpaperDialog(target){
   $('#wallpaper-dialog-title').textContent=target==='profile'?'Fundo do Meu Canto':'Fundo geral do AVESSO';
   grid.innerHTML=WALLPAPER_OPTIONS.map(([slug,name,tag])=>`<button class="wallpaper-choice ${slug===current?'active':''}" data-wallpaper="${slug}"><img src="${wallpaperUrl(slug)}" alt=""><b>${escapeHtml(name)}</b><small>${escapeHtml(tag)}</small></button>`).join('');
   $$('[data-wallpaper]').forEach(b=>b.onclick=()=>saveWallpaper(target,b.dataset.wallpaper));
-  $('#wallpaper-dialog').showModal();
+  openCompatDialog($('#wallpaper-dialog'));
 }
 async function saveWallpaper(target,slug){
   if(!WALLPAPER_OPTIONS.some(x=>x[0]===slug))return;
@@ -5907,7 +5958,7 @@ async function saveWallpaper(target,slug){
   if(error)return toast('O papel de parede se recusou a colar na parede.');
   state.profile=data;
   applyAppWallpaper();
-  $('#wallpaper-dialog').close();
+  closeCompatDialog($('#wallpaper-dialog'));
   renderProfile();
   toast(target==='profile'?'Seu Canto ganhou cenário novo.':'O AVESSO trocou de cenário. A realidade continua em beta.');
 }
@@ -5964,7 +6015,7 @@ function openAvatarDialog(){
   const grid=$('#avatar-modal-grid');
   grid.innerHTML=AVATAR_OPTIONS.map(([label,url,kind])=>`<button class="avatar-choice-modal ${state.profile.avatar_url===url?'active':''}" data-avatar-url="${escapeAttr(url)}"><img src="${escapeAttr(avatarAssetUrl(url))}" alt="${escapeAttr(label)}"><b>${label}</b><small>${kind}</small></button>`).join('');
   $$('[data-avatar-url]').forEach(b=>b.onclick=()=>saveAvatar(b.dataset.avatarUrl));
-  $('#avatar-dialog').showModal();
+  openCompatDialog($('#avatar-dialog'));
 }
 async function saveProfileSettings(){
   const display_name=String($('#profile-display-name').value||'').replace(/[\u0000-\u001F\u007F]/g,'').trim().slice(0,80);
@@ -6090,8 +6141,8 @@ function ensureImageViewer(){
   dialog.className='avesso-image-viewer';
   dialog.innerHTML='<button class="image-viewer-close" type="button" aria-label="Fechar">×</button><div id="image-viewer-content"></div>';
   document.body.appendChild(dialog);
-  dialog.querySelector('.image-viewer-close').onclick=()=>dialog.close();
-  dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+  dialog.querySelector('.image-viewer-close').onclick=()=>closeCompatDialog(dialog);
+  dialog.addEventListener('click',e=>{if(e.target===dialog)closeCompatDialog(dialog);});
   return dialog;
 }
 function imageViewerCommentHtml(row,ownerId=''){
@@ -6131,7 +6182,7 @@ async function openAlbumPhotoViewer(photoId){
   const dialog=ensureImageViewer();
   const host=$('#image-viewer-content');
   host.innerHTML='<div class="image-viewer-loading">abrindo pixels...</div>';
-  if(!dialog.open)dialog.showModal();
+  if(!dialog.open)openCompatDialog(dialog);
   const data=await loadPhotoViewerData(photoId);
   if(!data){host.innerHTML='<div class="image-viewer-error">A foto sumiu atrás do servidor.</div>';return;}
   const photo=data.photo,owner=data.owner,comments=data.comments,reactions=data.reactions;
@@ -6205,7 +6256,7 @@ async function openFeedImageViewer(postId){
   if(!postId)return;
   const dialog=ensureImageViewer(),host=$('#image-viewer-content');
   host.innerHTML='<div class="image-viewer-loading">abrindo pixels...</div>';
-  if(!dialog.open)dialog.showModal();
+  if(!dialog.open)openCompatDialog(dialog);
   const {data:post,error}=await supabase.from('feed_attention').select('*').eq('id',postId).maybeSingle();
   if(error||!post){host.innerHTML='<div class="image-viewer-error">A publicação não está mais disponível.</div>';return;}
   const imageUrl=post.image_url?postImageSrc(post.image_url):(post.reshare_photo_storage_path?publicAlbumUrl(post.reshare_photo_storage_path):'');
@@ -6410,7 +6461,7 @@ async function saveAvatar(url){
   const {data,error}=await supabase.from('profiles').update({avatar_url:url}).eq('id',state.profile.id).select().single();
   if(error)return toast('O avatar se recusou a cooperar. Dramático.');
   state.profile=data;renderNavAvatar();
-  if($('#avatar-dialog').open)$('#avatar-dialog').close();
+  if($('#avatar-dialog').open)closeCompatDialog($('#avatar-dialog'));
   renderProfile();
   trackAction('avatar_changed','profile',{avatar:url});
   askWorldCharacter('avatar_changed',{action_type:'avatar_changed',surface:'profile',metadata:{avatar:url}});
@@ -6647,7 +6698,7 @@ function showAuthLinkError(){
   setAuthMode('login');
   const expired=errorCode==='otp_expired'||errorCode==='otp_disabled'||errorCode==='invalid_token';
   $('#auth-message').textContent=expired?'O link de confirmação expirou ou já foi usado. Se você já confirmou, entre com sua senha; caso contrário, solicite um novo link na aba de cadastro.':'Não foi possível concluir a confirmação. Tente entrar com a senha; caso ainda não tenha confirmado, solicite um novo link na aba de cadastro.';
-  if(!$('#auth-dialog').open)$('#auth-dialog').showModal();
+  if(!$('#auth-dialog').open)openCompatDialog($('#auth-dialog'));
 }
 
 await Promise.all([loadSiteSettings(),loadIdentityRegistry()]);
