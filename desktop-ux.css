@@ -2660,24 +2660,24 @@
   .app-nav nav button,
   .nav-logout{
     min-height:44px;
-    font-size:.78rem!important;
-    line-height:1.25!important;
+    font-size:.82rem!important;
+    line-height:1.3!important;
   }
   .desktop-nav-label{
-    font-size:.78rem!important;
+    font-size:.82rem!important;
   }
   .desktop-nav-icon{
     font-size:1.05rem!important;
   }
   .desktop-nav-collapse{
     min-height:38px;
-    font-size:.7rem!important;
+    font-size:.74rem!important;
   }
   .app-nav .user-chip strong{
     font-size:.82rem!important;
   }
   .app-nav .user-chip small{
-    font-size:.72rem!important;
+    font-size:.75rem!important;
   }
 
   /* Legibilidade global: metadados deixam de disputar com microscópios. */
@@ -2686,11 +2686,11 @@
     line-height:1.5;
   }
   #app-view small{
-    font-size:.74rem!important;
-    line-height:1.45!important;
+    font-size:.76rem!important;
+    line-height:1.48!important;
   }
   #app-view .section-code{
-    font-size:.69rem!important;
+    font-size:.74rem!important;
     line-height:1.45!important;
     letter-spacing:.075em!important;
   }
@@ -2699,8 +2699,8 @@
     line-height:1.55;
   }
   #app-view label{
-    font-size:.78rem;
-    line-height:1.4;
+    font-size:.82rem;
+    line-height:1.45;
   }
   #app-view input,
   #app-view textarea,
@@ -2718,17 +2718,17 @@
   }
   .desktop-command-bar>button{
     min-height:38px;
-    font-size:.7rem!important;
+    font-size:.74rem!important;
   }
   .desktop-command-bar>button>span{
     font-size:.95rem!important;
   }
   .desktop-command-bar kbd,
   .desktop-command-bar>small{
-    font-size:.58rem!important;
+    font-size:.62rem!important;
   }
   .desktop-quick-search input{
-    font-size:.72rem!important;
+    font-size:.76rem!important;
   }
 
   .app-aside .side-card,
@@ -2738,12 +2738,12 @@
   .app-aside p,
   .desktop-live-card p,
   .tower-live p{
-    font-size:.78rem!important;
+    font-size:.82rem!important;
     line-height:1.55!important;
   }
   .app-aside small,
   .desktop-live-card small{
-    font-size:.66rem!important;
+    font-size:.7rem!important;
   }
   .tower-live h3{
     font-size:1.15rem!important;
@@ -2773,8 +2773,8 @@
   .conversation-item small,
   .compact-friend small,
   .plaza-message header span{
-    font-size:.68rem!important;
-    line-height:1.4!important;
+    font-size:.72rem!important;
+    line-height:1.45!important;
   }
   .post-card p,
   .response-card p,
@@ -2797,7 +2797,7 @@
   .staff-dashboard small,
   .staff-dashboard code,
   .staff-dashboard .section-code{
-    font-size:.67rem!important;
+    font-size:.72rem!important;
   }
   .staff-dashboard button,
   .staff-dashboard input,
@@ -2818,7 +2818,7 @@
     z-index:11280;
   }
   .desktop-chat-shelf-label{
-    font-size:.58rem!important;
+    font-size:.65rem!important;
     padding-inline:6px;
   }
   .desktop-chat-shelf-list>button{
@@ -2831,10 +2831,10 @@
     height:32px;
   }
   .desktop-chat-shelf-list b{
-    font-size:.67rem!important;
+    font-size:.72rem!important;
   }
   .desktop-chat-shelf-list small{
-    font-size:.56rem!important;
+    font-size:.62rem!important;
   }
 
   /* Stories do perfil: todos os ativos aparecem, sem se cobrirem. */
@@ -2861,10 +2861,10 @@
     height:48px!important;
   }
   .profile-story-list .story-card b{
-    font-size:.7rem!important;
+    font-size:.75rem!important;
   }
   .profile-story-list .story-card small{
-    font-size:.62rem!important;
+    font-size:.68rem!important;
   }
 
   /* Visualizador: mídia mantém a proporção original e não toma a tela inteira. */
@@ -2899,10 +2899,10 @@
   .story-views b,
   .story-reaction,
   .story-desktop-shortcuts{
-    font-size:.64rem!important;
+    font-size:.68rem!important;
   }
   .story-views small{
-    font-size:.57rem!important;
+    font-size:.62rem!important;
   }
 
   /* Meu Canto volta a ter peso visual proporcional ao nome. */
@@ -2926,7 +2926,7 @@
   .desktop-profile-presence{
     min-height:28px!important;
     padding:5px 9px!important;
-    font-size:.61rem!important;
+    font-size:.66rem!important;
   }
   .desktop-profile-summary p{
     font-size:.86rem!important;
@@ -2937,7 +2937,7 @@
   .desktop-profile-actions button{
     min-height:38px!important;
     padding:8px 12px!important;
-    font-size:.65rem!important;
+    font-size:.7rem!important;
   }
   .desktop-profile-jump-nav{
     padding:8px!important;
@@ -2946,7 +2946,7 @@
   .desktop-profile-jump-nav button{
     min-height:38px!important;
     padding:7px 10px!important;
-    font-size:.62rem!important;
+    font-size:.7rem!important;
   }
   .desktop-profile-jump-nav button>span{
     width:26px!important;
@@ -2954,7 +2954,7 @@
     font-size:.8rem!important;
   }
   .desktop-profile-jump-nav button>small{
-    font-size:.56rem!important;
+    font-size:.62rem!important;
   }
   .desktop-profile-main .profile-story-section h2,
   .desktop-profile-main .profile-posts-control h2,
