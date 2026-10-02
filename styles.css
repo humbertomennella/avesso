@@ -9287,3 +9287,114 @@ dialog.dialog-fallback-open[open]{
     background:#000e;
   }
 }
+
+
+/* AVESSO Profile Posts Base 2026-10-02 */
+.profile-posts-control{
+  display:grid;
+  gap:14px;
+  padding:18px;
+  border:1px solid var(--line);
+  background:var(--panel);
+}
+.profile-posts-heading{
+  display:flex;
+  gap:16px;
+  align-items:flex-start;
+  justify-content:space-between;
+}
+.profile-posts-heading h2{
+  margin:4px 0 6px;
+}
+.profile-posts-heading p{
+  margin:0;
+  color:var(--muted);
+}
+.profile-posts-feed-link{
+  flex:0 0 auto;
+}
+.profile-posts-list{
+  display:grid;
+  gap:12px;
+}
+.profile-posts-empty{
+  margin:0;
+  padding:20px;
+  border:1px dashed var(--line);
+  color:var(--muted);
+  text-align:center;
+}
+.profile-post-card{
+  position:relative;
+  display:grid;
+  gap:12px;
+  padding:14px;
+  border:1px solid var(--line);
+  background:var(--panel2);
+  overflow:hidden;
+}
+.profile-post-card>header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.profile-post-card>header>div{
+  display:grid;
+  gap:4px;
+}
+.profile-post-card>header span{
+  color:var(--cyan);
+  font:800 .56rem var(--mono);
+  letter-spacing:.06em;
+}
+.profile-post-card>header small{
+  color:var(--muted);
+  font:700 .54rem var(--mono);
+}
+.profile-post-recipient{
+  border:0;
+  padding:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+  text-decoration:underline;
+  text-decoration-style:dotted;
+  text-underline-offset:3px;
+}
+.profile-post-open{
+  min-height:30px;
+  padding:5px 9px;
+}
+.profile-post-body{
+  margin:0;
+  font-size:.92rem;
+  line-height:1.55;
+  overflow-wrap:anywhere;
+}
+.profile-post-image{
+  margin:0;
+  border:1px solid var(--line);
+  background:#050809;
+  overflow:hidden;
+}
+.profile-post-image img{
+  display:block;
+  width:100%;
+  max-height:420px;
+  object-fit:cover;
+}
+.profile-post-card>footer{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  align-items:center;
+  color:var(--muted);
+}
+.profile-post-card>footer span{
+  padding:4px 7px;
+  border:1px solid var(--line);
+  background:color-mix(in srgb,var(--panel2) 82%,#000);
+  font:700 .5rem var(--mono);
+}
