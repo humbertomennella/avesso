@@ -1274,6 +1274,51 @@
   .desktop-profile-summary{
     min-width:0;
   }
+  .desktop-profile-state-row{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    min-width:0;
+  }
+  .desktop-profile-presence{
+    flex:0 0 auto;
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    min-height:23px;
+    padding:3px 7px;
+    border:1px solid #3c5055;
+    border-radius:99px;
+    background:#071012;
+    color:#aab7b3;
+    font:800 .43rem var(--mono);
+    text-transform:uppercase;
+  }
+  .desktop-profile-presence i{
+    width:7px;
+    height:7px;
+    border-radius:50%;
+    background:#6f7f7b;
+    box-shadow:0 0 0 2px #0a1113;
+  }
+  .desktop-profile-presence.online{
+    border-color:#49624a;
+    color:var(--acid);
+  }
+  .desktop-profile-presence.online i{
+    background:var(--acid);
+    box-shadow:0 0 8px color-mix(in srgb,var(--acid) 55%,transparent);
+  }
+  .desktop-profile-presence.away{
+    border-color:#75653d;
+    color:#e7c56e;
+  }
+  .desktop-profile-presence.away i{
+    background:#e7c56e;
+  }
+  .desktop-profile-presence.invisible{
+    color:#7f8c88;
+  }
   .desktop-profile-summary p{
     margin:0!important;
     overflow:hidden;
