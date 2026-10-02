@@ -49,6 +49,27 @@ window.addEventListener('online',()=>{
   if(typeof pollDirectInbox==='function')pollDirectInbox();
 });
 
+function ensureUpdateBanner(){
+  let banner=$('#app-update-banner');
+  if(banner)return banner;
+  banner=document.createElement('div');
+  banner.id='app-update-banner';
+  banner.className='app-update-banner hidden';
+  banner.setAttribute('role','status');
+  banner.setAttribute('aria-live','polite');
+  banner.innerHTML='<span><b>NOVA VERSÃO // AVESSO atualizado</b><small>Recarregue para usar os arquivos novos sem misturar versões.</small></span><button type="button" data-app-update-reload>atualizar agora</button><button type="button" data-app-update-later aria-label="Fechar">×</button>';
+  document.body.appendChild(banner);
+  banner.querySelector('[data-app-update-reload]').onclick=()=>location.reload();
+  banner.querySelector('[data-app-update-later]').onclick=()=>banner.classList.add('hidden');
+  return banner;
+}
+function showUpdateReady(){
+  const banner=ensureUpdateBanner();
+  banner.classList.remove('hidden');
+}
+window.addEventListener('avesso:update-ready',showUpdateReady);
+
+
 function initials(name='?'){ return name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
 function ago(date){ const s=Math.floor((Date.now()-new Date(date))/1000); if(s<60)return'agora'; if(s<3600)return`${Math.floor(s/60)}min`; if(s<86400)return`${Math.floor(s/3600)}h`; return`${Math.floor(s/86400)}d`; }
 function escapeHtml(value=''){ const d=document.createElement('div'); d.textContent=value; return d.innerHTML; }
@@ -930,8 +951,19 @@ async function registerNotificationWorker(){
   if(state.notificationRegistration||!('serviceWorker' in navigator))return state.notificationRegistration;
   try{
     state.notificationRegistration=await navigator.serviceWorker.register(new URL('sw.js',SITE_URL).href,{scope:new URL('./',SITE_URL).pathname,updateViaCache:'none'});
-    state.notificationRegistration.update().catch(()=>{});
-    return state.notificationRegistration;
+    const registration=state.notificationRegistration;
+    const watchInstalling=worker=>{
+      if(!worker)return;
+      worker.addEventListener('statechange',()=>{
+        if(['installed','activated'].includes(worker.state)&&navigator.serviceWorker.controller){
+          window.dispatchEvent(new CustomEvent('avesso:update-ready'));
+        }
+      });
+    };
+    registration.addEventListener('updatefound',()=>watchInstalling(registration.installing));
+    if(registration.waiting&&navigator.serviceWorker.controller)window.dispatchEvent(new CustomEvent('avesso:update-ready'));
+    registration.update().catch(()=>{});
+    return registration;
   }catch{return null;}
 }
 function pushKeyBytes(value=''){
@@ -972,19 +1004,19 @@ function dispatchPush(event_type,entity_id){
   if(!state.session?.user?.id||!event_type||!entity_id)return;
   supabase.functions.invoke('send-push',{body:{action:'send',event_type,entity_id:String(entity_id)}}).catch(()=>{});
 }
-async function browserNotify({title='AVESSO',body='',avatar='',kind='message',action=null}={}){
+async function browserNotify({title='AVESSO',body='',avatar='',kind='message',action=null,target=null,dedupeKey=''}={}){
   if((!document.hidden&&document.hasFocus())||!('Notification' in window)||Notification.permission!=='granted')return;
   const icon=avatar?new URL(avatar,SITE_URL).href:new URL('assets/avatars/robo-01.svg',SITE_URL).href;
   const options={
     body,
     icon,
     badge:new URL('assets/avatars/robo-01.svg',SITE_URL).href,
-    tag:`avesso-${kind}-${title}`,
+    tag:(dedupeKey?`avesso-${dedupeKey}`:`avesso-${kind}-${title}`).slice(0,180),
     renotify:true,
     silent:false,
     vibrate:[90,45,90],
     timestamp:Date.now(),
-    data:{url:SITE_URL,kind}
+    data:{url:target?.type&&target?.id?avessoShareUrl(target.type,target.id):SITE_URL,kind,target}
   };
   try{
     const registration=await registerNotificationWorker();
