@@ -9064,3 +9064,71 @@ img[src*="assets/avatars/robo-avesso.webp"]{
   object-fit:cover!important;
   object-position:center!important;
 }
+
+
+/* AVESSO Accessibility + Connection States 2026-10-02 */
+:where(button,a,input,textarea,select,[tabindex]):focus-visible{
+  outline:2px solid var(--cyan);
+  outline-offset:3px;
+}
+:where(button,a,[role="button"]):focus-visible{
+  box-shadow:0 0 0 1px #061012,0 0 0 4px color-mix(in srgb,var(--cyan) 32%,transparent);
+}
+
+.connection-status-banner{
+  position:fixed;
+  z-index:20050;
+  top:max(10px,env(safe-area-inset-top));
+  left:50%;
+  width:min(620px,calc(100vw - 24px));
+  transform:translateX(-50%);
+  padding:9px 12px;
+  border:1px solid #596a6e;
+  background:#0b1113f4;
+  color:#dbe3e0;
+  box-shadow:6px 6px 0 #020405,0 12px 32px #0008;
+  text-align:center;
+  font:800 .54rem/1.4 var(--mono);
+  letter-spacing:.015em;
+  backdrop-filter:blur(8px);
+}
+.connection-status-banner.hidden{display:none}
+.connection-status-banner.offline{
+  border-color:#a54f48;
+  color:#ffaaa2;
+  background:#1a0d0ef5;
+}
+.connection-status-banner.reconnecting{
+  border-color:#9e7c38;
+  color:#ffd77b;
+  background:#171309f5;
+}
+.connection-status-banner.syncing{
+  border-color:#3d777f;
+  color:#80edf5;
+  background:#071416f5;
+}
+body[data-network-state="offline"] .notification-permission-button,
+body[data-network-state="offline"] #refresh-feed{
+  opacity:.72;
+}
+
+.discovery-target-highlight{
+  animation:avesso-target-highlight 1.55s ease both;
+}
+@keyframes avesso-target-highlight{
+  0%,100%{box-shadow:0 0 0 transparent}
+  25%,70%{box-shadow:0 0 0 2px var(--acid),0 0 22px #d8ff3e44}
+}
+
+@media(prefers-reduced-motion:reduce){
+  html:focus-within{scroll-behavior:auto!important}
+  *,
+  *::before,
+  *::after{
+    animation-duration:.001ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.001ms!important;
+    scroll-behavior:auto!important;
+  }
+}
