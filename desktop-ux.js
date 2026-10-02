@@ -16,6 +16,7 @@
   let navDecorated=false;
   let chatObserver=null;
   let notificationFilter='all';
+  let notificationOpener=null;
   let recentChats=[];
   let notificationGroups=new Map();
   let contextTarget=null;
@@ -32,11 +33,63 @@
   function readNotifications(){
     try{
       const rows=JSON.parse(localStorage.getItem(notificationKey())||'[]');
-      return Array.isArray(rows)?rows.slice(0,100):[];
+      if(!Array.isArray(rows))return[];
+      const cutoff=Date.now()-30*24*60*60*1000;
+      return rows
+        .filter(row=>row&&Number(row.createdAt||0)>=cutoff)
+        .slice(0,100);
     }catch{return[];}
   }
   function saveNotifications(rows){
-    try{localStorage.setItem(notificationKey(),JSON.stringify(rows.slice(0,100)));}catch{}
+    try{
+      const cutoff=Date.now()-30*24*60*60*1000;
+      const clean=(Array.isArray(rows)?rows:[])
+        .filter(row=>row&&Number(row.createdAt||0)>=cutoff)
+        .slice(0,100);
+      localStorage.setItem(notificationKey(),JSON.stringify(clean));
+    }catch{}
+  }
+  function notificationTargetFromUrl(url=''){
+    try{
+      const parsed=new URL(url,location.href);
+      const open=parsed.searchParams.get('open');
+      const id=parsed.searchParams.get('id');
+      if(open&&id&&/^(post|story|photo|chat|profile)$/i.test(open))return{type:open.toLowerCase(),id};
+      const hash=parsed.hash.replace(/^#/,'');
+      const match=hash.match(/^(post|story|photo|chat|profile)\/([^/?#]+)/i);
+      return match?{type:match[1].toLowerCase(),id:decodeURIComponent(match[2])}:null;
+    }catch{return null;}
+  }
+  function rememberDesktopNotification(detail={}){
+    const rows=readNotifications();
+    const createdAt=Number(detail.createdAt||Date.now());
+    const kind=String(detail.kind||'interaction');
+    const title=String(detail.title||'AVESSO').slice(0,140);
+    const body=String(detail.body||'').slice(0,260);
+    const target=detail.target||notificationTargetFromUrl(detail.url)||null;
+    const targetKey=target?.type&&target?.id?`${target.type}:${target.id}`:'';
+    const dedupeKey=String(detail.dedupeKey||[kind,targetKey,title,body].join('|')).toLowerCase();
+
+    const existingIndex=rows.findIndex(row=>
+      String(row.dedupeKey||'')===dedupeKey&&
+      Math.abs(createdAt-Number(row.createdAt||0))<15000
+    );
+    if(existingIndex>=0){
+      const existing=rows.splice(existingIndex,1)[0];
+      rows.unshift({
+        ...existing,
+        kind,title,body,target,dedupeKey,createdAt,
+        read:false,
+        repeat:Math.max(1,Number(existing.repeat||1))+1
+      });
+    }else{
+      rows.unshift({
+        id:String(createdAt)+'-'+Math.random().toString(36).slice(2,7),
+        kind,title,body,createdAt,target,dedupeKey,
+        read:false,repeat:1
+      });
+    }
+    saveNotifications(rows);
   }
   function readRecentChats(){
     try{
@@ -170,30 +223,45 @@
         <button type="button" data-desktop-notification-close aria-label="Fechar">×</button>
       </header>
       <nav>
-        <button type="button" class="active" data-desktop-notification-filter="all">tudo</button>
-        <button type="button" data-desktop-notification-filter="messages">mensagens</button>
-        <button type="button" data-desktop-notification-filter="reactions">reações</button>
-        <button type="button" data-desktop-notification-filter="people">pessoas</button>
+        <button type="button" class="active" data-desktop-notification-filter="all">tudo <small data-filter-count="all">0</small></button>
+        <button type="button" data-desktop-notification-filter="unread">não lidas <small data-filter-count="unread">0</small></button>
+        <button type="button" data-desktop-notification-filter="messages">mensagens <small data-filter-count="messages">0</small></button>
+        <button type="button" data-desktop-notification-filter="reactions">interações <small data-filter-count="reactions">0</small></button>
+        <button type="button" data-desktop-notification-filter="people">pessoas <small data-filter-count="people">0</small></button>
+        <button type="button" data-desktop-notification-filter="system">sistema <small data-filter-count="system">0</small></button>
       </nav>
+      <div class="desktop-notification-summary" aria-live="polite"></div>
       <div class="desktop-notification-list"></div>
       <footer>
         <button type="button" data-desktop-mark-read>marcar tudo como lido</button>
-        <button type="button" data-desktop-clear-notifications>limpar</button>
+        <button type="button" data-desktop-clear-read>limpar lidas</button>
+        <button type="button" data-desktop-clear-notifications>limpar tudo</button>
       </footer>`;
     document.body.appendChild(drawer);
     q('[data-desktop-notification-close]',drawer).onclick=closeNotificationDrawer;
     qa('[data-desktop-notification-filter]',drawer).forEach((button,index)=>button.setAttribute('aria-pressed',String(index===0)));
-    qa('[data-desktop-notification-filter]',drawer).forEach(button=>button.onclick=()=>{
-      notificationFilter=button.dataset.desktopNotificationFilter||'all';
-      qa('[data-desktop-notification-filter]',drawer).forEach(x=>{
-        const active=x===button;
-        x.classList.toggle('active',active);
-        x.setAttribute('aria-pressed',String(active));
-      });
-      renderNotificationDrawer();
+    try{notificationFilter=localStorage.getItem('avesso.desktop.notification.filter')||'all';}catch{}
+    qa('[data-desktop-notification-filter]',drawer).forEach(button=>{
+      const active=button.dataset.desktopNotificationFilter===notificationFilter;
+      button.classList.toggle('active',active);
+      button.setAttribute('aria-pressed',String(active));
+      button.onclick=()=>{
+        notificationFilter=button.dataset.desktopNotificationFilter||'all';
+        try{localStorage.setItem('avesso.desktop.notification.filter',notificationFilter);}catch{}
+        qa('[data-desktop-notification-filter]',drawer).forEach(x=>{
+          const selected=x===button;
+          x.classList.toggle('active',selected);
+          x.setAttribute('aria-pressed',String(selected));
+        });
+        renderNotificationDrawer();
+      };
     });
     q('[data-desktop-mark-read]',drawer).onclick=()=>{
       const rows=readNotifications();rows.forEach(r=>r.read=true);saveNotifications(rows);
+      renderNotificationDrawer();refreshNotificationBadge();
+    };
+    q('[data-desktop-clear-read]',drawer).onclick=()=>{
+      saveNotifications(readNotifications().filter(row=>!row.read));
       renderNotificationDrawer();refreshNotificationBadge();
     };
     q('[data-desktop-clear-notifications]',drawer).onclick=()=>{
@@ -203,7 +271,8 @@
       const mark=e.target.closest('[data-desktop-mark-one]');
       if(mark){
         e.stopPropagation();
-        const ids=notificationGroups.get(mark.dataset.desktopMarkOne)||[];
+        const group=notificationGroups.get(mark.dataset.desktopMarkOne);
+        const ids=group?.ids||[];
         const rows=readNotifications();
         rows.forEach(row=>{if(ids.includes(String(row.id)))row.read=true;});
         saveNotifications(rows);renderNotificationDrawer();refreshNotificationBadge();
@@ -211,9 +280,10 @@
       }
       const item=e.target.closest('[data-desktop-notification-group]');
       if(!item)return;
-      const ids=notificationGroups.get(item.dataset.desktopNotificationGroup)||[];
+      const group=notificationGroups.get(item.dataset.desktopNotificationGroup);
+      const ids=group?.ids||[];
       const rows=readNotifications();
-      const row=rows.find(x=>ids.includes(String(x.id)))||rows[0];
+      const row=group?.latest||rows.find(x=>ids.includes(String(x.id)))||rows[0];
       rows.forEach(x=>{if(ids.includes(String(x.id)))x.read=true;});
       saveNotifications(rows);refreshNotificationBadge();
       closeNotificationDrawer();
@@ -228,48 +298,77 @@
     return drawer;
   }
 
+  function notificationCategory(row={}){
+    if(row.kind==='message'||row.kind==='attention')return'messages';
+    if(['interaction','story','photo'].includes(row.kind))return'reactions';
+    if(row.kind==='friend'||row.kind==='guestbook'||row.kind==='online')return'people';
+    if(row.kind==='staff'||row.kind==='world'||row.kind==='system')return'system';
+    return'other';
+  }
   function filteredNotifications(){
     return readNotifications().filter(row=>{
-      if(notificationFilter==='messages')return row.kind==='message'||row.kind==='attention';
-      if(notificationFilter==='reactions')return ['interaction','story','photo'].includes(row.kind);
-      if(notificationFilter==='people')return row.kind==='friend'||row.kind==='guestbook';
+      if(notificationFilter==='unread')return !row.read;
+      if(['messages','reactions','people','system'].includes(notificationFilter))return notificationCategory(row)===notificationFilter;
       return true;
     });
+  }
+  function notificationCounts(rows=readNotifications()){
+    const counts={all:rows.length,unread:0,messages:0,reactions:0,people:0,system:0};
+    for(const row of rows){
+      if(!row.read)counts.unread+=Math.max(1,Number(row.repeat||1));
+      const category=notificationCategory(row);
+      if(counts[category]!==undefined)counts[category]+=Math.max(1,Number(row.repeat||1));
+    }
+    return counts;
   }
 
   function groupNotifications(rows=[]){
     const groups=[];
     const byKey=new Map();
-    rows.forEach((row,index)=>{
+    [...rows].sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).forEach((row,index)=>{
       const target=row.target||{};
-      const key=[row.kind||'other',target.type||'',target.id||'',row.title||''].join('|');
+      const category=notificationCategory(row);
+      const targetKey=target.type&&target.id?`${target.type}:${target.id}`:'';
+      const fallbackKey=String(row.dedupeKey||row.title||row.kind||'other').toLowerCase();
+      const key=[category,targetKey||fallbackKey].join('|');
       let group=byKey.get(key);
       if(!group){
-        group={id:'g'+index,key,latest:row,rows:[],ids:[],count:0,unread:false};
+        group={id:'g'+index,key,latest:row,rows:[],ids:[],count:0,unread:false,category,target:targetKey?target:null};
         byKey.set(key,group);groups.push(group);
       }
       group.rows.push(row);
       group.ids.push(String(row.id));
-      group.count+=1;
+      group.count+=Math.max(1,Number(row.repeat||1));
       group.unread=group.unread||!row.read;
       if(Number(row.createdAt||0)>Number(group.latest?.createdAt||0))group.latest=row;
     });
-    return groups;
+    return groups.sort((a,b)=>Number(b.latest?.createdAt||0)-Number(a.latest?.createdAt||0));
   }
 
   function renderNotificationDrawer(){
     const drawer=ensureNotificationDrawer();
     const list=q('.desktop-notification-list',drawer);
+    const allRows=readNotifications();
     const groups=groupNotifications(filteredNotifications());
-    notificationGroups=new Map(groups.map(group=>[group.id,group.ids]));
-    const icons={message:'↔',attention:'⚡',friend:'+',guestbook:'▤',story:'◫',photo:'▧',interaction:'♥',online:'●'};
+    notificationGroups=new Map(groups.map(group=>[group.id,group]));
+    const counts=notificationCounts(allRows);
+    qa('[data-filter-count]',drawer).forEach(el=>{
+      const value=counts[el.dataset.filterCount]||0;
+      el.textContent=value>99?'99+':String(value);
+    });
+    const summary=q('.desktop-notification-summary',drawer);
+    if(summary){
+      const shown=groups.reduce((sum,group)=>sum+group.count,0);
+      summary.innerHTML=`<span><b>${counts.unread}</b> não lida${counts.unread===1?'':'s'}</span><span><b>${shown}</b> neste filtro</span><span><b>${allRows.length}</b> eventos salvos</span>`;
+    }
+    const icons={message:'↔',attention:'⚡',friend:'+',guestbook:'▤',story:'◫',photo:'▧',interaction:'♥',online:'●',staff:'⚑',world:'♛',system:'◉'};
     if(!groups.length){
       list.innerHTML='<div class="desktop-notification-empty">Nada aqui. O desktop está estranhamente civilizado.</div>';
       return;
     }
     list.innerHTML=groups.map(group=>{
       const row=group.latest||{};
-      const badge=group.count>1?`<strong class="desktop-notification-count">+${group.count-1}</strong>`:'';
+      const badge=group.count>1?`<strong class="desktop-notification-count">×${group.count}</strong>`:'';
       return `<article class="desktop-notification-item ${group.unread?'unread':''}">
         <button type="button" class="desktop-notification-open" data-desktop-notification-group="${esc(group.id)}">
           <i>${icons[row.kind]||'•'}</i>
@@ -282,7 +381,7 @@
 
   function refreshNotificationBadge(){
     const rows=readNotifications();
-    const count=rows.filter(r=>!r.read).length;
+    const count=rows.filter(r=>!r.read).reduce((sum,row)=>sum+Math.max(1,Number(row.repeat||1)),0);
     const badge=q('[data-desktop-notifications] i');
     if(badge){
       badge.textContent=count>99?'99+':String(count);
@@ -292,6 +391,7 @@
 
   function openNotificationDrawer(){
     if(!isDesktop())return;
+    notificationOpener=document.activeElement instanceof HTMLElement?document.activeElement:null;
     const drawer=ensureNotificationDrawer();
     renderNotificationDrawer();
     drawer.classList.add('open');
@@ -301,9 +401,15 @@
   }
   function closeNotificationDrawer(){
     const drawer=q('#desktop-notification-drawer');
+    const wasOpen=drawer?.classList.contains('open');
     drawer?.classList.remove('open');
     drawer?.setAttribute('aria-hidden','true');
     document.body.classList.remove('desktop-notifications-open');
+    if(wasOpen){
+      const opener=notificationOpener;
+      notificationOpener=null;
+      if(opener?.isConnected)requestAnimationFrame(()=>opener.focus({preventScroll:true}));
+    }
   }
 
   function ensureLiveAside(){
@@ -1083,9 +1189,26 @@
       rememberChat(e.detail||{});
       setTimeout(()=>{bindChatDrop();ensureChatDesktopEnhancements();},0);
     });
-    window.addEventListener('avesso:notification',()=>setTimeout(refreshNotificationBadge,30));
+    window.addEventListener('avesso:notification',event=>{
+      rememberDesktopNotification(event.detail||{});
+      setTimeout(()=>{
+        refreshNotificationBadge();
+        if(q('#desktop-notification-drawer')?.classList.contains('open'))renderNotificationDrawer();
+      },30);
+    });
     navigator.serviceWorker?.addEventListener?.('message',e=>{
-      if(e.data?.type==='AVESSO_PUSH_WHILE_VISIBLE')setTimeout(refreshNotificationBadge,60);
+      if(e.data?.type==='AVESSO_PUSH_WHILE_VISIBLE'){
+        if(e.data.payload)rememberDesktopNotification(e.data.payload);
+        setTimeout(()=>{
+          refreshNotificationBadge();
+          if(q('#desktop-notification-drawer')?.classList.contains('open'))renderNotificationDrawer();
+        },60);
+      }
+    });
+    window.addEventListener('storage',event=>{
+      if(event.key!==notificationKey())return;
+      refreshNotificationBadge();
+      if(q('#desktop-notification-drawer')?.classList.contains('open'))renderNotificationDrawer();
     });
     document.addEventListener('visibilitychange',()=>{
       if(!document.hidden&&isDesktop()){
