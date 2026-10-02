@@ -3089,3 +3089,252 @@
     font-size:.68rem!important;
   }
 }
+
+
+/* =========================================================
+   AVESSO Desktop Final Scale + Layout Pass 2026-10-02
+   Regra final: legibilidade primeiro, sem deslocar o conteúdo
+   quando a navegação é recolhida.
+   ========================================================= */
+@media (min-width:821px){
+  body{
+    --desktop-nav-track-w:248px;
+    --desktop-aside-w:320px;
+  }
+  body.desktop-nav-collapsed{
+    --desktop-nav-w:92px;
+  }
+  #app-view.app-shell,
+  body.desktop-nav-collapsed #app-view.app-shell{
+    grid-template-columns:var(--desktop-nav-track-w) minmax(0,1fr) var(--desktop-aside-w)!important;
+    column-gap:24px!important;
+  }
+  body.desktop-nav-collapsed .app-nav{
+    justify-self:start!important;
+    transform:none!important;
+  }
+  body.desktop-nav-collapsed .app-nav nav button{
+    width:64px!important;
+    min-height:54px!important;
+  }
+  body.desktop-nav-collapsed .desktop-nav-icon{
+    font-size:1.38rem!important;
+  }
+  body.desktop-nav-collapsed .app-nav .user-chip .avatar{
+    width:52px!important;
+    height:52px!important;
+    flex-basis:52px!important;
+  }
+  body.desktop-nav-collapsed .desktop-nav-collapse{
+    width:64px!important;
+    min-height:44px!important;
+  }
+
+  /* Escala tipográfica final do app inteiro. */
+  #app-view{
+    font-size:17px!important;
+  }
+  #app-view p,
+  #app-view li{
+    font-size:.94rem!important;
+    line-height:1.58!important;
+  }
+  #app-view small,
+  #app-view .meta,
+  #app-view time{
+    font-size:.80rem!important;
+    line-height:1.48!important;
+  }
+  #app-view .section-code{
+    font-size:.78rem!important;
+    line-height:1.45!important;
+    letter-spacing:.07em!important;
+  }
+  #app-view label{
+    font-size:.86rem!important;
+    line-height:1.4!important;
+  }
+  #app-view button,
+  #app-view select{
+    font-size:.80rem!important;
+  }
+  #app-view input,
+  #app-view textarea{
+    font-size:.94rem!important;
+  }
+
+  .app-nav nav button,
+  .nav-logout{
+    font-size:.90rem!important;
+  }
+  .desktop-nav-label{
+    font-size:.90rem!important;
+  }
+  .app-nav .user-chip strong{
+    font-size:.94rem!important;
+  }
+  .app-nav .user-chip small{
+    font-size:.80rem!important;
+  }
+  .desktop-command-bar{
+    min-height:52px!important;
+  }
+  .desktop-command-bar button,
+  .desktop-command-bar input,
+  .desktop-command-bar span,
+  .desktop-command-bar small{
+    font-size:.74rem!important;
+  }
+  .app-aside .aside-card p,
+  .app-aside .aside-card small,
+  .app-aside .aside-card li{
+    font-size:.82rem!important;
+    line-height:1.55!important;
+  }
+  .app-aside .aside-card h3{
+    font-size:.95rem!important;
+  }
+
+  /* Conversa minimizada: canto inferior direito e abaixo das notificações. */
+  .dm-floating-window.minimized,
+  .dm-floating-window.docked-minimized{
+    left:auto!important;
+    top:auto!important;
+    right:18px!important;
+    bottom:18px!important;
+    width:min(340px,calc(100vw - 36px))!important;
+    height:58px!important;
+    max-height:58px!important;
+    z-index:11260!important;
+  }
+  body.desktop-notifications-open .dm-floating-window.minimized,
+  body.desktop-notifications-open .dm-floating-window.docked-minimized{
+    right:458px!important;
+  }
+  .desktop-chat-shelf{
+    left:auto!important;
+    right:18px!important;
+    bottom:18px!important;
+    transform:none!important;
+    z-index:11240!important;
+    max-width:min(540px,calc(100vw - 40px))!important;
+  }
+  .desktop-chat-shelf-label{
+    font-size:.72rem!important;
+  }
+  .desktop-chat-shelf-list>button{
+    min-height:46px!important;
+    height:46px!important;
+  }
+  .desktop-chat-shelf-list b{
+    font-size:.78rem!important;
+  }
+  .desktop-chat-shelf-list small{
+    font-size:.68rem!important;
+  }
+
+  /* Stories do perfil: cada publicação ocupa seu próprio card. */
+  .desktop-profile-main .profile-story-list,
+  .public-profile .profile-story-list{
+    display:grid!important;
+    grid-template-columns:repeat(auto-fill,minmax(190px,1fr))!important;
+    gap:12px!important;
+    overflow:visible!important;
+    align-items:stretch!important;
+  }
+  .desktop-profile-main .profile-story-list .story-card,
+  .public-profile .profile-story-list .story-card{
+    position:relative!important;
+    inset:auto!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    min-height:128px!important;
+    margin:0!important;
+    transform:none!important;
+  }
+  .story-view-dialog{
+    width:min(1120px,calc(100vw - 48px))!important;
+    height:min(790px,calc(100dvh - 42px))!important;
+  }
+  .story-stage{
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  .story-stage img,
+  .story-stage video,
+  .story-stage .story-video{
+    width:auto!important;
+    height:auto!important;
+    max-width:100%!important;
+    max-height:calc(100dvh - 190px)!important;
+    object-fit:contain!important;
+    object-position:center!important;
+  }
+
+  /* Meu Canto: avatar volta a ter peso real no cabeçalho. */
+  .desktop-profile-enhanced .profile-control-hero{
+    min-height:312px!important;
+    grid-template-columns:220px minmax(0,1fr)!important;
+    gap:34px!important;
+    padding:32px 38px!important;
+  }
+  .desktop-profile-enhanced .profile-avatar-large{
+    width:210px!important;
+    height:210px!important;
+    flex:0 0 210px!important;
+  }
+  .desktop-profile-enhanced .profile-name-listening-row h2{
+    font-size:clamp(3.15rem,4.8vw,5.6rem)!important;
+    line-height:.92!important;
+  }
+  .desktop-profile-enhanced .profile-hero-identity>p{
+    font-size:.90rem!important;
+  }
+  .desktop-profile-summary p{
+    font-size:.94rem!important;
+  }
+  .desktop-profile-summary small{
+    font-size:.84rem!important;
+  }
+
+  body.avesso-public-corner .public-profile>header{
+    grid-template-columns:220px minmax(0,1fr)!important;
+  }
+  body.avesso-public-corner .public-profile-avatar{
+    width:210px!important;
+    height:210px!important;
+  }
+}
+
+@media (min-width:821px) and (max-width:1280px){
+  body{
+    --desktop-nav-track-w:210px;
+    --desktop-aside-w:270px;
+  }
+  body.desktop-nav-collapsed .app-nav{
+    justify-self:start!important;
+  }
+  #app-view.app-shell,
+  body.desktop-nav-collapsed #app-view.app-shell{
+    grid-template-columns:var(--desktop-nav-track-w) minmax(0,1fr) var(--desktop-aside-w)!important;
+  }
+  .desktop-profile-enhanced .profile-control-hero{
+    grid-template-columns:180px minmax(0,1fr)!important;
+    min-height:270px!important;
+  }
+  .desktop-profile-enhanced .profile-avatar-large{
+    width:170px!important;
+    height:170px!important;
+    flex-basis:170px!important;
+  }
+}
+@media (min-width:821px) and (max-width:1050px){
+  body{
+    --desktop-nav-track-w:190px;
+  }
+  #app-view.app-shell,
+  body.desktop-nav-collapsed #app-view.app-shell{
+    grid-template-columns:var(--desktop-nav-track-w) minmax(0,1fr)!important;
+  }
+}
