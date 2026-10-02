@@ -437,6 +437,140 @@
     win.classList.toggle('desktop-chat-rail-active',recentChats.length>1);
   }
 
+
+  function profileSettingsOpen(){
+    try{return localStorage.getItem('avesso.desktop.profile.settings')==='1';}catch{return false;}
+  }
+
+  function profilePlaceholder(key,node){
+    if(!node?.parentNode)return null;
+    let placeholder=q('[data-desktop-profile-placeholder="'+key+'"]');
+    if(!placeholder){
+      placeholder=document.createElement('span');
+      placeholder.hidden=true;
+      placeholder.dataset.desktopProfilePlaceholder=key;
+      node.parentNode.insertBefore(placeholder,node);
+    }
+    return placeholder;
+  }
+
+  function moveProfileNode(node,target,key){
+    if(!node||!target||node.parentElement===target)return;
+    profilePlaceholder(key,node);
+    target.appendChild(node);
+  }
+
+  function restoreProfileDesktop(){
+    qa('[data-desktop-profile-placeholder]').forEach(placeholder=>{
+      const key=placeholder.dataset.desktopProfilePlaceholder;
+      const node=q('[data-desktop-profile-key="'+key+'"]');
+      if(node&&placeholder.parentNode)placeholder.parentNode.insertBefore(node,placeholder);
+      placeholder.remove();
+    });
+    q('#desktop-profile-layout')?.remove();
+    q('#desktop-profile-settings-panel')?.remove();
+    q('#desktop-profile-tools')?.remove();
+    q('.profile-control')?.classList.remove('desktop-profile-enhanced','desktop-profile-settings-open');
+    document.body.classList.remove('desktop-profile-settings-open');
+  }
+
+  function tagProfileNode(node,key){
+    if(node)node.dataset.desktopProfileKey=key;
+    return node;
+  }
+
+  function enhanceProfileDesktop(){
+    if(!isDesktop()||!document.body.classList.contains('avesso-own-corner'))return;
+    const root=q('.profile-control');
+    const hero=q('.profile-control-hero',root);
+    if(!root||!hero)return;
+    if(root.classList.contains('desktop-profile-enhanced')){
+      const status=q('#profile-status')?.value||'';
+      const bio=q('#profile-bio')?.value||'';
+      const statusEl=q('[data-desktop-profile-status]',hero);
+      const bioEl=q('[data-desktop-profile-bio]',hero);
+      if(statusEl)statusEl.textContent=status||'sem status definido';
+      if(bioEl)bioEl.textContent=bio||'Sem bio. Um raro caso de contenção editorial.';
+      return;
+    }
+
+    root.classList.add('desktop-profile-enhanced');
+
+    const identity=q('.profile-hero-identity',hero);
+    if(identity&&!q('#desktop-profile-tools',hero)){
+      const status=q('#profile-status')?.value||'';
+      const bio=q('#profile-bio')?.value||'';
+      const tools=document.createElement('div');
+      tools.id='desktop-profile-tools';
+      tools.className='desktop-profile-tools';
+      tools.innerHTML=`
+        <div class="desktop-profile-summary">
+          <p data-desktop-profile-status>${esc(status||'sem status definido')}</p>
+          <small data-desktop-profile-bio>${esc(bio||'Sem bio. Um raro caso de contenção editorial.')}</small>
+        </div>
+        <div class="desktop-profile-actions">
+          <button type="button" data-desktop-profile-settings>⚙ ajustes do Canto</button>
+          <button type="button" data-desktop-profile-avatar>◎ trocar avatar</button>
+        </div>`;
+      identity.appendChild(tools);
+      q('[data-desktop-profile-settings]',tools).onclick=()=>{
+        const open=!root.classList.contains('desktop-profile-settings-open');
+        root.classList.toggle('desktop-profile-settings-open',open);
+        document.body.classList.toggle('desktop-profile-settings-open',open);
+        try{localStorage.setItem('avesso.desktop.profile.settings',open?'1':'0');}catch{}
+        const button=q('[data-desktop-profile-settings]',tools);
+        if(button)button.textContent=open?'× fechar ajustes':'⚙ ajustes do Canto';
+        if(open)setTimeout(()=>q('#desktop-profile-settings-panel')?.scrollIntoView({behavior:'smooth',block:'start'}),30);
+      };
+      q('[data-desktop-profile-avatar]',tools).onclick=()=>q('#open-avatar-picker')?.click();
+      q('#open-avatar-picker',identity)?.classList.add('desktop-profile-original-avatar');
+    }
+
+    const layout=document.createElement('div');
+    layout.id='desktop-profile-layout';
+    layout.className='desktop-profile-layout';
+    layout.innerHTML='<main class="desktop-profile-main"></main><aside class="desktop-profile-social"></aside>';
+    hero.insertAdjacentElement('afterend',layout);
+
+    const settings=document.createElement('section');
+    settings.id='desktop-profile-settings-panel';
+    settings.className='desktop-profile-settings-panel';
+    settings.innerHTML='<header><div><span>CONFIG.EXE // SEU CANTO</span><h2>Ajustes sem disputar espaço com sua vida social</h2><p>Perfil, privacidade, cenário, trilha, segurança e controles ficam aqui.</p></div><button type="button" data-desktop-profile-settings-close>×</button></header><div class="desktop-profile-settings-content"></div>';
+    layout.insertAdjacentElement('afterend',settings);
+    q('[data-desktop-profile-settings-close]',settings).onclick=()=>{
+      root.classList.remove('desktop-profile-settings-open');
+      document.body.classList.remove('desktop-profile-settings-open');
+      try{localStorage.setItem('avesso.desktop.profile.settings','0');}catch{}
+      const button=q('[data-desktop-profile-settings]');
+      if(button)button.textContent='⚙ ajustes do Canto';
+    };
+
+    const main=q('.desktop-profile-main',layout);
+    const social=q('.desktop-profile-social',layout);
+    const settingsContent=q('.desktop-profile-settings-content',settings);
+
+    moveProfileNode(tagProfileNode(q('.profile-story-section',root),'stories'),main,'stories');
+    moveProfileNode(tagProfileNode(q('.profile-album-control',root),'album'),main,'album');
+    moveProfileNode(tagProfileNode(q('.profile-media-control',root),'media'),main,'media');
+
+    moveProfileNode(tagProfileNode(q('.guestbook-own',root),'guestbook'),social,'guestbook');
+    moveProfileNode(tagProfileNode(q('.friends-control',root),'friends'),social,'friends');
+
+    moveProfileNode(tagProfileNode(q('.profile-settings-grid',root),'profile-settings'),settingsContent,'profile-settings');
+    moveProfileNode(tagProfileNode(q('.wallpaper-control',root),'wallpaper'),settingsContent,'wallpaper');
+    moveProfileNode(tagProfileNode(q('.corner-music-control',root),'corner-music'),settingsContent,'corner-music');
+    moveProfileNode(tagProfileNode(q('.blocked-control',root),'blocked'),settingsContent,'blocked');
+
+    const world=q('.world-preferences');
+    moveProfileNode(tagProfileNode(world,'world'),settingsContent,'world');
+
+    const open=profileSettingsOpen();
+    root.classList.toggle('desktop-profile-settings-open',open);
+    document.body.classList.toggle('desktop-profile-settings-open',open);
+    const settingsButton=q('[data-desktop-profile-settings]');
+    if(settingsButton)settingsButton.textContent=open?'× fechar ajustes':'⚙ ajustes do Canto';
+  }
+
   function bindChatDrop(){
     const win=q('#dm-floating-window');
     if(!win||win.dataset.desktopDropBound)return;
@@ -495,6 +629,7 @@
   function syncDesktop(){
     if(!isDesktop()){
       closeNotificationDrawer();
+      restoreProfileDesktop();
       document.body.classList.remove('desktop-nav-collapsed');
       restoreNav();
       q('#desktop-nav-collapse')?.setAttribute('hidden','');
@@ -513,6 +648,7 @@
     ensureLiveAside();
     renderChatShelf();
     ensureChatDesktopEnhancements();
+    enhanceProfileDesktop();
     bindChatDrop();
     refreshNotificationBadge();
     if(!summaryTimer){
@@ -523,7 +659,10 @@
 
   function boot(){
     bindKeyboard();
-    const observer=new MutationObserver(()=>requestAnimationFrame(syncDesktop));
+    const observer=new MutationObserver(()=>requestAnimationFrame(()=>{
+      if(isDesktop()&&!document.body.classList.contains('avesso-own-corner')&&q('.profile-control.desktop-profile-enhanced'))restoreProfileDesktop();
+      syncDesktop();
+    }));
     observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
     window.addEventListener('avesso:desktop-summary',e=>renderSummary(e.detail||{}));
     window.addEventListener('avesso:chat-opened',e=>{
