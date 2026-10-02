@@ -332,7 +332,8 @@ function storyCardHtml(story,{compact=false}={}){
   const a=story.author||{};
   const isVideo=story.media_type==='video';
   const style=story.image_url&&!isVideo?'--story-thumb:url(\''+escapeAttr(story.image_url)+'\')':'';
-  return '<button class="story-card '+(compact?'compact ':'')+(isVideo?'has-video':'')+'" data-story-open="'+escapeAttr(story.id)+'" style="'+style+'">'+
+  const viewed=story.viewed?'viewed ':'unseen ';
+  return '<button class="story-card '+viewed+(compact?'compact ':'')+(isVideo?'has-video':'')+'" data-story-open="'+escapeAttr(story.id)+'" style="'+style+'">'+
     '<span class="story-ring"><i>'+avatarHtml(a.avatar_url,a.display_name||'?')+'</i></span>'+
     (isVideo?'<em class="story-card-media">▶ vídeo</em>':'')+
     '<span class="story-card-copy"><b>'+identityNameHtml(a.id,a.display_name||'humano')+'</b><small>'+(story.visibility==='amigos'?'amigos':'público')+' · '+storyTimeLeft(story.expires_at)+'</small></span>'+
@@ -346,13 +347,31 @@ async function loadStoriesStrip(){
   const {data,error}=await supabase.from('stories').select('id,author_id,body,image_path,media_type,visibility,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(60);
   if(error){host.innerHTML='<div class="stories-error">stories deram tela azul.</div>';return;}
   const stories=await hydrateStories((data||[]).filter(s=>!isPeerBlocked(s.author_id)));
+  const storyIds=stories.map(row=>row.id).filter(Boolean);
+  let viewedIds=new Set();
+  if(storyIds.length){
+    const {data:viewedRows}=await supabase.from('story_views').select('story_id').eq('user_id',state.profile.id).in('story_id',storyIds);
+    viewedIds=new Set((viewedRows||[]).map(row=>row.story_id));
+  }
+  stories.forEach(row=>{row.viewed=row.author_id===state.profile.id||viewedIds.has(row.id);});
   const latestByAuthor=[],seen=new Set();
-  for(const s of stories){if(!seen.has(s.author_id)){seen.add(s.author_id);latestByAuthor.push(s);}}
-  host.innerHTML=`<div class="stories-head"><div><span class="section-code">STORIES // 24H</span><b>temporário, como toda boa decisão na internet</b></div><button id="story-create-feed">＋ postar story</button></div><div class="stories-strip"><button class="story-new-card" id="story-create-feed-card"><span class="story-ring self"><i>${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</i><em>＋</em></span><b>seu story</b><small>24h e acabou</small></button>${latestByAuthor.map(s=>storyCardHtml(s,{compact:true})).join('')}</div>`;
+  for(const row of stories){if(!seen.has(row.author_id)){seen.add(row.author_id);latestByAuthor.push(row);}}
+  host.innerHTML=`<div class="stories-head"><div><span class="section-code">STORIES // 24H</span><b>temporário, como toda boa decisão na internet</b></div><button id="story-create-feed">＋ postar story</button></div><div class="stories-strip"><button class="story-new-card" id="story-create-feed-card"><span class="story-ring self"><i>${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</i><em>＋</em></span><b>seu story</b><small>24h e acabou</small></button>${latestByAuthor.map(row=>storyCardHtml(row,{compact:true})).join('')}</div>`;
   $('#story-create-feed')?.addEventListener('click',openStoryCreate);
   $('#story-create-feed-card')?.addEventListener('click',openStoryCreate);
-  const storySequence=latestByAuthor.map(s=>s.id);
-  host.querySelectorAll('[data-story-open]').forEach(b=>b.onclick=()=>openStory(b.dataset.storyOpen,{sequence:storySequence}));
+  const storySequence=latestByAuthor.map(row=>row.id);
+  host.querySelectorAll('[data-story-open]').forEach(button=>button.onclick=()=>openStory(button.dataset.storyOpen,{sequence:storySequence}));
+  const strip=host.querySelector('.stories-strip');
+  if(strip&&!strip.dataset.desktopWheelBound){
+    strip.dataset.desktopWheelBound='1';
+    strip.addEventListener('wheel',event=>{
+      if(!window.matchMedia('(min-width: 821px)').matches)return;
+      if(strip.scrollWidth<=strip.clientWidth+2)return;
+      if(Math.abs(event.deltaY)<=Math.abs(event.deltaX))return;
+      event.preventDefault();
+      strip.scrollLeft+=event.deltaY;
+    },{passive:false});
+  }
 }
 
 function clearStoryPreview(){
@@ -550,6 +569,56 @@ async function loadProfileStories(userId,selector){
 
 
 const STORY_VIEW_MS=10000;
+const storyPreloadCache=new Map();
+function storyDesktopEnabled(){return window.matchMedia('(min-width: 821px)').matches;}
+async function preloadStoryOffset(delta=1){
+  const seq=state.storySequence||[];
+  const index=seq.indexOf(state.storyCurrentId);
+  const id=index>=0?seq[index+delta]:null;
+  if(!id||storyPreloadCache.has(id))return;
+  storyPreloadCache.set(id,{loading:true,at:Date.now()});
+  try{
+    const {data:row,error}=await supabase.from('stories').select('id,image_path,media_type,expires_at').eq('id',id).gt('expires_at',new Date().toISOString()).maybeSingle();
+    if(error||!row?.image_path){storyPreloadCache.set(id,{url:'',media_type:row?.media_type||null,at:Date.now()});return;}
+    const signed=await supabase.storage.from('avesso-stories').createSignedUrl(row.image_path,300);
+    const url=signed.data?.signedUrl||'';
+    storyPreloadCache.set(id,{url,media_type:row.media_type||null,at:Date.now()});
+    if(!url)return;
+    if(row.media_type==='video'){
+      const video=document.createElement('video');
+      video.preload='metadata';video.muted=true;video.src=url;video.load();
+    }else{
+      const image=new Image();image.decoding='async';image.src=url;
+    }
+  }catch{storyPreloadCache.delete(id);}
+}
+function ensureStoryDesktopKeyboard(){
+  if(document.documentElement.dataset.storyDesktopKeysBound)return;
+  document.documentElement.dataset.storyDesktopKeysBound='1';
+  document.addEventListener('keydown',event=>{
+    const dialog=$('#story-view-dialog');
+    if(!dialog?.open||!storyDesktopEnabled())return;
+    const active=document.activeElement;
+    const typing=active?.matches?.('input,textarea,select,[contenteditable="true"]');
+    if(event.key==='Escape'){
+      event.preventDefault();closeStoryViewer();return;
+    }
+    if(typing)return;
+    if(event.key==='ArrowLeft'){
+      event.preventDefault();openStoryOffset(-1);return;
+    }
+    if(event.key==='ArrowRight'){
+      event.preventDefault();openStoryOffset(1);return;
+    }
+    if(event.code==='Space'){
+      const video=dialog.querySelector('.story-video');
+      if(!video)return;
+      event.preventDefault();
+      if(video.paused)video.play().catch(()=>{});
+      else video.pause();
+    }
+  });
+}
 function clearStoryTimer(){
   if(state.storyTimer){clearTimeout(state.storyTimer);state.storyTimer=null;}
 }
@@ -636,8 +705,14 @@ async function openStory(storyId,options={}){
   ]);
   let image_url='';
   if(story.image_path){
-    const signed=await supabase.storage.from('avesso-stories').createSignedUrl(story.image_path,300);
-    image_url=signed.data?.signedUrl||'';
+    const cached=storyPreloadCache.get(story.id);
+    const cacheFresh=cached?.url&&(Date.now()-Number(cached.at||0)<240000);
+    if(cacheFresh)image_url=cached.url;
+    else{
+      const signed=await supabase.storage.from('avesso-stories').createSignedUrl(story.image_path,300);
+      image_url=signed.data?.signedUrl||'';
+      if(image_url)storyPreloadCache.set(story.id,{url:image_url,media_type:story.media_type||null,at:Date.now()});
+    }
   }
   const storyIsVideo=story.media_type==='video';
   const comments=commentsRes.data||[],commentIds=[...new Set(comments.map(x=>x.user_id))];
@@ -667,13 +742,15 @@ async function openStory(storyId,options={}){
   const host=$('#story-view-content');
   host.innerHTML=`<article class="story-view-card">
     ${storyProgressHtml(story.id)}
-    <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${identityNameHtml(story.author_id,a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
+    <header><span class="story-ring"><i>${avatarHtml(a.avatar_url,a.display_name||'?')}</i></span><div><b>${identityNameHtml(story.author_id,a.display_name||'humano')}</b><small>@${escapeHtml(a.handle||'...')} · ${story.visibility==='amigos'?'só amigos':'público'} · expira em ${storyTimeLeft(story.expires_at)}</small></div><span class="story-desktop-shortcuts">← → navegar · espaço vídeo · ESC fechar</span>${canDelete?'<button id="story-delete" class="story-delete">apagar</button>':''}</header>
     <div class="story-stage ${image_url?'has-image':''} ${storyIsVideo?'has-video':''}" style="${image_url&&!storyIsVideo?`--story-image:url('${escapeAttr(image_url)}')`:''}">${image_url?(storyIsVideo?`<video class="story-video" src="${escapeAttr(image_url)}" controls playsinline preload="metadata"></video>`:`<img src="${escapeAttr(image_url)}" alt="Story de ${escapeAttr(a.display_name||'usuário')}" decoding="async" fetchpriority="high">`):''}${story.body?`<p>${escapeHtml(story.body)}</p>`:''}<button type="button" class="story-nav story-nav-prev" aria-label="Story anterior">‹</button><button type="button" class="story-nav story-nav-next" aria-label="Próximo story">›</button></div>
     ${viewsHtml}
     <div class="story-reactions">${reactionHtml}</div>
     <section class="story-comments"><h3>respostas // sem plateia</h3><div class="story-comment-list">${commentsHtml}</div><div class="story-comment-compose"><textarea id="story-comment-body" maxlength="420" placeholder="responda antes que isso desapareça..."></textarea><div><button id="story-comment-emoticons" type="button">☻ avessícones</button><button id="story-comment-send" type="button">responder</button></div><div id="story-comment-palette" class="feed-emoticon-palette hidden">${avessoEmoticonButtons('data-story-comment-emoticon')}</div></div></section>
   </article>`;
   const dialog=$('#story-view-dialog');if(!dialog.open)dialog.showModal();
+  ensureStoryDesktopKeyboard();
+  if(storyDesktopEnabled()&&canDelete)host.querySelector('.story-views')?.setAttribute('open','');
   host.querySelector('.story-nav-prev')?.addEventListener('click',()=>openStoryOffset(-1));
   host.querySelector('.story-nav-next')?.addEventListener('click',()=>openStoryOffset(1));
   bindStoryStageGestures(host.querySelector('.story-stage'));
@@ -691,6 +768,8 @@ async function openStory(storyId,options={}){
   commentInput?.addEventListener('blur',resumeStoryTimer);
   if(canDelete)$('#story-delete').onclick=()=>deleteStory(story);
   scheduleStoryAdvance();
+  preloadStoryOffset(1);
+  preloadStoryOffset(-1);
 }
 
 async function toggleStoryReaction(storyId,reaction){
