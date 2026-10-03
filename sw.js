@@ -1,5 +1,5 @@
 const PUBLIC_IMAGE_CACHE='avesso-public-images-v2';
-const SHELL_CACHE='avesso-shell-v25';
+const SHELL_CACHE='avesso-shell-v26';
 const SHELL_ASSETS=[
   './',
   './index.html',
@@ -9,11 +9,13 @@ const SHELL_ASSETS=[
   './experience.css',
   './desktop-ux.css',
   './polish.css',
+  './account-center.css',
   './app.js',
   './desktop-ux.js',
   './mobile.js',
   './mobile-ux.js',
   './polish.js',
+  './account-center.js',
   './config.js',
   './gif-library.js',
   './manifest.webmanifest',

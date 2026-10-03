@@ -1,8 +1,8 @@
-// AVESSO polish layer 2026-10-02
+// AVESSO polish layer 2026-10-03
 // Camada pequena e deliberadamente isolada: corrige arestas de UX sem misturar
 // regras de produto com o arquivo de configuração.
 
-const POLISH_VERSION='20261002-polish1';
+const POLISH_VERSION='20261003-polish2';
 const q=(selector,root=document)=>root.querySelector(selector);
 const qa=(selector,root=document)=>[...root.querySelectorAll(selector)];
 
@@ -119,12 +119,19 @@ function bindReducedMotion(){
   sync();
 }
 
+function loadAccountCenter(){
+  window.setTimeout(()=>{
+    import(`./account-center.js?v=${POLISH_VERSION}`).catch(error=>console.error('account center boot',error));
+  },0);
+}
+
 function boot(){
   ensurePolishStyles();
   ensureAuthTabIterationContract();
   bindAuthIntent();
   bindViewport();
   bindReducedMotion();
+  loadAccountCenter();
   document.documentElement.dataset.avessoPolish=POLISH_VERSION;
 }
 

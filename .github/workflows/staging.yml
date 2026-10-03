@@ -1,0 +1,31 @@
+name: Homologar AVESSO staging
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: staging-quality
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sintaxe
+        run: |
+          node --input-type=module --check < app.js
+          node --input-type=module --check < config.js
+          node --input-type=module --check < polish.js
+          node --input-type=module --check < account-center.js
+          node --check mobile.js
+          node --check mobile-ux.js
+          node --check desktop-ux.js
+          node --check sw.js
+      - name: Instalar Playwright
+        run: |
+          npm install --no-save @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Smoke desktop e mobile
+        run: npx playwright test

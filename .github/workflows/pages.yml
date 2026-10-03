@@ -22,11 +22,14 @@ jobs:
           node --input-type=module --check < app.js
           node --input-type=module --check < config.js
           node --input-type=module --check < polish.js
+          node --input-type=module --check < account-center.js
+          node --input-type=module --check < tests/smoke.spec.js
+          node --input-type=module --check < playwright.config.js
           node --check mobile.js
           node --check mobile-ux.js
           node --check desktop-ux.js
           node --check sw.js
-      - name: Conferir contratos críticos de UX
+      - name: Conferir contratos críticos de UX e privacidade
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -36,6 +39,7 @@ jobs:
           app = Path('app.js').read_text(encoding='utf-8')
           config = Path('config.js').read_text(encoding='utf-8')
           polish = Path('polish.js').read_text(encoding='utf-8')
+          account = Path('account-center.js').read_text(encoding='utf-8')
           sw = Path('sw.js').read_text(encoding='utf-8')
 
           ids = re.findall(r'\bid=["\']([^"\']+)["\']', html)
@@ -50,21 +54,26 @@ jobs:
           assert 'Element.prototype.forEach' not in config
           assert 'Element.prototype.forEach' not in polish
           assert 'AUTH_TAB_LEGACY_BRIDGE' in polish
+          assert "import(`./account-center.js" in polish
+          assert "account-export" in account
+          assert "account-delete" in account
+          assert "resetPasswordForEmail" in account
+          assert "signOut({scope:'others'})" in account
 
-          # Detecta somente o helper singular $(...).forEach. Não confunde $$()
-          # nem cadeias válidas como $(...).querySelectorAll(...).forEach.
           legacy = re.findall(r"(?<!\$)\$\([^)]*\)\.forEach", app)
           unexpected = [item for item in legacy if 'data-auth-mode' not in item]
           assert not unexpected, f'querySelector(...).forEach fora do auth: {unexpected[:3]}'
           assert len([item for item in legacy if 'data-auth-mode' in item]) == 2, \
               'O bridge de auth precisa ser revisto: quantidade de chamadas legadas mudou.'
 
-          assert "const SHELL_CACHE='avesso-shell-v25'" in sw
-          assert "'./polish.js'" in sw
-          assert "'./polish.css'" in sw
-          assert Path('polish.js').is_file() and Path('polish.css').is_file()
+          assert "const SHELL_CACHE='avesso-shell-v26'" in sw
+          for asset in ['./polish.js','./polish.css','./account-center.js','./account-center.css']:
+              assert repr(asset) in sw or f"'{asset}'" in sw, f'{asset} fora do shell offline'
 
-          print('Contratos críticos de UX e autenticação conferidos.')
+          for path in ['PRIVACIDADE.md','TERMOS.md','supabase/migrations/20261003030000_account_privacy_audit.sql']:
+              assert Path(path).is_file(), f'{path} ausente'
+
+          print('Contratos críticos de UX, autenticação e privacidade conferidos.')
           PY
       - name: Conferir fluxo comunitário e regras versionadas
         run: |
@@ -101,6 +110,12 @@ jobs:
           assert ".hero-art img{width:100%;height:auto;" in css
           print("Arte original íntegra, com caminho e proporção corretos.")
           PY
+      - name: Instalar navegador para smoke tests
+        run: |
+          npm install --no-save @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Executar smoke tests em desktop e mobile
+        run: npx playwright test
   deploy:
     if: github.event_name != 'pull_request'
     needs: verify
