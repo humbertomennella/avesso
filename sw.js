@@ -1,5 +1,5 @@
 const PUBLIC_IMAGE_CACHE='avesso-public-images-v2';
-const SHELL_CACHE='avesso-shell-v22';
+const SHELL_CACHE='avesso-shell-v23';
 const SHELL_ASSETS=[
   './',
   './index.html',
@@ -18,10 +18,24 @@ const SHELL_ASSETS=[
   './assets/avesso-app-icon.svg'
 ];
 
+async function fetchFresh(request){
+  try{
+    return await fetch(new Request(request,{cache:'no-store'}));
+  }catch{
+    return fetch(request);
+  }
+}
+
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   try{
     const cache=await caches.open(SHELL_CACHE);
-    await cache.addAll(SHELL_ASSETS);
+    await Promise.all(SHELL_ASSETS.map(async asset=>{
+      try{
+        const request=new Request(asset,{cache:'reload'});
+        const response=await fetch(request);
+        if(response?.ok)await cache.put(request,response.clone());
+      }catch{}
+    }));
   }catch{}
   await self.skipWaiting();
 })()));
@@ -116,7 +130,7 @@ self.addEventListener('fetch',event=>{
   event.respondWith((async()=>{
     const cache=await caches.open(SHELL_CACHE);
     try{
-      const response=await fetch(request);
+      const response=await fetchFresh(request);
       if(response?.ok)await cache.put(request,response.clone());
       return response;
     }catch{
