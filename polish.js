@@ -2,7 +2,7 @@
 // Camada pequena e deliberadamente isolada: corrige arestas de UX sem misturar
 // regras de produto com o arquivo de configuração.
 
-const POLISH_VERSION='20261003-polish2';
+const POLISH_VERSION='20261003-polish3';
 const q=(selector,root=document)=>root.querySelector(selector);
 const qa=(selector,root=document)=>[...root.querySelectorAll(selector)];
 
@@ -53,6 +53,16 @@ function focusAuth(mode){
     target?.focus({preventScroll:true});
     q('.auth-panel',dialog)?.scrollTo?.({top:0,behavior:'instant'});
   });
+}
+
+function ensureAuthLegalLinks(){
+  const panel=q('#auth-dialog .auth-panel');
+  if(!panel||q('.auth-legal-links',panel))return;
+  const legal=document.createElement('p');
+  legal.className='auth-legal-links';
+  legal.style.cssText='display:flex;flex-wrap:wrap;justify-content:center;gap:8px 14px;margin:12px 0 0;font:600 .52rem var(--mono);';
+  legal.innerHTML='<a href="PRIVACIDADE.md" target="_blank" rel="noopener" style="color:var(--cyan)">privacidade</a><a href="TERMOS.md" target="_blank" rel="noopener" style="color:var(--cyan)">termos de uso</a>';
+  panel.appendChild(legal);
 }
 
 function bindAuthIntent(){
@@ -128,6 +138,7 @@ function loadAccountCenter(){
 function boot(){
   ensurePolishStyles();
   ensureAuthTabIterationContract();
+  ensureAuthLegalLinks();
   bindAuthIntent();
   bindViewport();
   bindReducedMotion();
