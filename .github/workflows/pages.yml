@@ -23,6 +23,8 @@ jobs:
           node --input-type=module --check < config.js
           node --input-type=module --check < polish.js
           node --input-type=module --check < release-controller.js
+          node --input-type=module --check < story-media-compat.js
+          node --input-type=module --check < avesso-ui.js
           node --input-type=module --check < account-center.js
           node --input-type=module --check < tests/smoke.spec.js
           node --input-type=module --check < playwright.config.js
@@ -43,6 +45,9 @@ jobs:
           polish_css = Path('polish.css').read_text(encoding='utf-8')
           release = Path('release-controller.js').read_text(encoding='utf-8')
           release_css = Path('release-controller.css').read_text(encoding='utf-8')
+          media = Path('story-media-compat.js').read_text(encoding='utf-8')
+          ui = Path('avesso-ui.js').read_text(encoding='utf-8')
+          ui_css = Path('avesso-ui.css').read_text(encoding='utf-8')
           account = Path('account-center.js').read_text(encoding='utf-8')
           sw = Path('sw.js').read_text(encoding='utf-8')
 
@@ -56,6 +61,8 @@ jobs:
           assert 'id="auth-submit"' in html
           assert "import './polish.js';" in config
           assert "import './release-controller.js';" in config
+          assert "import './story-media-compat.js';" in config
+          assert "import './avesso-ui.js';" in config
           assert 'Element.prototype.forEach' not in config
           assert 'Element.prototype.forEach' not in polish
           assert 'AUTH_TAB_LEGACY_BRIDGE' in polish
@@ -71,8 +78,8 @@ jobs:
           assert len([item for item in legacy if 'data-auth-mode' in item]) == 2, \
               'O bridge de auth precisa ser revisto: quantidade de chamadas legadas mudou.'
 
-          assert "const SHELL_CACHE='avesso-shell-v28'" in sw
-          for asset in ['./polish.js','./polish.css','./release-controller.js','./release-controller.css','./account-center.js','./account-center.css']:
+          assert "const SHELL_CACHE='avesso-shell-v29'" in sw
+          for asset in ['./polish.js','./polish.css','./release-controller.js','./release-controller.css','./story-media-compat.js','./avesso-ui.js','./avesso-ui.css','./account-center.js','./account-center.css']:
               assert repr(asset) in sw or f"'{asset}'" in sw, f'{asset} fora do shell offline'
 
           assert 'DESKTOP LAYOUT CONTRACT 2026-10-03' in polish_css
@@ -82,7 +89,7 @@ jobs:
           assert '--avesso-profile-avatar-size' in polish_css
 
           assert '--avesso-desktop-nav:252px!important' in release_css
-          assert '#avesso-release-indicator' not in release_css  # seletor é por classe; evita acoplamento ao id
+          assert '#avesso-release-indicator' not in release_css
           assert '.avesso-release-indicator' in release_css
           assert "UPDATE_CHECK_MS=60_000" in release
           assert "AUTO_RESTART_SECONDS=5" in release
@@ -91,10 +98,19 @@ jobs:
           assert 'location.reload()' in release
           assert 'navigator.vibrate' in release
 
+          assert '__avessoStoryPlaybackCompat=true' in media
+          assert "response.arrayBuffer()" in media
+          assert "video.preload='auto'" in media
+          assert "UI_VERSION='20261003-ui1'" in ui
+          assert '--avesso-font-pixel' in ui_css
+          assert 'Press Start 2P' in ui_css
+          assert '--avesso-desktop-nav:264px!important' in ui_css
+          assert 'width:58px!important;height:52px!important' in ui_css
+
           for path in ['PRIVACIDADE.md','TERMOS.md','supabase/migrations/20261003030000_account_privacy_audit.sql']:
               assert Path(path).is_file(), f'{path} ausente'
 
-          print('Contratos críticos de UX, autenticação, desktop, atualização e privacidade conferidos.')
+          print('Contratos críticos de UX, autenticação, desktop, vídeo, atualização e privacidade conferidos.')
           PY
       - name: Conferir fluxo comunitário e regras versionadas
         run: |
