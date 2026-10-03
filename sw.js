@@ -1,5 +1,5 @@
 const PUBLIC_IMAGE_CACHE='avesso-public-images-v2';
-const SHELL_CACHE='avesso-shell-v23';
+const SHELL_CACHE='avesso-shell-v24';
 const SHELL_ASSETS=[
   './',
   './index.html',
