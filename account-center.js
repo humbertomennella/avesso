@@ -1,9 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 
-const VERSION='20261003-account-center1';
+const VERSION='20261003-account-center2';
 const supabase=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 const q=(selector,root=document)=>root.querySelector(selector);
+let recoveryEventsBound=false;
 
 function ensureStyles(){
   if(q('link[data-avesso-account-center]'))return;
@@ -12,19 +13,6 @@ function ensureStyles(){
   link.href=new URL(`account-center.css?v=${VERSION}`,import.meta.url).href;
   link.dataset.avessoAccountCenter=VERSION;
   document.head.appendChild(link);
-}
-
-function flash(message,kind='info'){
-  const toast=q('#toast');
-  if(toast){
-    toast.textContent=message;
-    toast.dataset.kind=kind;
-    toast.classList.add('show');
-    clearTimeout(flash._timer);
-    flash._timer=setTimeout(()=>toast.classList.remove('show'),3200);
-    return;
-  }
-  console[kind==='error'?'error':'log'](message);
 }
 
 function downloadJson(payload){
@@ -105,6 +93,9 @@ function bindPasswordRecovery(){
       if(message)message.textContent=error?'Não foi possível enviar o link de recuperação.':'Se esse e-mail existir, o link de recuperação foi enviado.';
     });
   }
+
+  if(recoveryEventsBound)return;
+  recoveryEventsBound=true;
 
   supabase.auth.onAuthStateChange((event)=>{
     if(event==='PASSWORD_RECOVERY'){
