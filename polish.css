@@ -265,3 +265,216 @@ html.avesso-short-viewport #auth-dialog .auth-intro-copy p{
     scroll-behavior:auto!important;
   }
 }
+
+/* --------------------------------------------------------------------------
+   DESKTOP LAYOUT CONTRACT 2026-10-03
+   Corrige a hierarquia do app em telas grandes: laterais estáveis, feed com
+   largura de leitura previsível, perfil consistente e controles legíveis.
+   -------------------------------------------------------------------------- */
+@media (min-width:821px){
+  body{
+    --avesso-desktop-shell-max:1500px;
+    --avesso-desktop-nav:220px;
+    --avesso-desktop-aside:280px;
+    --avesso-desktop-gap:20px;
+    --avesso-profile-avatar-size:180px;
+  }
+
+  /* A prateleira de conversas recentes era redundante com a janela realmente
+     minimizada do chat e permanecia na tela mesmo sem chat minimizado. */
+  .desktop-chat-shelf{display:none!important}
+
+  /* Feed/home: três trilhos previsíveis e coluna central com largura de leitura. */
+  body:not(.avesso-own-corner):not(.avesso-public-corner) #app-view.app-shell{
+    width:min(var(--avesso-desktop-shell-max),calc(100vw - 24px))!important;
+    max-width:var(--avesso-desktop-shell-max)!important;
+    grid-template-columns:var(--avesso-desktop-nav) minmax(0,860px) var(--avesso-desktop-aside)!important;
+    justify-content:center!important;
+    align-items:start!important;
+    column-gap:var(--avesso-desktop-gap)!important;
+    row-gap:0!important;
+    padding:18px 12px 42px!important;
+  }
+  body:not(.avesso-own-corner):not(.avesso-public-corner) .feed-column{
+    grid-column:2!important;
+    width:100%!important;
+    max-width:860px!important;
+    min-width:0!important;
+    justify-self:center!important;
+  }
+  body:not(.avesso-own-corner):not(.avesso-public-corner) .feed-header,
+  body:not(.avesso-own-corner):not(.avesso-public-corner) .stories-zone,
+  body:not(.avesso-own-corner):not(.avesso-public-corner) .composer,
+  body:not(.avesso-own-corner):not(.avesso-public-corner) .feed-list,
+  body:not(.avesso-own-corner):not(.avesso-public-corner) .desktop-command-bar{
+    width:100%!important;
+    max-width:100%!important;
+  }
+
+  /* Laterais independentes do scroll do documento. Cada uma rola internamente
+     apenas quando seu próprio conteúdo ultrapassa a altura disponível. */
+  #app-view.app-shell>.app-nav{
+    position:fixed!important;
+    top:18px!important;
+    left:max(12px,calc((100vw - var(--avesso-desktop-shell-max))/2 + 12px))!important;
+    width:var(--avesso-desktop-nav)!important;
+    height:calc(100dvh - 36px)!important;
+    max-height:calc(100dvh - 36px)!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+    scrollbar-width:thin;
+    z-index:70!important;
+  }
+  body.desktop-nav-collapsed #app-view.app-shell>.app-nav{
+    width:92px!important;
+  }
+  body:not(.avesso-own-corner):not(.avesso-public-corner) #app-view.app-shell>.app-aside{
+    position:fixed!important;
+    top:18px!important;
+    right:max(12px,calc((100vw - var(--avesso-desktop-shell-max))/2 + 12px))!important;
+    width:var(--avesso-desktop-aside)!important;
+    height:calc(100dvh - 36px)!important;
+    max-height:calc(100dvh - 36px)!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+    scrollbar-width:thin;
+    z-index:60!important;
+  }
+
+  /* Perfil próprio e perfil público usam o mesmo trilho lateral e a mesma
+     escala de avatar. O dono do perfil não deve mudar a geometria da página. */
+  body.avesso-own-corner #app-view.app-shell,
+  body.avesso-public-corner #app-view.app-shell,
+  body.avesso-own-corner.desktop-nav-collapsed #app-view.app-shell,
+  body.avesso-public-corner.desktop-nav-collapsed #app-view.app-shell{
+    width:min(var(--avesso-desktop-shell-max),calc(100vw - 24px))!important;
+    max-width:var(--avesso-desktop-shell-max)!important;
+    grid-template-columns:var(--avesso-desktop-nav) minmax(0,1fr)!important;
+    justify-content:center!important;
+    align-items:start!important;
+    column-gap:var(--avesso-desktop-gap)!important;
+    padding:18px 12px 42px!important;
+  }
+  body.avesso-own-corner.desktop-nav-collapsed #app-view.app-shell,
+  body.avesso-public-corner.desktop-nav-collapsed #app-view.app-shell{
+    grid-template-columns:92px minmax(0,1fr)!important;
+  }
+  body.avesso-own-corner .feed-column,
+  body.avesso-public-corner .feed-column{
+    grid-column:2!important;
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+  }
+  .desktop-profile-enhanced .profile-control-hero,
+  body.avesso-public-corner .public-profile>header{
+    grid-template-columns:calc(var(--avesso-profile-avatar-size) + 10px) minmax(0,1fr)!important;
+    gap:28px!important;
+  }
+  .desktop-profile-enhanced .profile-avatar-large,
+  body.avesso-public-corner .public-profile-avatar{
+    width:var(--avesso-profile-avatar-size)!important;
+    height:var(--avesso-profile-avatar-size)!important;
+    min-width:var(--avesso-profile-avatar-size)!important;
+    min-height:var(--avesso-profile-avatar-size)!important;
+    flex:0 0 var(--avesso-profile-avatar-size)!important;
+  }
+  .desktop-profile-enhanced .profile-avatar-large img,
+  body.avesso-public-corner .public-profile-avatar img{
+    width:100%!important;
+    height:100%!important;
+    object-fit:cover!important;
+  }
+
+  /* Reações de Story: antes estavam em .44rem e truncadas. */
+  .story-view-card .story-reactions{
+    gap:7px!important;
+    padding:11px 10px!important;
+    align-items:stretch!important;
+  }
+  .story-view-card .story-reaction{
+    min-width:0!important;
+    min-height:52px!important;
+    padding:8px 5px!important;
+    display:flex!important;
+    flex:1 1 0!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:3px!important;
+    overflow:visible!important;
+    text-overflow:clip!important;
+    white-space:normal!important;
+    text-align:center!important;
+    font-size:.60rem!important;
+    line-height:1.18!important;
+  }
+  .story-view-card .story-reaction span{
+    display:block!important;
+    margin:0!important;
+    font-size:1.05rem!important;
+    line-height:1!important;
+  }
+
+  /* O chat minimizado real continua no canto. A barra de recentes acima foi
+     removida; fechar o chat não deixa um elemento fantasma persistente. */
+  .dm-floating-window.minimized,
+  .dm-floating-window.docked-minimized{
+    right:18px!important;
+    bottom:18px!important;
+    width:min(340px,calc(100vw - 36px))!important;
+    height:58px!important;
+    max-height:58px!important;
+  }
+}
+
+@media (min-width:821px) and (max-width:1280px){
+  body{
+    --avesso-desktop-nav:190px;
+    --avesso-desktop-aside:250px;
+    --avesso-desktop-gap:16px;
+    --avesso-profile-avatar-size:160px;
+  }
+  body:not(.avesso-own-corner):not(.avesso-public-corner) #app-view.app-shell{
+    grid-template-columns:var(--avesso-desktop-nav) minmax(0,1fr) var(--avesso-desktop-aside)!important;
+  }
+  body:not(.avesso-own-corner):not(.avesso-public-corner) .feed-column{
+    max-width:820px!important;
+  }
+  #app-view.app-shell>.app-nav{left:12px!important}
+  body:not(.avesso-own-corner):not(.avesso-public-corner) #app-view.app-shell>.app-aside{right:12px!important}
+}
+
+@media (min-width:821px) and (max-width:1080px){
+  body{
+    --avesso-desktop-nav:180px;
+    --avesso-desktop-gap:16px;
+    --avesso-profile-avatar-size:150px;
+  }
+  body:not(.avesso-own-corner):not(.avesso-public-corner) #app-view.app-shell{
+    grid-template-columns:var(--avesso-desktop-nav) minmax(0,1fr)!important;
+  }
+  body:not(.avesso-own-corner):not(.avesso-public-corner) #app-view.app-shell>.app-aside{
+    display:none!important;
+  }
+  body:not(.avesso-own-corner):not(.avesso-public-corner) .feed-column{
+    grid-column:2!important;
+    max-width:820px!important;
+  }
+}
+
+@media (min-width:821px) and (max-width:920px){
+  body{
+    --avesso-desktop-nav:164px;
+    --avesso-desktop-gap:12px;
+    --avesso-profile-avatar-size:140px;
+  }
+  #app-view.app-shell{
+    padding-inline:10px!important;
+  }
+  #app-view.app-shell>.app-nav{
+    left:10px!important;
+  }
+}
