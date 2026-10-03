@@ -1,4 +1,4 @@
-const UI_VERSION='20261003-ui1';
+const UI_VERSION='20261003-ui2';
 if(!document.querySelector('link[data-avesso-ui]')){
   const link=document.createElement('link');
   link.rel='stylesheet';
