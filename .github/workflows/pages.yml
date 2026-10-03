@@ -78,7 +78,7 @@ jobs:
           assert len([item for item in legacy if 'data-auth-mode' in item]) == 2, \
               'O bridge de auth precisa ser revisto: quantidade de chamadas legadas mudou.'
 
-          assert "const SHELL_CACHE='avesso-shell-v29'" in sw
+          assert "const SHELL_CACHE='avesso-shell-v30'" in sw
           for asset in ['./polish.js','./polish.css','./release-controller.js','./release-controller.css','./story-media-compat.js','./avesso-ui.js','./avesso-ui.css','./account-center.js','./account-center.css']:
               assert repr(asset) in sw or f"'{asset}'" in sw, f'{asset} fora do shell offline'
 
@@ -105,7 +105,8 @@ jobs:
           assert '--avesso-font-pixel' in ui_css
           assert 'Press Start 2P' in ui_css
           assert '--avesso-desktop-nav:264px!important' in ui_css
-          assert 'width:58px!important;height:52px!important' in ui_css
+          assert '--avesso-desktop-nav:104px!important' in ui_css
+          assert 'width:64px!important;height:54px!important' in ui_css
 
           for path in ['PRIVACIDADE.md','TERMOS.md','supabase/migrations/20261003030000_account_privacy_audit.sql']:
               assert Path(path).is_file(), f'{path} ausente'
