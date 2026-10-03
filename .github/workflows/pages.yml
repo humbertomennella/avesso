@@ -78,7 +78,7 @@ jobs:
           assert len([item for item in legacy if 'data-auth-mode' in item]) == 2, \
               'O bridge de auth precisa ser revisto: quantidade de chamadas legadas mudou.'
 
-          assert "const SHELL_CACHE='avesso-shell-v30'" in sw
+          assert "const SHELL_CACHE='avesso-shell-v31'" in sw
           for asset in ['./polish.js','./polish.css','./release-controller.js','./release-controller.css','./story-media-compat.js','./avesso-ui.js','./avesso-ui.css','./account-center.js','./account-center.css']:
               assert repr(asset) in sw or f"'{asset}'" in sw, f'{asset} fora do shell offline'
 
@@ -101,12 +101,15 @@ jobs:
           assert '__avessoStoryPlaybackCompat=true' in media
           assert "response.arrayBuffer()" in media
           assert "video.preload='auto'" in media
-          assert "UI_VERSION='20261003-ui1'" in ui
+          assert "UI_VERSION='20261003-ui2'" in ui
           assert '--avesso-font-pixel' in ui_css
           assert 'Press Start 2P' in ui_css
           assert '--avesso-desktop-nav:264px!important' in ui_css
-          assert '--avesso-desktop-nav:104px!important' in ui_css
-          assert 'width:64px!important;height:54px!important' in ui_css
+          assert '--avesso-desktop-nav:76px!important' in ui_css
+          assert 'width:50px!important' in ui_css
+          assert 'height:44px!important' in ui_css
+          assert 'navigation rail real' in ui_css
+          assert '#online-friends-dock' in ui_css
 
           for path in ['PRIVACIDADE.md','TERMOS.md','supabase/migrations/20261003030000_account_privacy_audit.sql']:
               assert Path(path).is_file(), f'{path} ausente'
