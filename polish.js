@@ -2,7 +2,7 @@
 // Camada pequena e deliberadamente isolada: corrige arestas de UX sem misturar
 // regras de produto com o arquivo de configuração.
 
-const POLISH_VERSION='20261003-polish5';
+const POLISH_VERSION='20261003-polish6';
 const q=(selector,root=document)=>root.querySelector(selector);
 const qa=(selector,root=document)=>[...root.querySelectorAll(selector)];
 
@@ -33,35 +33,6 @@ function ensureAuthTabIterationContract(){
       return qa('[data-auth-mode]').forEach(callback,thisArg);
     }
   });
-}
-
-/*
- * STORY_RECORDED_VIDEO_MIME_BRIDGE
- * Alguns MediaRecorder móveis devolvem MIME com parâmetros de codec, por
- * exemplo video/webm;codecs=vp8,opus. O fluxo de Stories e o bucket aceitam
- * video/webm / video/mp4 / video/quicktime. Normalizamos SOMENTE os arquivos
- * gerados pela câmera interna do AVESSO para não interferir em uploads comuns.
- */
-function ensureStoryRecordedVideoMimeContract(){
-  const NativeFile=window.File;
-  if(typeof NativeFile!=='function'||window.__avessoStoryFileMimeBridge)return;
-
-  function AvessoFile(bits,name,options={}){
-    const fileName=String(name||'');
-    const rawType=String(options?.type||'');
-    const isRecordedStory=/^avesso-story-\d+\.(?:webm|mp4)$/i.test(fileName);
-    const normalizedType=isRecordedStory&&/^video\//i.test(rawType)
-      ?rawType.split(';',1)[0].trim().toLowerCase()
-      :rawType;
-    const nextOptions=normalizedType!==rawType?{...options,type:normalizedType}:options;
-    return new NativeFile(bits,name,nextOptions);
-  }
-
-  AvessoFile.prototype=NativeFile.prototype;
-  try{Object.setPrototypeOf(AvessoFile,NativeFile);}catch{}
-  try{Object.defineProperty(AvessoFile,'name',{value:'File'});}catch{}
-  window.File=AvessoFile;
-  window.__avessoStoryFileMimeBridge=true;
 }
 
 function bindStoryDialogFeedback(){
@@ -186,7 +157,6 @@ function loadAccountCenter(){
 function boot(){
   ensurePolishStyles();
   ensureAuthTabIterationContract();
-  ensureStoryRecordedVideoMimeContract();
   ensureAuthLegalLinks();
   bindStoryDialogFeedback();
   bindAuthIntent();
