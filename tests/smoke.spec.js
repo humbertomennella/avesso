@@ -99,7 +99,7 @@ test('desktop mantém laterais fixas, feed controlado e Story legível',async({p
 
 test('desktop largo preserva rótulos com sidebar ampliada',async({page})=>{
   await page.setViewportSize({width:1760,height:833});
-  await page.waitForFunction(()=>document.documentElement.dataset.avessoUi==='20261003-ui1');
+  await page.waitForFunction(()=>document.documentElement.dataset.avessoUi==='20261003-ui2');
   await page.evaluate(()=>{
     document.querySelector('#marketing-view')?.classList.add('hidden');
     document.querySelector('.site-header')?.classList.add('hidden');
@@ -118,9 +118,9 @@ test('desktop largo preserva rótulos com sidebar ampliada',async({page})=>{
   expect(metrics.codeFont).toMatch(/Press Start 2P/i);
 });
 
-test('sidebar recolhida vira dock centralizada de ícones',async({page})=>{
+test('sidebar recolhida vira navigation rail de ícones sem resíduos do modo expandido',async({page})=>{
   await page.setViewportSize({width:1760,height:833});
-  await page.waitForFunction(()=>document.documentElement.dataset.avessoUi==='20261003-ui1');
+  await page.waitForFunction(()=>document.documentElement.dataset.avessoUi==='20261003-ui2');
   await page.evaluate(()=>{
     document.querySelector('#marketing-view')?.classList.add('hidden');
     document.querySelector('.site-header')?.classList.add('hidden');
@@ -131,19 +131,28 @@ test('sidebar recolhida vira dock centralizada de ícones',async({page})=>{
     const nav=document.querySelector('.app-nav');
     const button=document.querySelector('.app-nav nav button');
     const icon=button?.querySelector('.desktop-nav-icon');
+    const label=button?.querySelector('.desktop-nav-label');
+    const online=document.querySelector('#online-friends-dock');
+    const logout=document.querySelector('.nav-logout');
     return {
       navWidth:parseFloat(getComputedStyle(nav).width),
       buttonWidth:parseFloat(getComputedStyle(button).width),
       buttonHeight:parseFloat(getComputedStyle(button).height),
       justify:getComputedStyle(button).justifyItems,
-      iconSize:icon?parseFloat(getComputedStyle(icon).fontSize):0
+      iconSize:icon?parseFloat(getComputedStyle(icon).fontSize):0,
+      labelDisplay:label?getComputedStyle(label).display:'none',
+      onlineDisplay:online?getComputedStyle(online).display:'none',
+      logoutFont:logout?parseFloat(getComputedStyle(logout).fontSize):0
     };
   });
-  expect(metrics.navWidth).toBe(92);
-  expect(metrics.buttonWidth).toBe(58);
-  expect(metrics.buttonHeight).toBe(52);
+  expect(metrics.navWidth).toBe(76);
+  expect(metrics.buttonWidth).toBe(50);
+  expect(metrics.buttonHeight).toBe(44);
   expect(metrics.justify).toBe('center');
-  expect(metrics.iconSize).toBeGreaterThanOrEqual(18);
+  expect(metrics.iconSize).toBeGreaterThanOrEqual(16);
+  expect(metrics.labelDisplay).toBe('none');
+  expect(metrics.onlineDisplay).toBe('none');
+  expect(metrics.logoutFont).toBe(0);
 });
 
 test('nova versão avisa e aguarda trabalho local antes do reinício automático',async({page})=>{
