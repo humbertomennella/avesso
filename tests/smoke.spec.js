@@ -53,3 +53,53 @@ test('vídeo gravado no Story perde parâmetros de codec antes do upload',async(
   expect(result.recordedType).toBe('video/webm');
   expect(result.recordedIsFile).toBe(true);
 });
+
+test('desktop mantém laterais fixas, feed controlado e Story legível',async({page})=>{
+  await page.setViewportSize({width:1760,height:833});
+  await page.waitForFunction(()=>document.documentElement.dataset.avessoPolish==='20261003-polish8');
+  const metrics=await page.evaluate(()=>{
+    document.querySelector('#marketing-view')?.classList.add('hidden');
+    document.querySelector('.site-header')?.classList.add('hidden');
+    const app=document.querySelector('#app-view');
+    app?.classList.remove('hidden');
+
+    const shelf=document.createElement('div');
+    shelf.className='desktop-chat-shelf';
+    document.body.appendChild(shelf);
+
+    const story=document.createElement('div');
+    story.className='story-view-card';
+    const reactions=document.createElement('div');
+    reactions.className='story-reactions';
+    const reaction=document.createElement('button');
+    reaction.className='story-reaction';
+    reaction.innerHTML='<span>♥</span>curti isso';
+    reactions.appendChild(reaction);
+    story.appendChild(reactions);
+    document.body.appendChild(story);
+
+    const nav=getComputedStyle(document.querySelector('.app-nav'));
+    const aside=getComputedStyle(document.querySelector('.app-aside'));
+    const feed=getComputedStyle(document.querySelector('.feed-column'));
+    const shelfStyle=getComputedStyle(shelf);
+    const reactionStyle=getComputedStyle(reaction);
+    const iconStyle=getComputedStyle(reaction.querySelector('span'));
+    return {
+      navPosition:nav.position,
+      asidePosition:aside.position,
+      feedMaxWidth:feed.maxWidth,
+      shelfDisplay:shelfStyle.display,
+      reactionFont:parseFloat(reactionStyle.fontSize),
+      reactionHeight:parseFloat(reactionStyle.minHeight),
+      reactionIconFont:parseFloat(iconStyle.fontSize)
+    };
+  });
+
+  expect(metrics.navPosition).toBe('fixed');
+  expect(metrics.asidePosition).toBe('fixed');
+  expect(metrics.feedMaxWidth).toBe('860px');
+  expect(metrics.shelfDisplay).toBe('none');
+  expect(metrics.reactionFont).toBeGreaterThanOrEqual(11);
+  expect(metrics.reactionHeight).toBeGreaterThanOrEqual(56);
+  expect(metrics.reactionIconFont).toBeGreaterThanOrEqual(18);
+});
