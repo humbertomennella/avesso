@@ -103,3 +103,33 @@ test('desktop mantém laterais fixas, feed controlado e Story legível',async({p
   expect(metrics.reactionHeight).toBeGreaterThanOrEqual(56);
   expect(metrics.reactionIconFont).toBeGreaterThanOrEqual(18);
 });
+
+test('desktop largo preserva rótulos com sidebar ampliada',async({page})=>{
+  await page.setViewportSize({width:1760,height:833});
+  await page.waitForFunction(()=>document.documentElement.dataset.avessoReleaseController==='20261003-release1');
+  await page.evaluate(()=>{
+    document.querySelector('#marketing-view')?.classList.add('hidden');
+    document.querySelector('.site-header')?.classList.add('hidden');
+    document.querySelector('#app-view')?.classList.remove('hidden');
+  });
+  await page.waitForFunction(()=>parseFloat(getComputedStyle(document.querySelector('.app-nav')).width)>=248);
+  const metrics=await page.evaluate(()=>({
+    width:parseFloat(getComputedStyle(document.querySelector('.app-nav')).width),
+    cssVar:getComputedStyle(document.body).getPropertyValue('--avesso-desktop-nav').trim()
+  }));
+  expect(metrics.width).toBeGreaterThanOrEqual(248);
+  expect(metrics.cssVar).toBe('252px');
+});
+
+test('nova versão avisa e aguarda trabalho local antes do reinício automático',async({page})=>{
+  await page.waitForFunction(()=>document.documentElement.dataset.avessoReleaseController==='20261003-release1');
+  await page.locator('.site-header [data-open-auth]').click();
+  await page.locator('#auth-form input[name="email"]').fill('humano@avesso.local');
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('avesso:update-ready')));
+
+  const indicator=page.locator('#avesso-release-indicator');
+  await expect(indicator).toBeVisible();
+  await expect(page.locator('[data-release-status]')).toContainText(/aguardando você terminar/i);
+  await expect(page.locator('body')).toHaveClass(/avesso-release-pending/);
+  await expect(page.locator('#app-update-banner')).toBeHidden();
+});
