@@ -14,6 +14,7 @@ const SHELL_ASSETS=[
   './desktop-ux.js',
   './mobile.js',
   './mobile-ux.js',
+  './runtime-hotfix.js',
   './polish.js',
   './account-center.js',
   './config.js',

@@ -1,3 +1,4 @@
+import './runtime-hotfix.js';
 import './polish.js';
 
 export const SUPABASE_URL = 'https://uibhdikfgjnzljhuflxx.supabase.co';

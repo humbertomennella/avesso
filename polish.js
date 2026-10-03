@@ -2,7 +2,7 @@
 // Camada pequena e deliberadamente isolada: corrige arestas de UX sem misturar
 // regras de produto com o arquivo de configuração.
 
-const POLISH_VERSION='20261003-polish3';
+const POLISH_VERSION='20261003-polish6';
 const q=(selector,root=document)=>root.querySelector(selector);
 const qa=(selector,root=document)=>[...root.querySelectorAll(selector)];
 
@@ -33,6 +33,25 @@ function ensureAuthTabIterationContract(){
       return qa('[data-auth-mode]').forEach(callback,thisArg);
     }
   });
+}
+
+function bindStoryDialogFeedback(){
+  const dialog=q('#story-create-dialog');
+  const message=q('#story-create-message');
+  const toast=q('#toast');
+  const publish=q('#story-publish');
+  if(!dialog||!message||!toast)return;
+
+  const mirrorToast=()=>{
+    const open=dialog.open||dialog.hasAttribute('open');
+    const text=String(toast.textContent||'').trim();
+    if(open&&text)message.textContent=text;
+  };
+
+  const observer=new MutationObserver(mirrorToast);
+  observer.observe(toast,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class']});
+  publish?.addEventListener('click',()=>{message.textContent='';},true);
+  dialog.addEventListener('close',()=>{message.textContent='';});
 }
 
 function desiredAuthMode(trigger){
@@ -139,6 +158,7 @@ function boot(){
   ensurePolishStyles();
   ensureAuthTabIterationContract();
   ensureAuthLegalLinks();
+  bindStoryDialogFeedback();
   bindAuthIntent();
   bindViewport();
   bindReducedMotion();
