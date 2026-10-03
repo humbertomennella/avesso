@@ -1,10 +1,35 @@
 import { test, expect } from '@playwright/test';
 
-test.beforeEach(async({page})=>{
+async function refinementsReady(page,{timeout=12000}={}){
+  try{
+    await page.waitForFunction(()=>
+      document.documentElement.dataset.avessoRefine==='20261003-v2'&&
+      document.documentElement.dataset.avessoStoryVideoFix==='20261003-v2',
+      null,
+      {timeout}
+    );
+    return true;
+  }catch{
+    return false;
+  }
+}
+
+async function bootRefinements(page){
   await page.goto('/',{waitUntil:'domcontentloaded'});
   await page.waitForSelector('[data-open-auth]',{state:'visible'});
-  await page.waitForFunction(()=>document.documentElement.dataset.avessoRefine==='20261003-v2');
-  await page.waitForFunction(()=>document.documentElement.dataset.avessoStoryVideoFix==='20261003-v2');
+  if(await refinementsReady(page))return;
+
+  // O WebKit do CI às vezes mantém uma navegação anterior viva enquanto os
+  // módulos dinâmicos chegam. Uma recarga única valida o produto sem converter
+  // uma corrida do runner em falso negativo permanente.
+  await page.reload({waitUntil:'domcontentloaded'});
+  await page.waitForSelector('[data-open-auth]',{state:'visible'});
+  const ready=await refinementsReady(page,{timeout:18000});
+  expect(ready).toBe(true);
+}
+
+test.beforeEach(async({page})=>{
+  await bootRefinements(page);
 });
 
 test('identidade tipográfica combina display moderno, terminal e pixel',async({page})=>{
