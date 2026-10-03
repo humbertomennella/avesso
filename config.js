@@ -1,4 +1,6 @@
 import './runtime-hotfix.js';
+import './story-media-compat.js';
+import './avesso-ui.js';
 import './polish.js';
 import './release-controller.js';
 
