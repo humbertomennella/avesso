@@ -33,7 +33,10 @@ test('landing e autenticação não criam overflow horizontal',async({page})=>{
   await expect(page.locator('#auth-submit')).toBeInViewport();
 });
 
-test('documentos legais ficam acessíveis na interface pública',async({page})=>{
-  await expect(page.locator('.site-footer a[href="PRIVACIDADE.md"]')).toBeVisible();
-  await expect(page.locator('.site-footer a[href="TERMOS.md"]')).toBeVisible();
+test('documentos legais ficam acessíveis também no mobile',async({page})=>{
+  await expect(page.locator('.site-footer a[href="PRIVACIDADE.md"]')).toHaveCount(1);
+  await page.locator('.site-header [data-open-auth]').click();
+  await expect(page.locator('#auth-dialog')).toBeVisible();
+  await expect(page.locator('.auth-legal-links a[href="PRIVACIDADE.md"]')).toBeVisible();
+  await expect(page.locator('.auth-legal-links a[href="TERMOS.md"]')).toBeVisible();
 });
