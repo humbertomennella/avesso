@@ -42,7 +42,7 @@ test('documentos legais ficam acessíveis também no mobile',async({page})=>{
 });
 
 test('vídeo gravado no Story perde parâmetros de codec antes do upload',async({page})=>{
-  await page.waitForFunction(()=>globalThis.__avessoFileMimeNormalized===true);
+  await page.waitForFunction(()=>globalThis.__avessoStoryRecordedVideoMimeFix===true);
   const result=await page.evaluate(()=>{
     const recorded=new File([new Uint8Array([1,2,3])],'avesso-story-123.webm',{type:'video/webm;codecs=vp8,opus'});
     return {
