@@ -40,3 +40,18 @@ test('documentos legais ficam acessíveis também no mobile',async({page})=>{
   await expect(page.locator('.auth-legal-links a[href="PRIVACIDADE.md"]')).toBeVisible();
   await expect(page.locator('.auth-legal-links a[href="TERMOS.md"]')).toBeVisible();
 });
+
+test('vídeo gravado no Story perde parâmetros de codec antes do upload',async({page})=>{
+  const result=await page.evaluate(()=>{
+    const recorded=new File([new Uint8Array([1,2,3])],'avesso-story-123.webm',{type:'video/webm;codecs=vp8,opus'});
+    const regular=new File([new Uint8Array([1])],'video-comum.webm',{type:'video/webm;codecs=vp8,opus'});
+    return {
+      recordedType:recorded.type,
+      recordedIsFile:recorded instanceof File,
+      regularType:regular.type
+    };
+  });
+  expect(result.recordedType).toBe('video/webm');
+  expect(result.recordedIsFile).toBe(true);
+  expect(result.regularType).toBe('video/webm;codecs=vp8,opus');
+});
