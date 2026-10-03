@@ -39,6 +39,7 @@ jobs:
           app = Path('app.js').read_text(encoding='utf-8')
           config = Path('config.js').read_text(encoding='utf-8')
           polish = Path('polish.js').read_text(encoding='utf-8')
+          polish_css = Path('polish.css').read_text(encoding='utf-8')
           account = Path('account-center.js').read_text(encoding='utf-8')
           sw = Path('sw.js').read_text(encoding='utf-8')
 
@@ -66,14 +67,20 @@ jobs:
           assert len([item for item in legacy if 'data-auth-mode' in item]) == 2, \
               'O bridge de auth precisa ser revisto: quantidade de chamadas legadas mudou.'
 
-          assert "const SHELL_CACHE='avesso-shell-v26'" in sw
+          assert "const SHELL_CACHE='avesso-shell-v27'" in sw
           for asset in ['./polish.js','./polish.css','./account-center.js','./account-center.css']:
               assert repr(asset) in sw or f"'{asset}'" in sw, f'{asset} fora do shell offline'
+
+          assert 'DESKTOP LAYOUT CONTRACT 2026-10-03' in polish_css
+          assert '.desktop-chat-shelf{display:none!important}' in polish_css
+          assert 'position:fixed!important' in polish_css
+          assert 'max-width:860px!important' in polish_css
+          assert '--avesso-profile-avatar-size' in polish_css
 
           for path in ['PRIVACIDADE.md','TERMOS.md','supabase/migrations/20261003030000_account_privacy_audit.sql']:
               assert Path(path).is_file(), f'{path} ausente'
 
-          print('Contratos críticos de UX, autenticação e privacidade conferidos.')
+          print('Contratos críticos de UX, autenticação, desktop e privacidade conferidos.')
           PY
       - name: Conferir fluxo comunitário e regras versionadas
         run: |
