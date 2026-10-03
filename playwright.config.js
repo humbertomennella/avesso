@@ -20,6 +20,9 @@ export default defineConfig({
   },
   projects:[
     {name:'desktop-chromium',use:{...devices['Desktop Chrome'],viewport:{width:1366,height:768}}},
+    {name:'desktop-firefox',use:{...devices['Desktop Firefox'],viewport:{width:1366,height:768}}},
+    {name:'desktop-webkit',use:{...devices['Desktop Safari'],viewport:{width:1366,height:768}}},
     {name:'mobile-chromium',use:{...devices['Pixel 7'],viewport:{width:412,height:915}}},
+    {name:'mobile-webkit',use:{...devices['iPhone 13'],viewport:{width:390,height:844}}},
   ],
 });

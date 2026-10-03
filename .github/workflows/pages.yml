@@ -110,11 +110,11 @@ jobs:
           assert ".hero-art img{width:100%;height:auto;" in css
           print("Arte original íntegra, com caminho e proporção corretos.")
           PY
-      - name: Instalar navegador para smoke tests
+      - name: Instalar navegadores para smoke tests
         run: |
           npm install --no-save @playwright/test@1.55.0
-          npx playwright install --with-deps chromium
-      - name: Executar smoke tests em desktop e mobile
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Executar smoke tests multi-navegador em desktop e mobile
         run: npx playwright test
   deploy:
     if: github.event_name != 'pull_request'

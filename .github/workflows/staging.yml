@@ -26,6 +26,6 @@ jobs:
       - name: Instalar Playwright
         run: |
           npm install --no-save @playwright/test@1.55.0
-          npx playwright install --with-deps chromium
-      - name: Smoke desktop e mobile
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Smoke multi-navegador desktop e mobile
         run: npx playwright test
