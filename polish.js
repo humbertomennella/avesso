@@ -2,7 +2,7 @@
 // Camada pequena e deliberadamente isolada: corrige arestas de UX sem misturar
 // regras de produto com o arquivo de configuração.
 
-const POLISH_VERSION='20261003-polish6';
+const POLISH_VERSION='20261003-polish7';
 const q=(selector,root=document)=>root.querySelector(selector);
 const qa=(selector,root=document)=>[...root.querySelectorAll(selector)];
 
