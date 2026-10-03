@@ -1,1 +1,167 @@
-/* placeholder */
+/* AVESSO release controller + desktop sidebar refinement 2026-10-03 */
+
+@media (min-width:821px){
+  /* A lateral anterior (220px) cortava rótulos como "amigos & cúmplices".
+     Mantemos a coluna compacta, mas com largura suficiente para leitura. */
+  body{
+    --avesso-desktop-nav:252px!important;
+  }
+  body.desktop-nav-collapsed{
+    --avesso-desktop-nav:92px!important;
+  }
+  #app-view.app-shell>.app-nav{
+    width:var(--avesso-desktop-nav)!important;
+  }
+  .app-nav .desktop-nav-label{
+    max-width:none!important;
+  }
+  .app-nav nav button{
+    padding-inline:11px!important;
+  }
+}
+
+@media (min-width:821px) and (max-width:1280px){
+  body{--avesso-desktop-nav:220px!important}
+  body.desktop-nav-collapsed{--avesso-desktop-nav:92px!important}
+}
+
+@media (min-width:821px) and (max-width:1080px){
+  body{--avesso-desktop-nav:204px!important}
+  body.desktop-nav-collapsed{--avesso-desktop-nav:88px!important}
+}
+
+@media (min-width:821px) and (max-width:920px){
+  body{--avesso-desktop-nav:190px!important}
+  body.desktop-nav-collapsed{--avesso-desktop-nav:84px!important}
+}
+
+/* A interface antiga exibia um aviso manual. Quando o controlador automático
+   está ativo, ele assume a entrega para não duplicar notificações. */
+body.avesso-release-pending #app-update-banner{
+  display:none!important;
+}
+
+.avesso-release-indicator{
+  position:fixed;
+  z-index:60050;
+  right:18px;
+  bottom:88px;
+  width:min(390px,calc(100vw - 28px));
+  min-height:68px;
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  padding:9px 10px;
+  border:1px solid #3d555a;
+  border-left:4px solid var(--acid,#d8ff3e);
+  border-radius:9px;
+  background:rgba(7,12,14,.97);
+  color:#edf2ef;
+  box-shadow:0 18px 48px #000c,0 0 0 1px #000;
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  opacity:0;
+  pointer-events:none;
+  transform:translateY(14px) scale(.985);
+  transition:opacity .16s ease,transform .16s ease;
+}
+.avesso-release-indicator.show{
+  opacity:1;
+  pointer-events:auto;
+  transform:none;
+}
+.avesso-release-icon{
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  border:1px solid var(--acid,#d8ff3e);
+  border-radius:7px;
+  background:#d8ff3e12;
+  color:var(--acid,#d8ff3e);
+  font:900 1.25rem/1 var(--mono,monospace);
+  animation:avessoReleasePulse 1.15s steps(2,end) infinite;
+}
+.avesso-release-copy{
+  min-width:0;
+}
+.avesso-release-copy b,
+.avesso-release-copy small{
+  display:block;
+}
+.avesso-release-copy b{
+  color:var(--cyan,#22d9ee);
+  font:800 .68rem/1.3 var(--mono,monospace);
+  letter-spacing:.035em;
+}
+.avesso-release-copy small{
+  margin-top:4px;
+  color:#9aa7a3;
+  font:650 .58rem/1.35 var(--mono,monospace);
+}
+.avesso-release-indicator button{
+  min-height:38px;
+  padding:0 10px;
+  border:1px solid #42565a;
+  border-radius:6px;
+  background:#101719;
+  color:#c8d1ce;
+  cursor:pointer;
+  white-space:nowrap;
+  font:750 .55rem var(--mono,monospace);
+}
+.avesso-release-indicator button:hover,
+.avesso-release-indicator button:focus-visible{
+  border-color:var(--acid,#d8ff3e);
+  color:var(--acid,#d8ff3e);
+}
+.avesso-release-indicator[data-mode="waiting"]{
+  border-left-color:var(--cyan,#22d9ee);
+}
+.avesso-release-indicator[data-mode="waiting"] .avesso-release-icon{
+  border-color:var(--cyan,#22d9ee);
+  color:var(--cyan,#22d9ee);
+  animation:none;
+}
+.avesso-release-indicator[data-mode="restarting"] .avesso-release-icon{
+  animation:avessoReleaseSpin .7s linear infinite;
+}
+
+html.avesso-system-restarting body{
+  cursor:progress!important;
+}
+
+@keyframes avessoReleasePulse{
+  50%{filter:brightness(1.6);box-shadow:0 0 18px #d8ff3e33}
+}
+@keyframes avessoReleaseSpin{
+  to{transform:rotate(360deg)}
+}
+
+@media (max-width:820px){
+  .avesso-release-indicator{
+    right:10px;
+    bottom:calc(82px + env(safe-area-inset-bottom));
+    width:calc(100vw - 20px);
+    grid-template-columns:38px minmax(0,1fr);
+    padding:9px;
+  }
+  .avesso-release-icon{
+    width:36px;
+    height:36px;
+  }
+  .avesso-release-indicator button{
+    grid-column:1/-1;
+    width:100%;
+    min-height:42px;
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .avesso-release-indicator,
+  .avesso-release-icon{
+    animation:none!important;
+    transition:none!important;
+  }
+}
