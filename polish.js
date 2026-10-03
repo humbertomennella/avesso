@@ -2,7 +2,7 @@
 // Camada pequena e deliberadamente isolada: corrige arestas de UX sem misturar
 // regras de produto com o arquivo de configuração.
 
-const POLISH_VERSION='20261003-polish6';
+const POLISH_VERSION='20261003-polish8';
 const q=(selector,root=document)=>root.querySelector(selector);
 const qa=(selector,root=document)=>[...root.querySelectorAll(selector)];
 
@@ -13,6 +13,17 @@ function ensurePolishStyles(){
   link.href=new URL(`polish.css?v=${POLISH_VERSION}`,import.meta.url).href;
   link.dataset.avessoPolish=POLISH_VERSION;
   document.head.appendChild(link);
+}
+
+function ensureDesktopReadabilityOverrides(){
+  if(q('style[data-avesso-desktop-readability]'))return;
+  const style=document.createElement('style');
+  style.dataset.avessoDesktopReadability=POLISH_VERSION;
+  style.textContent=`@media (min-width:821px){
+    .story-view-card .story-reaction{font-size:.72rem!important;min-height:56px!important;padding:9px 6px!important}
+    .story-view-card .story-reaction span{font-size:1.15rem!important}
+  }`;
+  document.head.appendChild(style);
 }
 
 /*
@@ -156,6 +167,7 @@ function loadAccountCenter(){
 
 function boot(){
   ensurePolishStyles();
+  ensureDesktopReadabilityOverrides();
   ensureAuthTabIterationContract();
   ensureAuthLegalLinks();
   bindStoryDialogFeedback();
