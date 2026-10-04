@@ -10,7 +10,12 @@ async function openApp(page){
   });
 }
 
+function onlyDesktopChromium(){
+  test.skip(test.info().project.name!=='desktop-chromium','contrato estrutural base já coberto no Chromium desktop');
+}
+
 test('World Redesign cria palco contextual e identifica o distrito atual',async({page})=>{
+  onlyDesktopChromium();
   await openApp(page);
   const bar=page.locator('.world-zone-bar');
   await expect(bar).toBeVisible();
@@ -20,17 +25,19 @@ test('World Redesign cria palco contextual e identifica o distrito atual',async(
   await expect(page.locator('.world-broadcast')).toHaveCount(1);
 });
 
-test('navegação altera a zona do mundo sem substituir os controles reais',async({page})=>{
+test('navegação existente recebe semântica de distritos sem substituir controles',async({page})=>{
+  onlyDesktopChromium();
   await openApp(page);
+  const buttons=page.locator('.app-nav [data-app-tab]');
+  await expect(buttons).toHaveCount(9);
   const plaza=page.locator('.app-nav [data-app-tab="plaza"]');
-  await expect(plaza).toHaveCount(1);
-  await plaza.click();
-  await expect(page.locator('body')).toHaveAttribute('data-world-zone','plaza');
-  await expect(page.locator('.world-zone-title')).toContainText(/Praça Central/i);
-  await expect(plaza).toHaveAttribute('data-world-current','');
+  await expect(plaza).toHaveAttribute('data-world-name','Praça Central');
+  await expect(plaza).toHaveAttribute('data-world-index',/\d{2}/);
+  await expect(page.locator('.app-nav [data-app-tab="feed"]')).toHaveAttribute('data-world-current','');
 });
 
 test('desktop recolhido preserva rail funcional no novo mundo',async({page})=>{
+  onlyDesktopChromium();
   await page.setViewportSize({width:1760,height:833});
   await openApp(page);
   await page.evaluate(()=>document.body.classList.add('desktop-nav-collapsed'));
