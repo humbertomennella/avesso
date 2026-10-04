@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, staffSection:'overview', staffInternalChannel:null, staffDirectory:{}, staffByHandle:{}, userBadges:{}, badgeCatalog:{}, customAssets:[], customAssetBySlug:{}, customEmoticons:[], suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, feedLoadedPosts:[], feedCursor:null, feedHasMore:true, feedLoadingMore:false, directHistoryCursor:null, directHistoryHasMore:false, typingTimer:null, typingPeerId:null, replyingTo:null, editingMessage:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false} };
+const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, staffSection:'overview', staffInternalChannel:null, staffDirectory:{}, staffByHandle:{}, userBadges:{}, badgeCatalog:{}, customAssets:[], customAssetBySlug:{}, customEmoticons:[], suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, feedLoadedPosts:[], feedCursor:null, feedHasMore:true, feedLoadingMore:false, directHistoryCursor:null, directHistoryHasMore:false, typingTimer:null, typingPeerId:null, replyingTo:null, editingMessage:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false}, userEquipment:{}, userInventory:[] };
 
 function toast(message){
   const el=$('#toast');
@@ -361,13 +361,14 @@ function adminAssetPublicUrl(path=''){
   return path?supabase.storage.from('avesso-admin-assets').getPublicUrl(path).data.publicUrl:'';
 }
 function badgeHtmlForUser(userId){
-  const rows=state.userBadges?.[userId]||[];
-  return rows.map(row=>{
-    const badge=state.badgeCatalog?.[row.badge_id];if(!badge)return'';
-    const asset=state.customAssets.find(a=>a.id===badge.asset_id);
-    const url=asset?adminAssetPublicUrl(asset.storage_path):'';
-    return url?'<img class="identity-badge" src="'+escapeAttr(url)+'" alt="'+escapeAttr(badge.name||'emblema')+'" title="'+escapeAttr(badge.name||'Emblema AVESSO')+'">':'';
-  }).join('');
+  const equipped=state.userEquipment?.[userId];
+  const badgeId=equipped?.primary_badge_id;
+  if(!badgeId)return'';
+  const badge=state.badgeCatalog?.[badgeId];if(!badge)return'';
+  const asset=state.customAssets.find(a=>a.id===badge.asset_id);
+  const url=asset?adminAssetPublicUrl(asset.storage_path):badge.image_path||'';
+  if(!url)return '<span class="identity-badge identity-badge-glyph" title="'+escapeAttr(badge.name||'Emblema AVESSO')+'">✦</span>';
+  return '<img class="identity-badge" src="'+escapeAttr(url)+'" alt="'+escapeAttr(badge.name||'emblema')+'" title="'+escapeAttr(badge.name||'Emblema AVESSO')+'">';
 }
 function identityNameHtml(userId,name,extraClass=''){
   const role=state.staffDirectory?.[userId]?.role||'';
@@ -391,10 +392,11 @@ function hydrateCustomAssets(){
   }
 }
 async function loadIdentityRegistry(){
-  const [staffRes,badgeRes,userBadgeRes,assetRes]=await Promise.all([
+  const [staffRes,badgeRes,userBadgeRes,equipmentRes,assetRes]=await Promise.all([
     supabase.rpc('staff_directory_public'),
-    supabase.from('badges').select('id,name,slug,asset_id,description'),
+    supabase.from('badges').select('id,name,slug,asset_id,description,image_path'),
     supabase.from('user_badges').select('user_id,badge_id,assigned_at'),
+    supabase.from('avesso_user_equipment').select('user_id,primary_badge_id'),
     supabase.from('admin_assets').select('id,asset_type,name,slug,storage_path,mime_type,shortcode,meta,active').eq('active',true)
   ]);
   const staff=Array.isArray(staffRes.data)?staffRes.data:[];
@@ -403,6 +405,7 @@ async function loadIdentityRegistry(){
   state.badgeCatalog=Object.fromEntries((badgeRes.data||[]).map(x=>[x.id,x]));
   state.userBadges={};
   for(const row of userBadgeRes.data||[])(state.userBadges[row.user_id]??=[]).push(row);
+  state.userEquipment=Object.fromEntries((equipmentRes.data||[]).map(row=>[row.user_id,row]));
   state.customAssets=assetRes.data||[];
   hydrateCustomAssets();
 }
@@ -6554,6 +6557,43 @@ function updateProfilePostCounter(selector,count){
   });
 }
 
+async function loadInventory(){
+  const host=$('#inventory-panel');
+  if(!host||!state.profile?.id)return;
+  host.innerHTML='<p class="inventory-loading">abrindo o armário...</p>';
+  const [inventoryRes,catalogRes,equipmentRes]=await Promise.all([
+    supabase.from('avesso_user_inventory').select('user_id,item_id,quantity,acquisition_source,acquired_at').eq('user_id',state.profile.id),
+    supabase.from('avesso_item_catalog').select('id,slug,item_type,name,description,asset_path,rarity,tradable,soulbound,badge_id,metadata,sort_order').eq('active',true).order('sort_order',{ascending:true}),
+    supabase.from('avesso_user_equipment').select('user_id,primary_badge_id').eq('user_id',state.profile.id).maybeSingle()
+  ]);
+  if(inventoryRes.error||catalogRes.error){host.innerHTML='<p class="inventory-empty">O armário não abriu. A burocracia venceu por enquanto.</p>';return;}
+  const catalog=Object.fromEntries((catalogRes.data||[]).map(x=>[x.id,x]));
+  state.userInventory=inventoryRes.data||[];
+  state.userEquipment[state.profile.id]=equipmentRes.data||{user_id:state.profile.id,primary_badge_id:null};
+  const equipped=state.userEquipment[state.profile.id]?.primary_badge_id;
+  const items=state.userInventory.map(row=>({...row,item:catalog[row.item_id]})).filter(x=>x.item&&x.item.active!==false);
+  if(!items.length){host.innerHTML='<div class="inventory-empty"><strong>INVENTÁRIO VAZIO</strong><span>Você ainda não tem itens equipáveis.</span></div>';return;}
+  host.innerHTML=items.map(entry=>{
+    const item=entry.item;
+    const isBadge=item.item_type==='badge';
+    const isEquipped=isBadge&&item.badge_id===equipped;
+    const glyph=item.metadata?.glyph||'✦';
+    const action=isBadge ? '<button type="button" class="inventory-equip '+(isEquipped?'is-equipped':'')+'" data-equip-badge="'+escapeAttr(item.badge_id||'')+'">'+(isEquipped?'equipado':'equipar')+'</button>' : '<span class="inventory-soon">item catalogado</span>';
+    return '<article class="inventory-card rarity-'+escapeAttr(item.rarity||'common')+'"><div class="inventory-art">'+(item.asset_path?'<img src="'+escapeAttr(item.asset_path)+'" alt="">':'<span>'+escapeHtml(glyph)+'</span>')+'</div><div class="inventory-copy"><span class="inventory-type">'+escapeHtml(item.item_type)+' · '+escapeHtml(item.rarity||'common')+'</span><h3>'+escapeHtml(item.name)+'</h3><p>'+escapeHtml(item.description||'')+'</p><small>'+(entry.quantity>1?'quantidade '+entry.quantity+' · ':'')+(item.soulbound?'não negociável':'negociável')+'</small></div><div class="inventory-action">'+action+'</div></article>';
+  }).join('');
+  host.querySelectorAll('[data-equip-badge]').forEach(btn=>btn.onclick=()=>equipPrimaryBadge(btn.dataset.equipBadge));
+}
+async function equipPrimaryBadge(badgeId){
+  if(!state.profile?.id)return;
+  const button=document.querySelector('[data-equip-badge="'+CSS.escape(badgeId)+'"]');
+  if(button)button.disabled=true;
+  const {error}=await supabase.from('avesso_user_equipment').upsert({user_id:state.profile.id,primary_badge_id:badgeId||null,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+  if(error){if(button)button.disabled=false;return toast('Esse emblema não pode ser equipado.');}
+  state.userEquipment[state.profile.id]={user_id:state.profile.id,primary_badge_id:badgeId||null,updated_at:new Date().toISOString()};
+  renderNavAvatar();
+  renderProfile();
+  toast(badgeId?'Emblema equipado.':'Emblema removido.');
+}
 async function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
@@ -6563,6 +6603,10 @@ async function renderProfile(){
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
       <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${identityNameHtml(state.profile.id,state.profile.display_name,'profile-owner-name')}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
+    <section class="inventory-control">
+      <div class="inventory-heading"><div><span class="section-code">INVENTÁRIO // O QUE É SEU</span><h2>Emblemas e itens do AVESSO</h2><p>Seu inventário guarda o que você conquistou. Um único emblema principal aparece junto ao seu nome.</p></div><span class="inventory-balance-note">SALDO // shadow por enquanto</span></div>
+      <div id="inventory-panel" class="inventory-grid"><p class="inventory-loading">abrindo o armário...</p></div>
+    </section>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
       <button id="profile-story-create">＋ postar story</button>
@@ -6598,6 +6642,7 @@ async function renderProfile(){
     <div class="world-pref-foot"><span id="profile-world-status">carregando modo...</span><small>${interferenceOnline?'Interferências visuais globais estão online.':'O motor visual ainda está bloqueado globalmente.'} Personagens nunca reescrevem o que você publicou.</small></div>
   </section>`;
   $('#open-avatar-picker').onclick=openAvatarDialog;
+  loadInventory();
   $('#profile-story-create').onclick=openStoryCreate;
   $('#save-profile-settings').onclick=saveProfileSettings;
   $('#save-listening-privacy').onclick=saveListeningPrivacy;
