@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+<title>Emblema Voz da Praça</title><desc>Medalhão AVESSO de participação comunitária, com um rádio de praça e ondas de conversa em pixel art.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#130e18"/><stop offset=".48" stop-color="#0b1519"/><stop offset="1" stop-color="#091013"/></linearGradient>
+  <linearGradient id="pink" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff59d8"/><stop offset="1" stop-color="#7d3fff"/></linearGradient>
+  <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#5df8ff"/><stop offset="1" stop-color="#16a9ff"/></linearGradient>
+  <filter id="glow"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.4" fill="#ff5ed9" opacity=".2"/></pattern>
+</defs>
+<polygon points="256,18 454,132 454,380 256,494 58,380 58,132" fill="url(#bg)" stroke="#4d5965" stroke-width="4"/>
+<polygon points="256,36 436,140 436,372 256,476 76,372 76,140" fill="url(#dots)"/>
+<path d="M112 342H400" stroke="#d8ff3e" stroke-width="5" stroke-dasharray="4 13" opacity=".75"/>
+<g filter="url(#glow)">
+  <path d="M147 201H313Q332 201 332 220V321Q332 340 313 340H198L157 372V340H147Q128 340 128 321V220Q128 201 147 201Z" fill="#0b1519" stroke="url(#cyan)" stroke-width="8"/>
+  <path d="M169 230H291M169 252H269M169 274H302" stroke="#7df8ff" stroke-width="7" opacity=".78"/>
+  <path d="M177 300Q205 278 230 301Q257 324 285 299" fill="none" stroke="url(#pink)" stroke-width="8"/>
+  <circle cx="175" cy="299" r="7" fill="#d8ff3e"/><circle cx="287" cy="299" r="7" fill="#d8ff3e"/>
+</g>
+<g filter="url(#glow)">
+  <path d="M344 165Q389 199 390 247Q390 296 344 329" fill="none" stroke="#ff4fd8" stroke-width="9"/>
+  <path d="M367 143Q430 191 430 247Q430 304 367 351" fill="none" stroke="#7b54ff" stroke-width="6" stroke-dasharray="14 12"/>
+  <path d="M117 170Q82 205 82 247Q82 287 117 322" fill="none" stroke="#59efff" stroke-width="6" stroke-dasharray="9 12"/>
+</g>
+<g fill="#ff58d8"><rect x="104" y="104" width="8" height="8"/><rect x="396" y="104" width="8" height="8"/></g>
+<g fill="#62f8ff"><rect x="102" y="397" width="6" height="6"/><rect x="404" y="397" width="6" height="6"/></g>
+</svg>

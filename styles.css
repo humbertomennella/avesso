@@ -10269,3 +10269,136 @@ dialog.dialog-fallback-open[open]{
     max-height:calc(100vh - 32px);
   }
 }
+
+
+/* Economia AVESSO v2 // inventário e emblema principal */
+.identity-badge{
+  width:1.35em;
+  height:1.35em;
+  object-fit:contain;
+  vertical-align:-.18em;
+  margin-left:.35rem;
+  image-rendering:auto;
+  filter:drop-shadow(0 0 5px rgba(120,220,255,.25));
+}
+.identity-badge-glyph{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:1.35em;
+  height:1.35em;
+  margin-left:.35rem;
+  border:1px solid currentColor;
+  font-size:.72em;
+  line-height:1;
+  vertical-align:.08em;
+}
+.inventory-control{
+  margin:1.25rem 0;
+  padding:1.25rem;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(0,0,0,.24);
+  border-radius:12px;
+}
+.inventory-heading{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:1rem;
+  margin-bottom:1rem;
+}
+.inventory-heading h2{margin:.3rem 0 .4rem}
+.inventory-heading p{max-width:760px;margin:0;opacity:.78}
+.inventory-balance-note{
+  white-space:nowrap;
+  padding:.45rem .65rem;
+  border:1px dashed rgba(255,255,255,.2);
+  font:600 .7rem/1.2 "IBM Plex Mono",monospace;
+  opacity:.72;
+}
+.inventory-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:.8rem;
+}
+.inventory-card{
+  display:grid;
+  grid-template-columns:58px 1fr auto;
+  gap:.75rem;
+  align-items:center;
+  min-width:0;
+  padding:.8rem;
+  border:1px solid rgba(255,255,255,.1);
+  background:rgba(255,255,255,.025);
+  border-radius:10px;
+}
+.inventory-art{
+  width:58px;
+  height:58px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(255,255,255,.16);
+  background:rgba(0,0,0,.28);
+  overflow:hidden;
+}
+.inventory-art img{width:100%;height:100%;object-fit:contain}
+.inventory-art span{font-size:1.5rem}
+.inventory-copy{min-width:0}
+.inventory-type{
+  font:600 .65rem/1.2 "IBM Plex Mono",monospace;
+  text-transform:uppercase;
+  opacity:.62;
+}
+.inventory-copy h3{margin:.2rem 0;font-size:.95rem}
+.inventory-copy p{margin:0 0 .35rem;font-size:.78rem;opacity:.76}
+.inventory-copy small{font-size:.68rem;opacity:.55}
+.inventory-action{display:flex;align-items:center}
+.inventory-equip{
+  border:1px solid currentColor;
+  background:transparent;
+  color:inherit;
+  padding:.45rem .6rem;
+  border-radius:6px;
+  cursor:pointer;
+  font:600 .68rem/1 "IBM Plex Mono",monospace;
+  text-transform:uppercase;
+}
+.inventory-equip.is-equipped{
+  background:rgba(120,220,255,.12);
+  box-shadow:0 0 0 1px rgba(120,220,255,.15) inset;
+}
+.inventory-equip:disabled{opacity:.5;cursor:wait}
+.inventory-soon{font:600 .62rem/1 "IBM Plex Mono",monospace;opacity:.45;text-transform:uppercase}
+.inventory-loading,.inventory-empty{padding:1rem;opacity:.65}
+.inventory-empty{display:flex;flex-direction:column;gap:.35rem;border:1px dashed rgba(255,255,255,.12)}
+.inventory-empty strong{font:700 .72rem/1.2 "IBM Plex Mono",monospace}
+@media (max-width:700px){
+  .inventory-heading{flex-direction:column}
+  .inventory-card{grid-template-columns:48px 1fr}
+  .inventory-art{width:48px;height:48px}
+  .inventory-action{grid-column:2;justify-content:flex-start}
+}
+
+
+/* AVESSO // INVENTÁRIO V2 — primeiro plano */
+.inventory-control{order:0;margin:0;padding:18px;border:1px solid #2d454b;border-radius:4px;background:radial-gradient(circle at 8% 0%,#1d415012,transparent 34%),radial-gradient(circle at 92% 100%,#ff4fd80b,transparent 30%),#080d0f;box-shadow:8px 8px 0 #020405}
+.inventory-heading{margin-bottom:14px;padding-bottom:13px;border-bottom:1px solid #26383d}
+.inventory-heading h2{margin:4px 0 5px;font-size:clamp(1.25rem,2vw,1.8rem);letter-spacing:-.025em}
+.inventory-heading p{max-width:720px;color:#8e9b99}
+.inventory-heading-meta{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:flex-start}
+.inventory-stat{display:grid;gap:3px;min-width:100px;padding:8px 10px;border:1px solid #30434a;background:#05090b;color:#a8b5b2;font:700 .53rem/1.2 var(--mono);text-transform:uppercase}
+.inventory-stat b{color:var(--cyan);font-size:.7rem}
+.inventory-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.inventory-card{display:grid;grid-template-columns:1fr;gap:0;min-height:270px;padding:0;border:1px solid #263b41;border-radius:3px;background:#0a1114;overflow:hidden;position:relative;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.inventory-card:hover{transform:translateY(-3px);border-color:#4c8b98;box-shadow:0 10px 24px #0008}
+.inventory-card.is-equipped{border-color:var(--acid);box-shadow:0 0 0 1px #d8ff3e33 inset,0 0 24px #d8ff3e12}
+.inventory-card:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(120deg,transparent 42%,#ffffff04 50%,transparent 58%)}
+.inventory-card.rarity-event{--rarity:#d8ff3e}.inventory-card.rarity-rare{--rarity:#4eeaff}.inventory-card.rarity-epic{--rarity:#c276ff}.inventory-card.rarity-legendary{--rarity:#ffb84e}.inventory-card.rarity-common{--rarity:#899795}
+.inventory-card .inventory-art{width:100%;height:156px;border:0;border-bottom:1px solid #24353a;background:radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--rarity) 10%,transparent),transparent 58%),#060a0c}
+.inventory-card .inventory-art img{width:100%;height:100%;object-fit:contain;padding:12px;image-rendering:auto}
+.inventory-card .inventory-copy{display:grid;gap:5px;padding:11px 11px 7px}.inventory-type{color:var(--rarity);opacity:.9;letter-spacing:.08em}.inventory-copy h3{font-size:1rem;margin:0}.inventory-copy p{min-height:36px;color:#889694;font-size:.7rem;line-height:1.4}.inventory-copy small{color:#667572}
+.inventory-action{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px 11px;border-top:1px solid #1e2d31}.inventory-state{color:var(--rarity);font:800 .5rem var(--mono);text-transform:uppercase}
+.inventory-equip{padding:6px 9px;border-radius:2px;color:var(--rarity);background:#080d0f}.inventory-equip.is-equipped{color:#081006;background:var(--acid);border-color:var(--acid);box-shadow:none}
+.inventory-loading,.inventory-empty{min-height:150px;display:grid;place-items:center}
+@media(max-width:980px){.inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.inventory-control{padding:12px;box-shadow:5px 5px 0 #020405}.inventory-heading{display:grid;grid-template-columns:1fr;gap:10px}.inventory-heading-meta{justify-content:flex-start}.inventory-grid{grid-template-columns:1fr}.inventory-card{min-height:240px}.inventory-card .inventory-art{height:170px}}
