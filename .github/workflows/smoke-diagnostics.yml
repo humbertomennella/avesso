@@ -1,0 +1,81 @@
+name: Diagnosticar smoke AVESSO
+on:
+  push:
+    branches: [reskin-poster-rockstar]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar Playwright
+        run: |
+          npm install --no-save @playwright/test@1.55.0
+          npx playwright install --with-deps chromium firefox webkit
+      - id: auth
+        name: SMOKE 1 — autenticação
+        continue-on-error: true
+        run: npx playwright test --grep "fluxo de autenticação"
+      - id: overflow
+        name: SMOKE 2 — overflow landing/auth
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --grep "overflow horizontal"
+      - id: legal
+        name: SMOKE 3 — documentos legais
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --grep "documentos legais"
+      - id: story_mime
+        name: SMOKE 4 — Story MIME
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --grep "parâmetros de codec"
+      - id: story_playback
+        name: SMOKE 5 — Story playback
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --grep "reprodução do Story"
+      - id: desktop_layout
+        name: SMOKE 6 — desktop layout
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --grep "desktop mantém laterais"
+      - id: desktop_wide
+        name: SMOKE 7 — desktop largo
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --grep "desktop largo preserva"
+      - id: nav_collapsed
+        name: SMOKE 8 — sidebar recolhida
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --grep "sidebar recolhida"
+      - id: release
+        name: SMOKE 9 — atualização automática
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --grep "nova versão avisa"
+      - name: Consolidar diagnóstico
+        if: always()
+        run: |
+          echo "auth=${{ steps.auth.outcome }}"
+          echo "overflow=${{ steps.overflow.outcome }}"
+          echo "legal=${{ steps.legal.outcome }}"
+          echo "story_mime=${{ steps.story_mime.outcome }}"
+          echo "story_playback=${{ steps.story_playback.outcome }}"
+          echo "desktop_layout=${{ steps.desktop_layout.outcome }}"
+          echo "desktop_wide=${{ steps.desktop_wide.outcome }}"
+          echo "nav_collapsed=${{ steps.nav_collapsed.outcome }}"
+          echo "release=${{ steps.release.outcome }}"
+          test "${{ steps.auth.outcome }}" = success
+          test "${{ steps.overflow.outcome }}" = success
+          test "${{ steps.legal.outcome }}" = success
+          test "${{ steps.story_mime.outcome }}" = success
+          test "${{ steps.story_playback.outcome }}" = success
+          test "${{ steps.desktop_layout.outcome }}" = success
+          test "${{ steps.desktop_wide.outcome }}" = success
+          test "${{ steps.nav_collapsed.outcome }}" = success
+          test "${{ steps.release.outcome }}" = success
