@@ -125,8 +125,19 @@ test('sidebar recolhida vira navigation rail de ícones sem resíduos do modo ex
     document.querySelector('#marketing-view')?.classList.add('hidden');
     document.querySelector('.site-header')?.classList.add('hidden');
     document.querySelector('#app-view')?.classList.remove('hidden');
-    document.body.classList.add('desktop-nav-collapsed');
   });
+  // No mobile, o nav é movido para o body. setViewportSize não aguarda
+  // os handlers de resize/matchMedia nem a decoração no próximo frame.
+  // A versão do módulo de UI também não sinaliza que esse trabalho terminou.
+  const nav=page.locator('.app-nav');
+  const button=nav.locator('nav button[data-app-tab]').first();
+  await expect(button.locator('.desktop-nav-icon')).toBeVisible();
+  await expect(nav).toHaveCSS('width','264px');
+  const collapse=page.getByRole('button',{name:'Recolher menu lateral',exact:true});
+  await collapse.click();
+  await expect(nav).toHaveCSS('width','76px');
+  await expect(button).toHaveCSS('width','50px');
+  await expect(button).toHaveCSS('height','44px');
   const metrics=await page.evaluate(()=>{
     const nav=document.querySelector('.app-nav');
     const button=document.querySelector('.app-nav nav button');
@@ -153,6 +164,9 @@ test('sidebar recolhida vira navigation rail de ícones sem resíduos do modo ex
   expect(metrics.labelDisplay).toBe('none');
   expect(metrics.onlineDisplay).toBe('none');
   expect(metrics.logoutFont).toBe(0);
+  await page.getByRole('button',{name:'Expandir menu lateral',exact:true}).click();
+  await expect(nav).toHaveCSS('width','264px');
+  await expect(button.locator('.desktop-nav-label')).toBeVisible();
 });
 
 test('nova versão avisa e aguarda trabalho local antes do reinício automático',async({page})=>{
