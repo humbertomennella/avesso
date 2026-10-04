@@ -14,6 +14,7 @@ jobs:
       - name: Verificar sintaxe da interface
         run: |
           node --input-type=module --check < market-center.js
+          node --input-type=module --check < config.js
           node --input-type=module --check < avesso-ui.js
           node --check sw.js
       - name: Conferir contratos de mercado e shadow
@@ -21,13 +22,14 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           market = Path('market-center.js').read_text(encoding='utf-8')
+          config = Path('config.js').read_text(encoding='utf-8')
           sw = Path('sw.js').read_text(encoding='utf-8')
           migration = Path('supabase/migrations/20261004170500_market_trade_v1.sql').read_text(encoding='utf-8').lower()
           guard = Path('supabase/migrations/20261004170600_market_trade_price_guard.sql').read_text(encoding='utf-8').lower()
           hardening = Path('supabase/migrations/20261004171000_market_trade_hardening.sql').read_text(encoding='utf-8').lower()
           test = Path('supabase/tests/market_trade.sql').read_text(encoding='utf-8').lower()
 
-          assert "import './market-center.js';" in Path('avesso-ui.js').read_text(encoding='utf-8')
+          assert "import('./market-center.js?v=20261004-market1')" in config
           assert "'./market-center.js'" in sw and "'./market-center.css'" in sw
           assert "avesso_market_create_listing" in market
           assert "avesso_market_cancel_listing" in market
@@ -35,8 +37,9 @@ jobs:
           assert "avesso_trade_accept_offer" in market
           assert "compras liberam quando saldo sair do shadow" in market.lower()
 
+          compact = migration.replace(' ', '')
           assert "economy_not_live" in migration
-          assert "coalesce(v_mode,'off') <> 'live'" in migration.replace(' ', '') or "coalesce(v_mode,'off')<>'live'" in migration.replace(' ', '')
+          assert "coalesce(v_mode,'off')<>'live'" in compact
           assert "security definer" in migration
           assert "set search_path = ''" in migration or "set search_path=''" in migration
           assert "revoke all on function public.avesso_market_buy" in migration
