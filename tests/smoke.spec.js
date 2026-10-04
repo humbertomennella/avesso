@@ -166,3 +166,33 @@ test('nova versão avisa e aguarda trabalho local antes do reinício automático
   await expect(page.locator('body')).toHaveClass(/avesso-release-pending/);
   await expect(page.locator('#app-update-banner')).toBeHidden();
 });
+
+test('mundo AVESSO reorganiza a interface sem substituir os contratos funcionais',async({page})=>{
+  await page.waitForFunction(()=>document.documentElement.dataset.avessoWorld==='20261004-world1');
+  await page.evaluate(()=>{
+    document.querySelector('#marketing-view')?.classList.add('hidden');
+    document.querySelector('.site-header')?.classList.add('hidden');
+    document.querySelector('#app-view')?.classList.remove('hidden');
+  });
+  await expect(page.locator('.world-topbar')).toHaveCount(1);
+  await expect(page.locator('.world-scene-intro')).toHaveCount(1);
+  await expect(page.locator('.world-transmission-deck')).toHaveCount(1);
+  await expect(page.locator('.world-stream')).toHaveCount(1);
+  await expect(page.locator('#stories-zone')).toHaveCount(1);
+  await expect(page.locator('.composer')).toHaveCount(1);
+  await expect(page.locator('#feed-list')).toHaveCount(1);
+  const hierarchy=await page.evaluate(()=>({
+    storiesInsideDeck:Boolean(document.querySelector('.world-transmission-deck #stories-zone')),
+    composerInsideDeck:Boolean(document.querySelector('.world-transmission-deck .composer')),
+    feedInsideStream:Boolean(document.querySelector('.world-stream #feed-list')),
+    navPosition:getComputedStyle(document.querySelector('.app-nav')).position,
+    asidePosition:getComputedStyle(document.querySelector('.app-aside')).position,
+    feedMaxWidth:getComputedStyle(document.querySelector('.feed-column')).maxWidth
+  }));
+  expect(hierarchy.storiesInsideDeck).toBe(true);
+  expect(hierarchy.composerInsideDeck).toBe(true);
+  expect(hierarchy.feedInsideStream).toBe(true);
+  expect(hierarchy.navPosition).toBe('fixed');
+  expect(hierarchy.asidePosition).toBe('fixed');
+  expect(hierarchy.feedMaxWidth).toBe('860px');
+});
