@@ -81,7 +81,9 @@ BEGIN
   END IF;
 
   SELECT pg_get_functiondef('public.avesso_market_buy(uuid)'::regprocedure) INTO v_fn;
-  IF position('economy_not_live' in v_fn)=0 OR position('<> ''live''' in v_fn)=0 THEN
+  IF position('economy_not_live' in v_fn)=0
+     OR position('avesso_economy_settings' in v_fn)=0
+     OR position('live' in v_fn)=0 THEN
     RAISE EXCEPTION 'compra nao esta protegida pelo modo live';
   END IF;
 
