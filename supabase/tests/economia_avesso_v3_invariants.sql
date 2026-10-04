@@ -59,3 +59,59 @@ begin
   end if;
 end
 $$;
+
+do $$
+declare
+  v_user uuid;
+  v_other uuid;
+  v_item uuid;
+  v_before integer;
+  v_after integer;
+begin
+  select id into v_user from public.profiles order by id limit 1;
+  select id into v_other from public.profiles where id <> v_user order by id limit 1;
+  select id into v_item from public.avesso_item_catalog where active and not tradable limit 1;
+
+  if v_user is null or v_other is null or v_item is null then
+    raise exception 'test_fixture_missing';
+  end if;
+
+  perform set_config('request.jwt.claims', jsonb_build_object(
+    'sub',v_user::text,'role','authenticated','aud','authenticated'
+  )::text, true);
+
+  begin
+    perform public.avesso_market_buy('00000000-0000-0000-0000-000000000000');
+    raise exception 'market_buy_should_be_blocked_in_shadow';
+  exception when others then
+    if sqlerrm <> 'economy_not_live' then raise; end if;
+  end;
+
+  select count(*) into v_before from public.avesso_trade_offers where proposer_id=v_user;
+
+  begin
+    perform public.avesso_trade_create_offer(
+      v_other,
+      jsonb_build_array(jsonb_build_object('item_id',v_item::text,'quantity',1)),
+      jsonb_build_array(jsonb_build_object('item_id',v_item::text,'quantity',1)),
+      'test',
+      null
+    );
+    raise exception 'trade_should_reject_non_tradable_item';
+  exception when others then
+    if sqlerrm <> 'item_not_tradable' then raise; end if;
+  end;
+
+  select count(*) into v_after from public.avesso_trade_offers where proposer_id=v_user;
+  if v_before <> v_after then
+    raise exception 'failed_trade_left_persistent_offer';
+  end if;
+
+  begin
+    perform public.avesso_market_create_listing(v_item,1,1,null);
+    raise exception 'market_should_reject_non_tradable_item';
+  exception when others then
+    if sqlerrm <> 'item_not_tradable' then raise; end if;
+  end;
+end
+$$;
