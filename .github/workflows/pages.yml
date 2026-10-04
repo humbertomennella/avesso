@@ -156,7 +156,7 @@ jobs:
           npm install --no-save @playwright/test@1.55.0
           npx playwright install --with-deps chromium firefox webkit
       - name: Executar smoke tests multi-navegador em desktop e mobile
-        run: npx playwright test
+        run: npx playwright test --workers=1
   deploy:
     if: github.event_name != 'pull_request'
     needs: verify
