@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+<title>Emblema Cúmplice de Verdade</title><desc>Medalhão AVESSO de vínculo bilateral, com dois perfis digitais conectados por um fio luminoso.</desc>
+<defs>
+  <radialGradient id="bg"><stop stop-color="#1b1222"/><stop offset=".5" stop-color="#0d1017"/><stop offset="1" stop-color="#070b0d"/></radialGradient>
+  <linearGradient id="p" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff59d8"/><stop offset="1" stop-color="#8b45ff"/></linearGradient>
+  <linearGradient id="c" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#63f8ff"/><stop offset="1" stop-color="#1e9cff"/></linearGradient>
+  <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<circle cx="256" cy="256" r="238" fill="url(#bg)" stroke="#4a4560" stroke-width="5"/>
+<circle cx="256" cy="256" r="209" fill="none" stroke="#6d55a5" stroke-opacity=".32" stroke-width="2" stroke-dasharray="4 12"/>
+<path d="M88 256H424M256 88V424" stroke="#5ceeff" stroke-opacity=".09" stroke-width="2"/>
+<g filter="url(#glow)">
+  <path d="M150 175Q190 129 236 165L260 202V292L232 333Q193 355 153 322L128 286V218Z" fill="#0d171c" stroke="url(#c)" stroke-width="8"/>
+  <path d="M362 175Q322 129 276 165L252 202V292L280 333Q319 355 359 322L384 286V218Z" fill="#120f1a" stroke="url(#p)" stroke-width="8"/>
+  <path d="M169 215Q194 194 221 215" fill="none" stroke="#62f8ff" stroke-width="7"/>
+  <path d="M343 215Q318 194 291 215" fill="none" stroke="#ff58d8" stroke-width="7"/>
+  <circle cx="205" cy="244" r="8" fill="#d8ff3e"/><circle cx="307" cy="244" r="8" fill="#d8ff3e"/>
+  <path d="M218 286Q256 306 294 286" fill="none" stroke="#e7f7f4" stroke-width="6" opacity=".75"/>
+  <path d="M207 272Q256 229 305 272" fill="none" stroke="#d8ff3e" stroke-width="8"/>
+  <circle cx="256" cy="251" r="13" fill="#d8ff3e" stroke="#101512" stroke-width="5"/>
+</g>
+<path d="M214 274C177 232 160 239 150 267C142 291 163 317 195 303" fill="none" stroke="#62f8ff" stroke-width="6"/>
+<path d="M298 274C335 232 352 239 362 267C370 291 349 317 317 303" fill="none" stroke="#ff58d8" stroke-width="6"/>
+<g filter="url(#glow)"><path d="M256 92v28M256 392v28M92 256h28M392 256h28" stroke="#d8ff3e" stroke-width="7"/></g>
+<path d="M120 377Q256 450 392 377" fill="none" stroke="#8c6cff" stroke-width="4" stroke-dasharray="5 13" opacity=".7"/>
+</svg>
