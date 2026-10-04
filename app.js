@@ -6612,6 +6612,43 @@ async function equipPrimaryBadge(badgeId){
   renderProfile();
   toast(nextBadgeId?'Emblema equipado.':'Emblema removido.');
 }
+
+function renderBadgeGallery(){
+  const host=$('#badge-gallery-panel');
+  if(!host)return;
+  const badges=Object.values(state.badgeCatalog||{}).filter(b=>b&&b.id);
+  if(!badges.length){
+    host.innerHTML='<div class="badge-gallery-empty"><strong>CATÁLOGO INDISPONÍVEL</strong><span>Nenhum emblema ativo foi carregado ainda.</span></div>';
+    return;
+  }
+  const inventoryByBadge=new Map();
+  for(const row of state.userInventory||[]){
+    const item=Object.values(state.badgeCatalog||{}).find(b=>b.id===row.item_id);
+    if(item?.id)inventoryByBadge.set(item.id,row);
+  }
+  const equipped=state.userEquipment?.[state.profile?.id]?.primary_badge_id||null;
+  const artByBadge=new Map();
+  for(const item of Object.values(state.badgeCatalog||{})){
+    if(item?.asset_path && item?.badge_id)artByBadge.set(item.badge_id,item);
+  }
+  host.innerHTML='<div class="badge-gallery-grid">'+badges.map((badge,index)=>{
+    const item=artByBadge.get(badge.id)||{};
+    const owned=inventoryByBadge.has(item.id)||Boolean((state.userBadges?.[state.profile?.id]||[]).some(x=>x.badge_id===badge.id));
+    const isEquipped=equipped===badge.id;
+    const art=badge.image_path
+      ? '<img src="'+escapeAttr(badge.image_path)+'" alt="'+escapeAttr(badge.name||'Emblema AVESSO')+'" loading="'+(index<4?'eager':'lazy')+'" decoding="async">'
+      : '<span aria-hidden="true">✦</span>';
+    const stateLabel=isEquipped?'EQUIPADO':owned?'NO INVENTÁRIO':'AINDA NÃO CONQUISTADO';
+    return '<article class="badge-gallery-card '+(owned?'is-owned ':'')+(isEquipped?'is-equipped':'')+'">'+
+      '<div class="badge-gallery-art">'+art+'</div>'+
+      '<div class="badge-gallery-copy"><span class="badge-gallery-code">EMBLEMA // '+String(index+1).padStart(2,'0')+'</span>'+
+      '<h3>'+escapeHtml(badge.name||'Emblema')+'</h3>'+
+      '<p>'+escapeHtml(badge.description||'')+'</p>'+
+      '<span class="badge-gallery-state">'+stateLabel+'</span></div>'+
+      '</article>';
+  }).join('')+'</div>';
+}
+
 async function renderProfile(){
   $('#feed-status').classList.add('hidden');
   const mode=state.world.preferences?.participation_mode||'world';
@@ -6635,6 +6672,17 @@ async function renderProfile(){
         </div>
       </div>
       <div id="inventory-panel" class="inventory-grid" aria-live="polite"><p class="inventory-loading">abrindo o armário...</p></div>
+    </section>
+    <section class="badge-gallery-control" id="badge-gallery">
+      <div class="badge-gallery-heading">
+        <div>
+          <span class="section-code">CATÁLOGO // EMBLEMAS DISPONÍVEIS</span>
+          <h2>Todos os emblemas do AVESSO.</h2>
+          <p>Este é o quadro completo. O inventário mostra o que é seu; aqui ficam visíveis todas as peças que podem existir no AVESSO.</p>
+        </div>
+        <span class="badge-gallery-total">4 ARTES ORIGINAIS</span>
+      </div>
+      <div id="badge-gallery-panel" class="badge-gallery-panel" aria-live="polite"><p class="badge-gallery-loading">carregando o catálogo...</p></div>
     </section>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
@@ -6672,6 +6720,7 @@ async function renderProfile(){
   </section>`;
   $('#open-avatar-picker').onclick=openAvatarDialog;
   loadInventory();
+  renderBadgeGallery();
   $('#profile-story-create').onclick=openStoryCreate;
   $('#save-profile-settings').onclick=saveProfileSettings;
   $('#save-listening-privacy').onclick=saveListeningPrivacy;
