@@ -12,13 +12,17 @@ const ZONES={
   admin:{code:'BASTIDORES',title:'Dashboard',subtitle:'Ferramentas de administração do outro lado.',signal:'ACESSO ELEVADO'}
 };
 
+let refreshQueued=false;
+let refreshing=false;
+let observer=null;
+
 function activeZone(){
   const active=document.querySelector('.app-nav [data-app-tab].active');
-  return active?.dataset.appTab||document.body.dataset.worldZone||'feed';
+  return active?.dataset.appTab||document.body?.dataset.worldZone||'feed';
 }
 
 function ensureBackdrop(){
-  if(document.querySelector('.avesso-world-backdrop'))return;
+  if(!document.body||document.querySelector('.avesso-world-backdrop'))return;
   const el=document.createElement('div');
   el.className='avesso-world-backdrop';
   el.setAttribute('aria-hidden','true');
@@ -68,33 +72,47 @@ function decorateNav(){
   document.querySelectorAll('.app-nav [data-app-tab]').forEach((button,index)=>{
     const zone=ZONES[button.dataset.appTab];
     if(!zone)return;
-    button.dataset.worldIndex=String(index+1).padStart(2,'0');
-    button.dataset.worldName=zone.title;
+    const expectedIndex=String(index+1).padStart(2,'0');
+    if(button.dataset.worldIndex!==expectedIndex)button.dataset.worldIndex=expectedIndex;
+    if(button.dataset.worldName!==zone.title)button.dataset.worldName=zone.title;
   });
 }
 
 function decorateContent(){
   document.querySelectorAll('.feed-list > *,.post-card,.post,.feed-item').forEach((card,index)=>{
-    card.classList.add('world-content-card');
+    if(!card.classList.contains('world-content-card'))card.classList.add('world-content-card');
     if(!card.dataset.worldSerial)card.dataset.worldSerial=String(index+1).padStart(3,'0');
   });
-  document.querySelectorAll('.story-view-card,.story-card').forEach(card=>card.classList.add('world-story-frame'));
-  document.querySelectorAll('.chat-window,.direct-chat-window,.messages-window,.conversation-window').forEach(el=>el.classList.add('world-chat-frame'));
-  document.querySelectorAll('.profile-shell,.profile-page,.profile-hero,.corner-shell').forEach(el=>el.classList.add('world-profile-frame'));
+  document.querySelectorAll('.story-view-card,.story-card').forEach(card=>{
+    if(!card.classList.contains('world-story-frame'))card.classList.add('world-story-frame');
+  });
+  document.querySelectorAll('.chat-window,.direct-chat-window,.messages-window,.conversation-window').forEach(el=>{
+    if(!el.classList.contains('world-chat-frame'))el.classList.add('world-chat-frame');
+  });
+  document.querySelectorAll('.profile-shell,.profile-page,.profile-hero,.corner-shell').forEach(el=>{
+    if(!el.classList.contains('world-profile-frame'))el.classList.add('world-profile-frame');
+  });
 }
 
 function updateZone(zoneName=activeZone()){
+  if(!document.body)return;
   const zone=ZONES[zoneName]||ZONES.feed;
-  document.body.dataset.worldZone=zoneName;
+  if(document.body.dataset.worldZone!==zoneName)document.body.dataset.worldZone=zoneName;
   const bar=ensureWorldBar();
   if(bar){
-    bar.querySelector('.world-zone-code').textContent=zone.code;
-    bar.querySelector('.world-zone-title').textContent=zone.title;
-    bar.querySelector('.world-zone-subtitle').textContent=zone.subtitle;
-    bar.querySelector('.world-zone-signal').textContent=zone.signal;
+    const code=bar.querySelector('.world-zone-code');
+    const title=bar.querySelector('.world-zone-title');
+    const subtitle=bar.querySelector('.world-zone-subtitle');
+    const signal=bar.querySelector('.world-zone-signal');
+    if(code&&code.textContent!==zone.code)code.textContent=zone.code;
+    if(title&&title.textContent!==zone.title)title.textContent=zone.title;
+    if(subtitle&&subtitle.textContent!==zone.subtitle)subtitle.textContent=zone.subtitle;
+    if(signal&&signal.textContent!==zone.signal)signal.textContent=zone.signal;
   }
   document.querySelectorAll('.app-nav [data-app-tab]').forEach(button=>{
-    button.toggleAttribute('data-world-current',button.dataset.appTab===zoneName);
+    const current=button.dataset.appTab===zoneName;
+    if(current&&!button.hasAttribute('data-world-current'))button.setAttribute('data-world-current','');
+    if(!current&&button.hasAttribute('data-world-current'))button.removeAttribute('data-world-current');
   });
 }
 
@@ -102,39 +120,67 @@ function tickClock(){
   const clock=document.querySelector('.world-zone-clock');
   if(!clock)return;
   const now=new Date();
-  clock.textContent=now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const value=now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  if(clock.textContent!==value)clock.textContent=value;
 }
 
-function installWorldEvents(){
-  document.addEventListener('click',event=>{
-    const button=event.target.closest?.('.app-nav [data-app-tab]');
-    if(button)queueMicrotask(()=>updateZone(button.dataset.appTab));
-  });
-  window.addEventListener('hashchange',()=>queueMicrotask(()=>updateZone()));
-}
-
-function bootWorld(){
-  document.documentElement.dataset.avessoWorld=WORLD_UI_VERSION;
-  document.documentElement.classList.add('avesso-world-redesign');
-  ensureBackdrop();
-  ensureWorldBar();
-  ensureWorldAside();
-  decorateNav();
-  decorateContent();
-  updateZone();
-  tickClock();
-  installWorldEvents();
-  setInterval(tickClock,30000);
-
-  const observer=new MutationObserver(()=>{
+function refreshWorld(){
+  if(refreshing)return;
+  refreshing=true;
+  try{
     ensureWorldBar();
     ensureWorldAside();
     decorateNav();
     decorateContent();
     updateZone();
-  });
-  observer.observe(document.body,{childList:true,subtree:true});
+    tickClock();
+  }finally{
+    refreshing=false;
+  }
 }
 
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bootWorld,{once:true});
-else bootWorld();
+function scheduleRefresh(){
+  if(refreshQueued)return;
+  refreshQueued=true;
+  const run=()=>{
+    refreshQueued=false;
+    refreshWorld();
+  };
+  if(typeof requestAnimationFrame==='function')requestAnimationFrame(run);
+  else setTimeout(run,0);
+}
+
+function installWorldEvents(){
+  document.addEventListener('click',event=>{
+    const button=event.target.closest?.('.app-nav [data-app-tab]');
+    if(button)setTimeout(()=>updateZone(button.dataset.appTab),0);
+  });
+  window.addEventListener('hashchange',scheduleRefresh);
+}
+
+function bootWorld(){
+  if(document.documentElement.dataset.avessoWorld===WORLD_UI_VERSION)return;
+  document.documentElement.dataset.avessoWorld=WORLD_UI_VERSION;
+  document.documentElement.classList.add('avesso-world-redesign');
+
+  refreshWorld();
+  installWorldEvents();
+  setInterval(tickClock,30000);
+
+  const target=document.querySelector('#app-view')||document.body;
+  if(target&&typeof MutationObserver!=='undefined'){
+    observer?.disconnect();
+    observer=new MutationObserver(scheduleRefresh);
+    observer.observe(target,{childList:true,subtree:true});
+  }
+}
+
+function scheduleBoot(){
+  setTimeout(bootWorld,0);
+}
+
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',scheduleBoot,{once:true});
+}else{
+  scheduleBoot();
+}
