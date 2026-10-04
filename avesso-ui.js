@@ -1,6 +1,6 @@
 import './market-center.js';
 
-const UI_VERSION='20261004-market1';
+const UI_VERSION='20261003-ui2';
 const POSTER_THEME_VERSION='20261003-rockstar1';
 
 function ensureUiStylesheet(key,file,version=UI_VERSION){
