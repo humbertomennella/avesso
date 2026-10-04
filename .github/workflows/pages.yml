@@ -22,6 +22,7 @@ jobs:
           node --input-type=module --check < app.js
           node --input-type=module --check < config.js
           node --input-type=module --check < economy-shadow.js
+          node --input-type=module --check < rewards-center.js
           node --input-type=module --check < polish.js
           node --input-type=module --check < release-controller.js
           node --input-type=module --check < story-media-compat.js
@@ -43,6 +44,9 @@ jobs:
           app = Path('app.js').read_text(encoding='utf-8')
           config = Path('config.js').read_text(encoding='utf-8')
           economy = Path('economy-shadow.js').read_text(encoding='utf-8')
+          rewards = Path('rewards-center.js').read_text(encoding='utf-8')
+          rewards_css = Path('rewards-center.css').read_text(encoding='utf-8')
+          mobile = Path('mobile.js').read_text(encoding='utf-8')
           polish = Path('polish.js').read_text(encoding='utf-8')
           polish_css = Path('polish.css').read_text(encoding='utf-8')
           release = Path('release-controller.js').read_text(encoding='utf-8')
@@ -70,6 +74,14 @@ jobs:
           assert 'Element.prototype.forEach' not in polish
           assert 'AUTH_TAB_LEGACY_BRIDGE' in polish
           assert "import(`./account-center.js" in polish
+          assert "import('./rewards-center.js?v=20261004-inventory1')" in mobile
+          assert "from('avesso_item_catalog')" in rewards
+          assert "from('avesso_user_inventory')" in rewards
+          assert "from('avesso_user_equipment')" in rewards
+          assert "from('user_badges')" in rewards
+          assert 'badge_not_owned' in rewards
+          assert '.rewards-badge-card.equipped' in rewards_css
+          assert '.avesso-equipped-badge' in rewards_css
           assert "account-export" in account
           assert "account-delete" in account
           assert "resetPasswordForEmail" in account
@@ -88,8 +100,8 @@ jobs:
           assert len([item for item in legacy if 'data-auth-mode' in item]) == 2, \
               'O bridge de auth precisa ser revisto: quantidade de chamadas legadas mudou.'
 
-          assert "const SHELL_CACHE='avesso-shell-v31'" in sw
-          for asset in ['./polish.js','./polish.css','./release-controller.js','./release-controller.css','./story-media-compat.js','./avesso-ui.js','./avesso-ui.css','./account-center.js','./account-center.css','./economy-shadow.js']:
+          assert "const SHELL_CACHE='avesso-shell-v32'" in sw
+          for asset in ['./polish.js','./polish.css','./release-controller.js','./release-controller.css','./story-media-compat.js','./avesso-ui.js','./avesso-ui.css','./account-center.js','./account-center.css','./economy-shadow.js','./rewards-center.js','./rewards-center.css']:
               assert repr(asset) in sw or f"'{asset}'" in sw, f'{asset} fora do shell offline'
 
           assert 'DESKTOP LAYOUT CONTRACT 2026-10-03' in polish_css
@@ -126,11 +138,14 @@ jobs:
               'supabase/migrations/20261003030000_account_privacy_audit.sql',
               'supabase/migrations/20261004112531_economia_avesso_shadow_mode_true_v1.sql',
               'supabase/migrations/20261004113742_economia_avesso_shadow_telemetry_v1.sql',
-              'supabase/migrations/20261004114131_economia_avesso_shadow_audit_v1.sql'
+              'supabase/migrations/20261004114131_economia_avesso_shadow_audit_v1.sql',
+              'supabase/migrations/20261004133000_inventory_badges_v1.sql',
+              'supabase/migrations/20261004133500_badge_registry_compat.sql',
+              'supabase/tests/inventory_badges.sql'
           ]:
               assert Path(path).is_file(), f'{path} ausente'
 
-          print('Contratos críticos de UX, autenticação, economia shadow, desktop, vídeo, atualização e privacidade conferidos.')
+          print('Contratos críticos de UX, autenticação, economia shadow, inventário, badges, desktop, vídeo, atualização e privacidade conferidos.')
           PY
       - name: Conferir fluxo comunitário e regras versionadas
         run: |
