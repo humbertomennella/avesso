@@ -21,6 +21,7 @@ jobs:
         run: |
           node --input-type=module --check < app.js
           node --input-type=module --check < config.js
+          node --input-type=module --check < economy-shadow.js
           node --input-type=module --check < polish.js
           node --input-type=module --check < release-controller.js
           node --input-type=module --check < story-media-compat.js
@@ -41,6 +42,7 @@ jobs:
           html = Path('index.html').read_text(encoding='utf-8')
           app = Path('app.js').read_text(encoding='utf-8')
           config = Path('config.js').read_text(encoding='utf-8')
+          economy = Path('economy-shadow.js').read_text(encoding='utf-8')
           polish = Path('polish.js').read_text(encoding='utf-8')
           polish_css = Path('polish.css').read_text(encoding='utf-8')
           release = Path('release-controller.js').read_text(encoding='utf-8')
@@ -63,6 +65,7 @@ jobs:
           assert "import './release-controller.js';" in config
           assert "import './story-media-compat.js';" in config
           assert "import './avesso-ui.js';" in config
+          assert "import('./economy-shadow.js')" in config
           assert 'Element.prototype.forEach' not in config
           assert 'Element.prototype.forEach' not in polish
           assert 'AUTH_TAB_LEGACY_BRIDGE' in polish
@@ -72,6 +75,13 @@ jobs:
           assert "resetPasswordForEmail" in account
           assert "signOut({scope:'others'})" in account
 
+          assert '/rest/v1/rpc/avesso_economy_heartbeat' in economy
+          assert "body:'{}'" in economy
+          assert 'ACTIVE_WINDOW_MS=120000' in economy
+          assert 'HEARTBEAT_MS=60000' in economy
+          assert 'document.visibilityState' in economy
+          assert 'amount' not in economy.lower(), 'cliente shadow não pode escolher valor de recompensa'
+
           legacy = re.findall(r"(?<!\$)\$\([^)]*\)\.forEach", app)
           unexpected = [item for item in legacy if 'data-auth-mode' not in item]
           assert not unexpected, f'querySelector(...).forEach fora do auth: {unexpected[:3]}'
@@ -79,7 +89,7 @@ jobs:
               'O bridge de auth precisa ser revisto: quantidade de chamadas legadas mudou.'
 
           assert "const SHELL_CACHE='avesso-shell-v31'" in sw
-          for asset in ['./polish.js','./polish.css','./release-controller.js','./release-controller.css','./story-media-compat.js','./avesso-ui.js','./avesso-ui.css','./account-center.js','./account-center.css']:
+          for asset in ['./polish.js','./polish.css','./release-controller.js','./release-controller.css','./story-media-compat.js','./avesso-ui.js','./avesso-ui.css','./account-center.js','./account-center.css','./economy-shadow.js']:
               assert repr(asset) in sw or f"'{asset}'" in sw, f'{asset} fora do shell offline'
 
           assert 'DESKTOP LAYOUT CONTRACT 2026-10-03' in polish_css
@@ -111,10 +121,16 @@ jobs:
           assert 'navigation rail real' in ui_css
           assert '#online-friends-dock' in ui_css
 
-          for path in ['PRIVACIDADE.md','TERMOS.md','supabase/migrations/20261003030000_account_privacy_audit.sql']:
+          for path in [
+              'PRIVACIDADE.md','TERMOS.md',
+              'supabase/migrations/20261003030000_account_privacy_audit.sql',
+              'supabase/migrations/20261004112531_economia_avesso_shadow_mode_true_v1.sql',
+              'supabase/migrations/20261004113742_economia_avesso_shadow_telemetry_v1.sql',
+              'supabase/migrations/20261004114131_economia_avesso_shadow_audit_v1.sql'
+          ]:
               assert Path(path).is_file(), f'{path} ausente'
 
-          print('Contratos críticos de UX, autenticação, desktop, vídeo, atualização e privacidade conferidos.')
+          print('Contratos críticos de UX, autenticação, economia shadow, desktop, vídeo, atualização e privacidade conferidos.')
           PY
       - name: Conferir fluxo comunitário e regras versionadas
         run: |
