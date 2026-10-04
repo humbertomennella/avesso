@@ -46,7 +46,12 @@ async function recoverVideo(video){
 function enhanceVideo(video){
   if(!video||tracked.has(video))return;
   tracked.add(video);
+  // Alguns builds do Firefox não refletem apenas o atributo HTML em
+  // HTMLVideoElement.playsInline. Mantemos atributo + propriedade para que
+  // o comportamento seja determinístico em desktop e mobile.
+  video.playsInline=true;
   video.setAttribute('playsinline','');
+  video.controls=true;
   video.setAttribute('controls','');
   video.preload='auto';
   video.controlsList?.remove?.('nodownload');

@@ -196,6 +196,12 @@ button,input,textarea,select,.app-nav,.app-aside,.desktop-command-bar,.section-c
     font-size:0!important;
     color:transparent!important;
   }
+  /* O tema posterior também estiliza .nav-logout. Este seletor mantém o
+     contrato do rail acima de qualquer regra visual carregada depois. */
+  html body.desktop-nav-collapsed #app-view.app-shell>.app-nav>.nav-logout{
+    font-size:0!important;
+    line-height:0!important;
+  }
   body.desktop-nav-collapsed .nav-logout>*{display:none!important}
   body.desktop-nav-collapsed .nav-logout:before{
     content:"⏻"!important;
