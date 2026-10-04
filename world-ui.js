@@ -41,10 +41,23 @@ function create(tag,className,html=''){
 
 function ensureWorldChrome(){
   const app=document.querySelector('#app-view.app-shell');
-  const nav=app?.querySelector('.app-nav');
-  const feed=app?.querySelector('.feed-column');
-  const aside=app?.querySelector('.app-aside');
+  const nav=app?.querySelector(':scope > .app-nav')||app?.querySelector('.app-nav');
+  const feed=app?.querySelector(':scope > .feed-column')||app?.querySelector('.feed-column');
+  const aside=app?.querySelector(':scope > .app-aside')||app?.querySelector('.app-aside');
   if(!app||!nav||!feed||!aside)return false;
+
+  // Restaura a hierarquia histórica caso uma execução anterior tenha deixado
+  // wrappers experimentais no DOM. CSS legado usa seletores com filho direto.
+  const legacyStage=app.querySelector(':scope > .world-stage');
+  if(legacyStage&&legacyStage.contains(feed)){
+    legacyStage.parentNode.insertBefore(feed,legacyStage);
+    legacyStage.remove();
+  }
+  const legacyTower=app.querySelector(':scope > .world-tower-shell');
+  if(legacyTower&&legacyTower.contains(aside)){
+    legacyTower.parentNode.insertBefore(aside,legacyTower);
+    legacyTower.remove();
+  }
 
   if(!document.querySelector('#avesso-world-backdrop')){
     const bg=create('div','avesso-world-backdrop');
@@ -54,28 +67,17 @@ function ensureWorldChrome(){
     document.body.appendChild(bg);
   }
 
-  let top=app.querySelector('.world-topbar');
+  let top=app.querySelector(':scope > .world-topbar');
   if(!top){
     top=create('header','world-topbar',`<div class="world-topbar-brand"><span>AVESSO://MUNDO</span><b data-world-scene-code>◒ PARA CUIDAR</b></div><div class="world-signal"><i></i><span data-world-signal>rede estável o suficiente</span></div><div class="world-clock" aria-hidden="true"><span>LOCAL</span><b data-world-clock>--:--</b></div>`);
     app.prepend(top);
   }
 
-  let stage=app.querySelector('.world-stage');
-  if(!stage){
-    stage=create('div','world-stage');
-    feed.parentNode.insertBefore(stage,feed);
-    stage.appendChild(feed);
+  if(!aside.querySelector(':scope > .world-tower-sign')){
+    aside.insertAdjacentHTML('afterbegin','<div class="world-tower-sign"><span>♛</span><b>TORRE DO ENGAJAMENTO</b><small>PROPAGANDA // AVISOS // DELÍRIOS</small></div>');
   }
 
-  let tower=app.querySelector('.world-tower-shell');
-  if(!tower){
-    tower=create('div','world-tower-shell');
-    aside.parentNode.insertBefore(tower,aside);
-    tower.appendChild(aside);
-    tower.insertAdjacentHTML('afterbegin','<div class="world-tower-sign"><span>♛</span><b>TORRE DO ENGAJAMENTO</b><small>PROPAGANDA // AVISOS // DELÍRIOS</small></div>');
-  }
-
-  let intro=feed.querySelector('.world-scene-intro');
+  let intro=feed.querySelector(':scope > .world-scene-intro');
   if(!intro){
     intro=create('section','world-scene-intro');
     intro.innerHTML='<div class="world-scene-copy"><span data-world-district>DISTRITO // SINAIS</span><h2 data-world-title>A praça de recados que virou feed</h2><p data-world-subtitle>Mais conversa, menos esteira.</p></div><div class="world-scene-terminal"><span>SINAL</span><b data-world-terminal>ONLINE</b><i></i></div>';
@@ -84,7 +86,7 @@ function ensureWorldChrome(){
 
   const stories=feed.querySelector('#stories-zone');
   const composer=feed.querySelector('.composer');
-  if(stories&&composer&&!feed.querySelector('.world-transmission-deck')){
+  if(stories&&composer&&!feed.querySelector(':scope > .world-transmission-deck')){
     const deck=create('section','world-transmission-deck');
     stories.parentNode.insertBefore(deck,stories);
     const label=create('header','world-deck-label','<span>TRANSMISSÕES // AGORA</span><small>Stories e coisas que talvez desapareçam antes de você entender</small>');
@@ -93,14 +95,14 @@ function ensureWorldChrome(){
 
   const status=feed.querySelector('#feed-status');
   const list=feed.querySelector('#feed-list');
-  if(status&&list&&!feed.querySelector('.world-stream')){
+  if(status&&list&&!feed.querySelector(':scope > .world-stream')){
     const stream=create('section','world-stream');
     status.parentNode.insertBefore(stream,status);
     stream.innerHTML='<header class="world-stream-head"><div><span>FLUXO // SEM ESTEIRA INFINITA</span><b data-world-stream-label>RECENTES</b></div><i aria-hidden="true"></i></header>';
     stream.append(status,list);
   }
 
-  if(!app.querySelector('.world-mobile-dock-label')){
+  if(!app.querySelector(':scope > .world-mobile-dock-label')){
     const label=create('div','world-mobile-dock-label','<span>AVESSO</span><b data-world-mobile-scene>PARA CUIDAR</b>');
     app.appendChild(label);
   }
@@ -123,18 +125,9 @@ function decorateSceneContent(scene){
     const profile=list.querySelector('.profile-control,.public-profile');
     if(profile&&!profile.querySelector('.world-corner-plaque'))profile.insertAdjacentHTML('afterbegin','<div class="world-corner-plaque"><span>◎</span><b>ESTE É UM LUGAR, NÃO UM PERFIL</b><small>MÚSICA // ÁLBUM // RECADOS // STORIES</small></div>');
   }
-  if(scene==='messages'){
-    const host=list.firstElementChild;
-    if(host&&!list.querySelector('.world-comms-plaque'))list.insertAdjacentHTML('afterbegin','<div class="world-comms-plaque"><span>↔</span><div><b>CENTRAL DE CÚMPLICES</b><small>PRESENÇA // MENSAGENS // JANELAS // BARULHOS DE MSN</small></div><i></i></div>');
-  }
-  if(scene==='residents'){
-    const host=list.firstElementChild;
-    if(host&&!list.querySelector('.world-residents-plaque'))list.insertAdjacentHTML('afterbegin','<div class="world-residents-plaque"><span>⌁</span><div><b>HABITANTES DO AVESSO</b><small>eles estavam aqui antes desta página carregar. reconfortante.</small></div></div>');
-  }
-  if(scene==='tower'){
-    const host=list.firstElementChild;
-    if(host&&!list.querySelector('.world-king-plaque'))list.insertAdjacentHTML('afterbegin','<div class="world-king-plaque"><span>♛</span><div><b>A TORRE ESTÁ TRANSMITINDO</b><small>o Rei do Engajamento garante que isto é estrategicamente indispensável.</small></div></div>');
-  }
+  if(scene==='messages'&&!list.querySelector('.world-comms-plaque'))list.insertAdjacentHTML('afterbegin','<div class="world-comms-plaque"><span>↔</span><div><b>CENTRAL DE CÚMPLICES</b><small>PRESENÇA // MENSAGENS // JANELAS // BARULHOS DE MSN</small></div><i></i></div>');
+  if(scene==='residents'&&!list.querySelector('.world-residents-plaque'))list.insertAdjacentHTML('afterbegin','<div class="world-residents-plaque"><span>⌁</span><div><b>HABITANTES DO AVESSO</b><small>eles estavam aqui antes desta página carregar. reconfortante.</small></div></div>');
+  if(scene==='tower'&&!list.querySelector('.world-king-plaque'))list.insertAdjacentHTML('afterbegin','<div class="world-king-plaque"><span>♛</span><div><b>A TORRE ESTÁ TRANSMITINDO</b><small>o Rei do Engajamento garante que isto é estrategicamente indispensável.</small></div></div>');
 }
 
 function applyScene(scene=activeScene()){
