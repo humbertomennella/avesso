@@ -285,3 +285,5 @@
     boot();
   }
 })();
+
+import('./rewards-center.js?v=20261004-inventory1').catch(error=>console.error('AVESSO rewards center',error));
