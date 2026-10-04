@@ -14,74 +14,85 @@ jobs:
         run: |
           npm install --no-save @playwright/test@1.55.0
           npx playwright install --with-deps chromium firefox webkit
-      - id: auth
-        name: SMOKE 1 — autenticação
+
+      - id: story_dc
+        name: STORY PLAYBACK — desktop Chromium
         continue-on-error: true
-        run: npx playwright test --grep "fluxo de autenticação"
-      - id: overflow
-        name: SMOKE 2 — overflow landing/auth
+        run: npx playwright test --grep "reprodução do Story" --project=desktop-chromium
+      - id: story_df
+        name: STORY PLAYBACK — desktop Firefox
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "overflow horizontal"
-      - id: legal
-        name: SMOKE 3 — documentos legais
+        run: npx playwright test --grep "reprodução do Story" --project=desktop-firefox
+      - id: story_dw
+        name: STORY PLAYBACK — desktop WebKit
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "documentos legais"
-      - id: story_mime
-        name: SMOKE 4 — Story MIME
+        run: npx playwright test --grep "reprodução do Story" --project=desktop-webkit
+      - id: story_mc
+        name: STORY PLAYBACK — mobile Chromium
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "parâmetros de codec"
-      - id: story_playback
-        name: SMOKE 5 — Story playback
+        run: npx playwright test --grep "reprodução do Story" --project=mobile-chromium
+      - id: story_mw
+        name: STORY PLAYBACK — mobile WebKit
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "reprodução do Story"
-      - id: desktop_layout
-        name: SMOKE 6 — desktop layout
+        run: npx playwright test --grep "reprodução do Story" --project=mobile-webkit
+
+      - id: nav_dc
+        name: SIDEBAR — desktop Chromium
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "desktop mantém laterais"
-      - id: desktop_wide
-        name: SMOKE 7 — desktop largo
+        run: npx playwright test --grep "sidebar recolhida" --project=desktop-chromium
+      - id: nav_df
+        name: SIDEBAR — desktop Firefox
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "desktop largo preserva"
-      - id: nav_collapsed
-        name: SMOKE 8 — sidebar recolhida
+        run: npx playwright test --grep "sidebar recolhida" --project=desktop-firefox
+      - id: nav_dw
+        name: SIDEBAR — desktop WebKit
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "sidebar recolhida"
-      - id: release
-        name: SMOKE 9 — atualização automática
+        run: npx playwright test --grep "sidebar recolhida" --project=desktop-webkit
+      - id: nav_mc
+        name: SIDEBAR — mobile Chromium
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "nova versão avisa"
-      - name: FALHA — autenticação
-        if: ${{ always() && steps.auth.outcome == 'failure' }}
+        run: npx playwright test --grep "sidebar recolhida" --project=mobile-chromium
+      - id: nav_mw
+        name: SIDEBAR — mobile WebKit
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --grep "sidebar recolhida" --project=mobile-webkit
+
+      - name: FALHA — Story desktop Chromium
+        if: ${{ always() && steps.story_dc.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — overflow landing/auth
-        if: ${{ always() && steps.overflow.outcome == 'failure' }}
+      - name: FALHA — Story desktop Firefox
+        if: ${{ always() && steps.story_df.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — documentos legais
-        if: ${{ always() && steps.legal.outcome == 'failure' }}
+      - name: FALHA — Story desktop WebKit
+        if: ${{ always() && steps.story_dw.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — Story MIME
-        if: ${{ always() && steps.story_mime.outcome == 'failure' }}
+      - name: FALHA — Story mobile Chromium
+        if: ${{ always() && steps.story_mc.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — Story playback
-        if: ${{ always() && steps.story_playback.outcome == 'failure' }}
+      - name: FALHA — Story mobile WebKit
+        if: ${{ always() && steps.story_mw.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — desktop layout
-        if: ${{ always() && steps.desktop_layout.outcome == 'failure' }}
+      - name: FALHA — Sidebar desktop Chromium
+        if: ${{ always() && steps.nav_dc.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — desktop largo
-        if: ${{ always() && steps.desktop_wide.outcome == 'failure' }}
+      - name: FALHA — Sidebar desktop Firefox
+        if: ${{ always() && steps.nav_df.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — sidebar recolhida
-        if: ${{ always() && steps.nav_collapsed.outcome == 'failure' }}
+      - name: FALHA — Sidebar desktop WebKit
+        if: ${{ always() && steps.nav_dw.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — atualização automática
-        if: ${{ always() && steps.release.outcome == 'failure' }}
+      - name: FALHA — Sidebar mobile Chromium
+        if: ${{ always() && steps.nav_mc.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — Sidebar mobile WebKit
+        if: ${{ always() && steps.nav_mw.outcome == 'failure' }}
         run: exit 1
