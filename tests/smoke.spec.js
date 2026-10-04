@@ -138,6 +138,9 @@ test('sidebar recolhida vira navigation rail de ícones sem resíduos do modo ex
   await expect(nav).toHaveCSS('width','76px');
   await expect(button).toHaveCSS('width','50px');
   await expect(button).toHaveCSS('height','44px');
+  // O botão de sair herda transition: .18s; sua fonte ainda pode estar
+  // interpolando mesmo quando a largura da sidebar já chegou ao destino.
+  await expect(nav.locator('.nav-logout')).toHaveCSS('font-size','0px');
   const metrics=await page.evaluate(()=>{
     const nav=document.querySelector('.app-nav');
     const button=document.querySelector('.app-nav nav button');
