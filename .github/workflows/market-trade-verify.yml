@@ -1,0 +1,49 @@
+name: Verificar Mercado AVESSO
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  market-trade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar sintaxe da interface
+        run: |
+          node --input-type=module --check < market-center.js
+          node --input-type=module --check < avesso-ui.js
+          node --check sw.js
+      - name: Conferir contratos de mercado e shadow
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          market = Path('market-center.js').read_text(encoding='utf-8')
+          sw = Path('sw.js').read_text(encoding='utf-8')
+          migration = Path('supabase/migrations/20261004170500_market_trade_v1.sql').read_text(encoding='utf-8').lower()
+          guard = Path('supabase/migrations/20261004170600_market_trade_price_guard.sql').read_text(encoding='utf-8').lower()
+          hardening = Path('supabase/migrations/20261004171000_market_trade_hardening.sql').read_text(encoding='utf-8').lower()
+          test = Path('supabase/tests/market_trade.sql').read_text(encoding='utf-8').lower()
+
+          assert "import './market-center.js';" in Path('avesso-ui.js').read_text(encoding='utf-8')
+          assert "'./market-center.js'" in sw and "'./market-center.css'" in sw
+          assert "avesso_market_create_listing" in market
+          assert "avesso_market_cancel_listing" in market
+          assert "avesso_trade_create_offer" in market
+          assert "avesso_trade_accept_offer" in market
+          assert "compras liberam quando saldo sair do shadow" in market.lower()
+
+          assert "economy_not_live" in migration
+          assert "coalesce(v_mode,'off') <> 'live'" in migration.replace(' ', '') or "coalesce(v_mode,'off')<>'live'" in migration.replace(' ', '')
+          assert "security definer" in migration
+          assert "set search_path = ''" in migration or "set search_path=''" in migration
+          assert "revoke all on function public.avesso_market_buy" in migration
+          assert "avesso_market_price_ledger_range" in guard
+          assert "avesso_market_escrow_client_deny" in hardening
+          assert "avesso_trade_escrow_client_deny" in hardening
+          assert "market_trade_validation_ok" not in test
+          assert "economia deveria continuar em shadow" in test
+          print('Mercado + Trocas: contratos estáticos conferidos.')
+          PY
