@@ -1,0 +1,55 @@
+name: Diagnosticar smoke AVESSO
+on:
+  push:
+    branches: [reskin-poster-rockstar]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar Playwright
+        run: |
+          npm install --no-save @playwright/test@1.55.0
+          npx playwright install --with-deps chromium firefox webkit
+      - id: dc
+        name: FULL — desktop Chromium
+        continue-on-error: true
+        run: npx playwright test --project=desktop-chromium
+      - id: df
+        name: FULL — desktop Firefox
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --project=desktop-firefox
+      - id: dw
+        name: FULL — desktop WebKit
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --project=desktop-webkit
+      - id: mc
+        name: FULL — mobile Chromium
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --project=mobile-chromium
+      - id: mw
+        name: FULL — mobile WebKit
+        if: always()
+        continue-on-error: true
+        run: npx playwright test --project=mobile-webkit
+      - name: FALHA — desktop Chromium
+        if: ${{ always() && steps.dc.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — desktop Firefox
+        if: ${{ always() && steps.df.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — desktop WebKit
+        if: ${{ always() && steps.dw.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — mobile Chromium
+        if: ${{ always() && steps.mc.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — mobile WebKit
+        if: ${{ always() && steps.mw.outcome == 'failure' }}
+        run: exit 1
