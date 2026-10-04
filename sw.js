@@ -22,6 +22,7 @@ const SHELL_ASSETS=[
   './polish.js',
   './release-controller.js',
   './account-center.js',
+  './economy-shadow.js',
   './config.js',
   './gif-library.js',
   './manifest.webmanifest',
