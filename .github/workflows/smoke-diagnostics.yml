@@ -58,24 +58,30 @@ jobs:
         if: always()
         continue-on-error: true
         run: npx playwright test --grep "nova versão avisa"
-      - name: Consolidar diagnóstico
-        if: always()
-        run: |
-          echo "auth=${{ steps.auth.outcome }}"
-          echo "overflow=${{ steps.overflow.outcome }}"
-          echo "legal=${{ steps.legal.outcome }}"
-          echo "story_mime=${{ steps.story_mime.outcome }}"
-          echo "story_playback=${{ steps.story_playback.outcome }}"
-          echo "desktop_layout=${{ steps.desktop_layout.outcome }}"
-          echo "desktop_wide=${{ steps.desktop_wide.outcome }}"
-          echo "nav_collapsed=${{ steps.nav_collapsed.outcome }}"
-          echo "release=${{ steps.release.outcome }}"
-          test "${{ steps.auth.outcome }}" = success
-          test "${{ steps.overflow.outcome }}" = success
-          test "${{ steps.legal.outcome }}" = success
-          test "${{ steps.story_mime.outcome }}" = success
-          test "${{ steps.story_playback.outcome }}" = success
-          test "${{ steps.desktop_layout.outcome }}" = success
-          test "${{ steps.desktop_wide.outcome }}" = success
-          test "${{ steps.nav_collapsed.outcome }}" = success
-          test "${{ steps.release.outcome }}" = success
+      - name: FALHA — autenticação
+        if: ${{ always() && steps.auth.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — overflow landing/auth
+        if: ${{ always() && steps.overflow.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — documentos legais
+        if: ${{ always() && steps.legal.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — Story MIME
+        if: ${{ always() && steps.story_mime.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — Story playback
+        if: ${{ always() && steps.story_playback.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — desktop layout
+        if: ${{ always() && steps.desktop_layout.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — desktop largo
+        if: ${{ always() && steps.desktop_wide.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — sidebar recolhida
+        if: ${{ always() && steps.nav_collapsed.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — atualização automática
+        if: ${{ always() && steps.release.outcome == 'failure' }}
+        run: exit 1
