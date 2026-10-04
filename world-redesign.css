@@ -1,0 +1,179 @@
+/* AVESSO WORLD REDESIGN // structural layer
+   Reorganiza a experiência sem alterar Supabase, Auth, RLS ou app.js. */
+
+:root{
+  --world-pink:#ff2dbd;
+  --world-cyan:#28d8ff;
+  --world-paper:#f4f0ea;
+  --world-ink:#06070b;
+  --world-panel:#0b0e14;
+  --world-panel-2:#111620;
+  --world-line:rgba(255,255,255,.13);
+  --world-muted:#8c92a0;
+  --world-green:#7dff9d;
+  --world-yellow:#f7d154;
+}
+
+html.avesso-world-redesign{background:#05060a}
+html.avesso-world-redesign body{min-height:100vh;background:#05060a!important}
+
+.avesso-world-backdrop{position:fixed;inset:0;z-index:-3;overflow:hidden;pointer-events:none;background:
+  radial-gradient(circle at 18% 22%,rgba(255,45,189,.16),transparent 26rem),
+  radial-gradient(circle at 83% 16%,rgba(40,216,255,.13),transparent 30rem),
+  linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px),
+  #05060a;background-size:auto,auto,48px 48px,48px 48px,auto}
+.avesso-world-backdrop:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(to bottom,transparent 0 3px,rgba(0,0,0,.15) 4px);opacity:.55}
+.avesso-world-backdrop i{position:absolute;border:1px solid rgba(255,255,255,.06);transform:rotate(-8deg);box-shadow:0 0 90px rgba(255,45,189,.06)}
+.avesso-world-backdrop i:nth-child(1){width:34vw;height:34vw;left:-10vw;top:22vh}
+.avesso-world-backdrop i:nth-child(2){width:25vw;height:25vw;right:-4vw;top:9vh;transform:rotate(18deg)}
+.avesso-world-backdrop i:nth-child(3){width:40vw;height:14vw;left:31vw;bottom:-8vw;transform:rotate(2deg)}
+.avesso-world-backdrop>span{position:absolute;right:18px;bottom:18px;font:700 10px/1 var(--mono);letter-spacing:.18em;color:rgba(255,255,255,.05);writing-mode:vertical-rl}
+
+/* App vira um lugar, não apenas três colunas. */
+#app-view.app-shell{background:transparent!important;min-height:100vh!important}
+#app-view.app-shell:after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(90deg,rgba(255,45,189,.025),transparent 26%,transparent 74%,rgba(40,216,255,.025))}
+
+.app-nav{border-right:1px solid rgba(255,45,189,.18)!important;background:linear-gradient(180deg,rgba(6,7,11,.98),rgba(9,10,15,.95))!important;box-shadow:18px 0 60px rgba(0,0,0,.22)!important}
+.app-nav:before{content:"NAV://DISTRITOS";display:block;padding:0 0 12px;margin:4px 0 14px;font:700 9px/1 var(--mono);letter-spacing:.18em;color:var(--world-cyan);border-bottom:1px dashed rgba(255,255,255,.12)}
+.app-nav nav{position:relative}
+.app-nav nav:before{content:"";position:absolute;left:17px;top:17px;bottom:17px;width:1px;background:linear-gradient(var(--world-pink),rgba(255,255,255,.04),var(--world-cyan));opacity:.35}
+.app-nav [data-app-tab]{position:relative!important;display:grid!important;grid-template-columns:34px 1fr!important;align-items:center!important;gap:10px!important;min-height:48px!important;padding:7px 10px!important;margin:4px 0!important;border:1px solid transparent!important;border-radius:4px!important;background:transparent!important;color:#a7abb5!important;text-align:left!important}
+.app-nav [data-app-tab]:before{content:attr(data-world-index);display:grid;place-items:center;width:28px;height:28px;border:1px solid rgba(255,255,255,.14);background:#080a0f;color:#686d78;font:700 8px/1 var(--mono);z-index:1}
+.app-nav [data-app-tab]:after{content:attr(data-world-name);position:absolute;right:9px;top:5px;font:700 7px/1 var(--mono);letter-spacing:.08em;color:rgba(255,255,255,.18);text-transform:uppercase}
+.app-nav [data-app-tab]:hover{background:rgba(255,255,255,.035)!important;border-color:rgba(40,216,255,.18)!important;color:#fff!important;transform:translateX(2px)}
+.app-nav [data-app-tab].active,.app-nav [data-app-tab][data-world-current]{background:linear-gradient(90deg,rgba(255,45,189,.15),rgba(255,45,189,.025))!important;border-color:rgba(255,45,189,.35)!important;color:#fff!important;box-shadow:4px 0 0 var(--world-pink) inset!important}
+.app-nav [data-app-tab].active:before,.app-nav [data-app-tab][data-world-current]:before{border-color:var(--world-pink);color:#fff;box-shadow:0 0 20px rgba(255,45,189,.2)}
+
+.user-chip{position:relative!important;overflow:hidden!important;border:1px solid rgba(40,216,255,.16)!important;background:linear-gradient(135deg,rgba(40,216,255,.07),rgba(255,45,189,.05))!important}
+.user-chip:after{content:"PRESENÇA LOCAL";position:absolute;right:8px;bottom:6px;font:700 7px/1 var(--mono);color:rgba(125,255,157,.65);letter-spacing:.08em}
+.user-chip .avatar{box-shadow:0 0 0 2px #090b10,0 0 0 3px rgba(255,45,189,.45),0 0 22px rgba(255,45,189,.14)!important}
+
+/* Palco central por zona */
+.feed-column{position:relative!important;max-width:860px!important;background:linear-gradient(180deg,rgba(8,10,15,.78),rgba(6,7,10,.88))!important;border-left:1px solid rgba(255,255,255,.04)!important;border-right:1px solid rgba(255,255,255,.04)!important;box-shadow:0 0 80px rgba(0,0,0,.30)!important;min-height:100vh!important}
+.feed-column:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(120deg,rgba(255,45,189,.025),transparent 25%),linear-gradient(300deg,rgba(40,216,255,.025),transparent 24%)}
+
+.world-zone-bar{position:sticky;top:0;z-index:18;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:end;padding:18px 22px 16px;margin:0 -1px 18px;background:linear-gradient(180deg,rgba(5,6,10,.97),rgba(8,10,15,.92));border-top:1px solid rgba(255,255,255,.05);border-bottom:1px solid rgba(255,45,189,.20);box-shadow:0 16px 40px rgba(0,0,0,.28);backdrop-filter:blur(14px)}
+.world-zone-copy{display:grid;gap:4px;min-width:0}
+.world-zone-code{font:800 9px/1 var(--mono);letter-spacing:.16em;color:var(--world-cyan);text-transform:uppercase}
+.world-zone-title{font:800 clamp(22px,3vw,36px)/.95 var(--sans);letter-spacing:-.055em;text-transform:uppercase;color:#f3efe9;text-shadow:2px 0 rgba(255,45,189,.28),-2px 0 rgba(40,216,255,.18)}
+.world-zone-subtitle{font:500 12px/1.35 var(--sans);color:#898f9d}
+.world-zone-telemetry{display:flex;align-items:center;gap:14px;font:700 8px/1 var(--mono);letter-spacing:.11em;color:#777d88;text-transform:uppercase}
+.world-zone-telemetry>span{display:flex;gap:7px;align-items:center}
+.world-zone-dot{width:7px;height:7px;border-radius:50%;background:var(--world-green);box-shadow:0 0 12px rgba(125,255,157,.7)}
+.world-zone-clock{padding:7px 8px;border:1px solid rgba(255,255,255,.1);background:#07090d;color:#c2c5ce}
+
+.feed-header{margin:0 18px 16px!important;padding:16px 18px!important;border:1px solid rgba(255,255,255,.08)!important;background:linear-gradient(135deg,rgba(255,255,255,.025),rgba(255,45,189,.025))!important;clip-path:polygon(0 0,98% 0,100% 18%,100% 100%,2% 100%,0 82%)}
+.feed-header h1{font-size:clamp(24px,4vw,42px)!important;line-height:.95!important;text-transform:uppercase!important;letter-spacing:-.055em!important}
+
+/* Stories viram sinalizadores de presença. */
+.stories-zone{margin:0 18px 18px!important;padding:14px 14px 16px!important;border:1px solid rgba(40,216,255,.12)!important;background:#090c12!important;box-shadow:inset 0 1px rgba(255,255,255,.03)!important;position:relative!important}
+.stories-zone:before{content:"STORIES://SINAIS DE VIDA";display:block;margin-bottom:11px;font:800 8px/1 var(--mono);letter-spacing:.15em;color:var(--world-cyan)}
+.stories-zone>*{position:relative;z-index:1}
+.story-card,.story-item{filter:saturate(.88) contrast(1.04)}
+.story-card img,.story-item img{box-shadow:0 0 0 2px #080a0f,0 0 0 3px rgba(255,45,189,.48)!important}
+
+/* Composer como terminal de transmissão */
+.composer{margin:0 18px 20px!important;border:1px solid rgba(255,45,189,.24)!important;background:linear-gradient(180deg,#0c0f15,#080a0f)!important;box-shadow:8px 8px 0 rgba(255,45,189,.05),-5px -5px 0 rgba(40,216,255,.025)!important;position:relative!important;overflow:visible!important}
+.composer:before{content:"TERMINAL DE TRANSMISSÃO // CTRL+HUMANO";display:block;margin:-1px -1px 14px;padding:9px 12px;background:linear-gradient(90deg,var(--world-pink),#a7258b 62%,transparent);font:800 8px/1 var(--mono);letter-spacing:.13em;color:white}
+.composer textarea{min-height:118px!important;background:#06080c!important;border:1px solid rgba(255,255,255,.11)!important;color:#f0edf0!important;font-size:15px!important;box-shadow:inset 0 0 30px rgba(0,0,0,.3)!important}
+.composer select,.composer input{background:#090c12!important;border-color:rgba(255,255,255,.13)!important;color:#e7e7ea!important}
+.composer-footer{border-top:1px dashed rgba(255,255,255,.12)!important;padding-top:12px!important}
+
+/* Feed editorial, não lista SaaS */
+.feed-list{display:grid!important;gap:18px!important;padding:0 18px 90px!important}
+.world-content-card,.feed-list>.post,.feed-list>.post-card,.feed-list>.feed-item{position:relative!important;border:1px solid rgba(255,255,255,.11)!important;background:linear-gradient(150deg,#0d1017,#080a0f 72%)!important;box-shadow:10px 10px 0 rgba(0,0,0,.20),0 0 0 1px rgba(255,45,189,.02)!important;border-radius:5px!important;overflow:visible!important}
+.world-content-card:before{content:"POST://" attr(data-world-serial);position:absolute;top:-9px;right:12px;padding:4px 7px;background:#05070b;border:1px solid rgba(40,216,255,.25);font:800 7px/1 var(--mono);letter-spacing:.08em;color:var(--world-cyan);z-index:2}
+.world-content-card:nth-child(3n+2){transform:translateX(7px)}
+.world-content-card:nth-child(3n){transform:translateX(-5px)}
+.world-content-card:hover{border-color:rgba(255,45,189,.28)!important;box-shadow:10px 10px 0 rgba(255,45,189,.05),0 0 40px rgba(255,45,189,.045)!important}
+
+/* Lateral como torre / rádio local */
+.app-aside{background:linear-gradient(180deg,rgba(7,8,12,.97),rgba(9,11,16,.94))!important;border-left:1px solid rgba(40,216,255,.14)!important;box-shadow:-18px 0 60px rgba(0,0,0,.18)!important}
+.app-aside:before{content:"TORRE://SINAL LOCAL";display:block;margin:3px 0 15px;padding:0 0 12px;border-bottom:1px dashed rgba(255,255,255,.10);font:800 8px/1 var(--mono);letter-spacing:.15em;color:var(--world-pink)}
+.aside-card{border:1px solid rgba(255,255,255,.09)!important;background:linear-gradient(180deg,#0d1118,#090c11)!important;box-shadow:5px 5px 0 rgba(40,216,255,.025)!important;border-radius:4px!important}
+.world-broadcast{position:relative!important;overflow:hidden!important}
+.world-broadcast:after{content:"";position:absolute;inset:auto -20px -28px auto;width:80px;height:80px;border:1px solid rgba(255,45,189,.16);border-radius:50%;box-shadow:0 0 0 10px rgba(255,45,189,.03),0 0 0 20px rgba(255,45,189,.02)}
+.world-broadcast-head{display:flex;justify-content:space-between;align-items:center;font:800 8px/1 var(--mono);letter-spacing:.13em;color:var(--world-cyan)}
+.world-broadcast-head b{color:var(--world-pink);text-shadow:0 0 12px rgba(255,45,189,.7)}
+.world-broadcast-copy{font-size:13px!important;line-height:1.45!important;color:#b7bac2!important}
+.world-broadcast small{font:700 7px/1 var(--mono);color:#565c68;letter-spacing:.1em}
+
+/* Zonas assumem atmosferas diferentes sem trocar lógica. */
+body[data-world-zone="plaza"] .feed-column{background:radial-gradient(circle at 50% 20%,rgba(40,216,255,.07),transparent 26rem),linear-gradient(180deg,rgba(7,11,17,.94),rgba(5,7,10,.98))!important}
+body[data-world-zone="plaza"] .world-zone-bar{border-bottom-color:rgba(40,216,255,.35)}
+body[data-world-zone="plaza"] .world-zone-title{color:#ddf9ff}
+body[data-world-zone="plaza"] .feed-column:after{content:"PRAÇA // PESSOAS PRESENTES";position:fixed;left:50%;bottom:16px;transform:translateX(-50%);padding:6px 10px;background:#070a0f;border:1px solid rgba(40,216,255,.18);font:800 7px/1 var(--mono);letter-spacing:.13em;color:rgba(40,216,255,.65);pointer-events:none}
+
+body[data-world-zone="residents"] .feed-column{background:radial-gradient(circle at 50% 18%,rgba(141,92,255,.09),transparent 27rem),linear-gradient(180deg,#0a0910,#07080d)!important}
+body[data-world-zone="residents"] .world-zone-bar{border-bottom-color:rgba(141,92,255,.38)}
+body[data-world-zone="residents"] .world-zone-dot{background:#b993ff;box-shadow:0 0 14px rgba(185,147,255,.72)}
+
+body[data-world-zone="tower"] .feed-column{background:linear-gradient(180deg,rgba(18,12,4,.96),rgba(7,7,9,.99))!important}
+body[data-world-zone="tower"] .world-zone-bar{border-bottom-color:rgba(247,209,84,.35)}
+body[data-world-zone="tower"] .world-zone-code,body[data-world-zone="tower"] .world-zone-signal{color:var(--world-yellow)}
+body[data-world-zone="tower"] .world-zone-dot{background:var(--world-yellow);box-shadow:0 0 14px rgba(247,209,84,.65)}
+
+body[data-world-zone="messages"] .feed-column{background:radial-gradient(circle at 50% 12%,rgba(53,120,255,.08),transparent 25rem),linear-gradient(180deg,#080b13,#06070b)!important}
+body[data-world-zone="profile"] .feed-column{background:radial-gradient(circle at 50% 16%,rgba(255,45,189,.08),transparent 27rem),linear-gradient(180deg,#0b0810,#06070b)!important}
+
+/* Perfil vira espaço pessoal, não ficha. */
+.world-profile-frame,.profile-shell,.corner-shell{border:1px solid rgba(255,45,189,.18)!important;background:linear-gradient(145deg,rgba(15,11,18,.94),rgba(7,9,13,.96))!important;box-shadow:12px 12px 0 rgba(255,45,189,.04)!important}
+.profile-hero,.corner-hero{position:relative!important;overflow:hidden!important;border-radius:4px!important;min-height:220px!important}
+.profile-hero:after,.corner-hero:after{content:"SEU CANTO // NÃO É UM CURRÍCULO";position:absolute;left:14px;bottom:12px;padding:6px 8px;background:rgba(5,6,10,.78);border:1px solid rgba(255,255,255,.13);font:800 7px/1 var(--mono);letter-spacing:.12em;color:#c8c5ca;backdrop-filter:blur(8px)}
+
+/* Janelas de conversa assumem o desktop retrô-futurista. */
+.world-chat-frame,.chat-window,.direct-chat-window,.messages-window,.conversation-window{border:1px solid rgba(40,216,255,.28)!important;border-radius:5px!important;background:#080a10!important;box-shadow:12px 12px 0 rgba(40,216,255,.06),-4px -4px 0 rgba(255,45,189,.05),0 28px 70px rgba(0,0,0,.45)!important}
+.world-chat-frame:before,.chat-window:before,.direct-chat-window:before{content:"AVESSO MESSENGER // conexão humana instável";display:block;padding:8px 10px;background:linear-gradient(90deg,#d9d7d3,#bfc2c8);color:#090a0e;font:800 8px/1 var(--mono);letter-spacing:.06em}
+
+/* Stories em tela cheia continuam legíveis e ganham moldura de transmissão. */
+.story-view-card.world-story-frame,.story-view-card{border:1px solid rgba(255,45,189,.28)!important;background:#05070a!important;box-shadow:0 0 0 1px rgba(40,216,255,.08),0 30px 90px rgba(0,0,0,.70)!important}
+.story-view-card:before{content:"STORY://TRANSMISSÃO TEMPORÁRIA";position:absolute;left:12px;top:12px;z-index:4;padding:6px 8px;background:rgba(5,6,9,.76);font:800 7px/1 var(--mono);letter-spacing:.1em;color:var(--world-cyan);border:1px solid rgba(40,216,255,.22)}
+
+/* Landing também ganha composição editorial, não só cor. */
+#marketing-view .hero{display:grid!important;grid-template-columns:minmax(0,.88fr) minmax(420px,1.12fr)!important;gap:clamp(30px,5vw,80px)!important;align-items:center!important;min-height:calc(100vh - 80px)!important}
+#marketing-view .hero-copy{position:relative!important;z-index:2!important}
+#marketing-view .hero-copy:before{content:"MANIFESTO DE ENTRADA";display:inline-block;margin-bottom:12px;padding:5px 8px;background:#07090d;border:1px solid rgba(40,216,255,.20);font:800 8px/1 var(--mono);letter-spacing:.13em;color:var(--world-cyan)}
+#marketing-view .hero-art{transform:rotate(1.1deg)!important}
+#marketing-view .hero-art:after{content:"OUTRO LADO DA INTERNET";position:absolute;right:-10px;bottom:18px;padding:8px 10px;background:var(--world-pink);color:#fff;font:800 8px/1 var(--mono);letter-spacing:.1em;transform:rotate(-2deg)}
+
+/* Mobile vira interface própria, não desktop espremido. */
+@media(max-width:900px){
+  .avesso-world-backdrop>span{display:none}
+  #marketing-view .hero{grid-template-columns:1fr!important;min-height:auto!important;padding-top:28px!important}
+  #marketing-view .hero-art{transform:none!important}
+  .world-zone-bar{top:0;padding:12px 12px 11px;margin:0 0 12px;grid-template-columns:1fr auto}
+  .world-zone-title{font-size:22px}
+  .world-zone-subtitle{font-size:11px;max-width:36ch}
+  .world-zone-telemetry{align-self:center}
+  .world-zone-signal{display:none}
+  .feed-column{max-width:none!important;width:100%!important;border:none!important;padding-bottom:76px!important}
+  .feed-header,.stories-zone,.composer{margin-left:10px!important;margin-right:10px!important}
+  .feed-list{padding-left:10px!important;padding-right:10px!important}
+  .world-content-card:nth-child(n){transform:none!important}
+  .app-nav{border-top:1px solid rgba(255,45,189,.22)!important;border-right:none!important;background:rgba(5,6,10,.96)!important;backdrop-filter:blur(16px)!important;box-shadow:0 -12px 40px rgba(0,0,0,.32)!important}
+  .app-nav:before,.app-nav .brand,.app-nav .user-chip,.app-nav #online-friends-dock,.app-nav .nav-logout{display:none!important}
+  .app-nav nav{display:flex!important;overflow-x:auto!important;gap:3px!important;padding:6px 7px max(6px,env(safe-area-inset-bottom))!important;scrollbar-width:none!important}
+  .app-nav nav:before{display:none!important}
+  .app-nav [data-app-tab]{flex:0 0 64px!important;display:grid!important;grid-template-columns:1fr!important;place-items:center!important;min-height:54px!important;padding:4px!important;margin:0!important;border-radius:5px!important;text-align:center!important}
+  .app-nav [data-app-tab]:before{width:26px;height:26px;margin:auto;font-size:7px}
+  .app-nav [data-app-tab]:after{content:attr(data-world-name);position:static!important;display:block!important;margin-top:3px!important;max-width:58px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;font-size:6px!important;color:#8f94a0!important}
+  .app-nav [data-app-tab].active{box-shadow:0 -3px 0 var(--world-pink) inset!important}
+  .app-aside{display:none!important}
+  body[data-world-zone="plaza"] .feed-column:after{display:none}
+  .composer:before{font-size:7px}
+}
+
+@media(max-width:520px){
+  .world-zone-code{font-size:7px}
+  .world-zone-title{font-size:20px}
+  .world-zone-clock{font-size:7px;padding:6px}
+  .world-zone-subtitle{max-width:29ch}
+  .feed-header h1{font-size:28px!important}
+  .composer{padding:12px!important}
+  .feed-list{gap:14px!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .world-content-card,.app-nav [data-app-tab],#marketing-view .hero-art{transform:none!important;transition:none!important}
+}
