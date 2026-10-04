@@ -6566,21 +6566,37 @@ async function loadInventory(){
     supabase.from('avesso_item_catalog').select('id,slug,item_type,name,description,asset_path,rarity,tradable,soulbound,badge_id,metadata,sort_order').eq('active',true).order('sort_order',{ascending:true}),
     supabase.from('avesso_user_equipment').select('user_id,primary_badge_id').eq('user_id',state.profile.id).maybeSingle()
   ]);
-  if(inventoryRes.error||catalogRes.error){host.innerHTML='<p class="inventory-empty">O armário não abriu. A burocracia venceu por enquanto.</p>';return;}
+  if(inventoryRes.error||catalogRes.error){
+    host.innerHTML='<p class="inventory-empty">O armário não abriu. A burocracia venceu por enquanto.</p>';
+    return;
+  }
   const catalog=Object.fromEntries((catalogRes.data||[]).map(x=>[x.id,x]));
   state.userInventory=inventoryRes.data||[];
   state.userEquipment[state.profile.id]=equipmentRes.data||{user_id:state.profile.id,primary_badge_id:null};
-  const equipped=state.userEquipment[state.profile.id]?.primary_badge_id;
+  const equipped=state.userEquipment[state.profile.id]?.primary_badge_id||null;
   const items=state.userInventory.map(row=>({...row,item:catalog[row.item_id]})).filter(x=>x.item&&x.item.active!==false);
-  if(!items.length){host.innerHTML='<div class="inventory-empty"><strong>INVENTÁRIO VAZIO</strong><span>Você ainda não tem itens equipáveis.</span></div>';return;}
-  host.innerHTML=items.map(entry=>{
+  if(!items.length){
+    host.innerHTML='<div class="inventory-empty"><strong>INVENTÁRIO VAZIO</strong><span>Você ainda não tem itens equipáveis.</span></div>';
+    return;
+  }
+  const badgeCount=items.filter(x=>x.item.item_type==='badge').length;
+  host.innerHTML='<div class="inventory-grid">'+items.map(entry=>{
     const item=entry.item;
     const isBadge=item.item_type==='badge';
     const isEquipped=isBadge&&item.badge_id===equipped;
-    const glyph=item.metadata?.glyph||'✦';
-    const action=isBadge ? '<button type="button" class="inventory-equip '+(isEquipped?'is-equipped':'')+'" data-equip-badge="'+escapeAttr(item.badge_id||'')+'">'+(isEquipped?'remover':'equipar')+'</button>' : '<span class="inventory-soon">item catalogado</span>';
-    return '<article class="inventory-card rarity-'+escapeAttr(item.rarity||'common')+'"><div class="inventory-art">'+(item.asset_path?'<img src="'+escapeAttr(item.asset_path)+'" alt="">':'<span>'+escapeHtml(glyph)+'</span>')+'</div><div class="inventory-copy"><span class="inventory-type">'+escapeHtml(item.item_type)+' · '+escapeHtml(item.rarity||'common')+'</span><h3>'+escapeHtml(item.name)+'</h3><p>'+escapeHtml(item.description||'')+'</p><small>'+(entry.quantity>1?'quantidade '+entry.quantity+' · ':'')+(item.soulbound?'não negociável':'negociável')+'</small></div><div class="inventory-action">'+action+'</div></article>';
-  }).join('');
+    const action=isBadge
+      ? '<button type="button" class="inventory-equip '+(isEquipped?'is-equipped':'')+'" data-equip-badge="'+escapeAttr(item.badge_id||'')+'">'+(isEquipped?'remover':'equipar')+'</button>'
+      : '<span class="inventory-soon">item catalogado</span>';
+    const stateLabel=isEquipped?'EM USO':(isBadge?'DISPONÍVEL':'CATALOGADO');
+    const art=item.asset_path
+      ? '<img src="'+escapeAttr(item.asset_path)+'" alt="'+escapeAttr(item.name||'Emblema AVESSO')+'" loading="lazy" decoding="async">'
+      : '<span aria-hidden="true">'+escapeHtml(item.metadata?.glyph||'✦')+'</span>';
+    return '<article class="inventory-card rarity-'+escapeAttr(item.rarity||'common')+(isEquipped?' is-equipped':'')+'"><div class="inventory-art">'+art+'</div><div class="inventory-copy"><span class="inventory-type">'+escapeHtml(item.item_type)+' · '+escapeHtml(item.rarity||'common')+'</span><h3>'+escapeHtml(item.name)+'</h3><p>'+escapeHtml(item.description||'')+'</p><small>'+(entry.quantity>1?'quantidade '+entry.quantity+' · ':'')+(item.soulbound?'não negociável':'negociável')+'</small></div><div class="inventory-action"><span class="inventory-state">'+stateLabel+'</span>'+action+'</div></article>';
+  }).join('')+'</div>';
+  const countNode=document.querySelector('[data-inventory-count]');
+  if(countNode)countNode.textContent=String(items.length);
+  const badgeNode=document.querySelector('[data-inventory-badge-count]');
+  if(badgeNode)badgeNode.textContent=String(badgeCount);
   host.querySelectorAll('[data-equip-badge]').forEach(btn=>btn.onclick=()=>equipPrimaryBadge(btn.dataset.equipBadge));
 }
 async function equipPrimaryBadge(badgeId){
@@ -6605,9 +6621,20 @@ async function renderProfile(){
       <div class="profile-avatar-large">${avatarHtml(state.profile.avatar_url,state.profile.display_name)}</div>
       <div class="profile-hero-identity"><span class="section-code">MEU CANTO // IDENTIDADE</span><div class="profile-name-listening-row"><h2>${identityNameHtml(state.profile.id,state.profile.display_name,'profile-owner-name')}</h2><div id="profile-hero-listening" class="profile-hero-listening profile-hero-listening-inline">${nowPlayingHtml(state.profile)||'<div class="now-playing-empty compact">aguardando o player...</div>'}</div></div><p>@${escapeHtml(state.profile.handle)}</p><div id="profile-hero-corner-music">${cornerMusicBadgeHtml(state.profile,{owner:true})}</div><button id="open-avatar-picker">mudar foto de perfil</button></div>
     </header>
-    <section class="inventory-control">
-      <div class="inventory-heading"><div><span class="section-code">INVENTÁRIO // O QUE É SEU</span><h2>Emblemas e itens do AVESSO</h2><p>Seu inventário guarda o que você conquistou. Um único emblema principal aparece junto ao seu nome.</p></div><span class="inventory-balance-note">SALDO // shadow por enquanto</span></div>
-      <div id="inventory-panel" class="inventory-grid"><p class="inventory-loading">abrindo o armário...</p></div>
+    <section class="inventory-control" id="profile-inventory">
+      <div class="inventory-heading">
+        <div>
+          <span class="section-code">INVENTÁRIO // PRIMEIRO PLANO</span>
+          <h2>O que é seu fica visível.</h2>
+          <p>Emblemas conquistados, escolhidos e mostrados no AVESSO. O principal acompanha seu nome; o restante continua seu.</p>
+        </div>
+        <div class="inventory-heading-meta" aria-label="Resumo do inventário">
+          <span class="inventory-stat"><b data-inventory-count>0</b> itens no canto</span>
+          <span class="inventory-stat"><b data-inventory-badge-count>0</b> emblemas</span>
+          <span class="inventory-stat"><b>SHADOW</b> saldo em preparação</span>
+        </div>
+      </div>
+      <div id="inventory-panel" class="inventory-grid" aria-live="polite"><p class="inventory-loading">abrindo o armário...</p></div>
     </section>
     <section class="profile-story-section">
       <div><span class="section-code">STORIES // SEU CANTO</span><h2>24 horas de contexto questionável</h2><p>Publique daqui também. Amigos e outros usuários podem reagir e comentar conforme a visibilidade escolhida.</p></div>
