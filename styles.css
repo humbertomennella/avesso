@@ -10378,3 +10378,27 @@ dialog.dialog-fallback-open[open]{
   .inventory-art{width:48px;height:48px}
   .inventory-action{grid-column:2;justify-content:flex-start}
 }
+
+
+/* AVESSO // INVENTÁRIO V2 — primeiro plano */
+.inventory-control{order:0;margin:0;padding:18px;border:1px solid #2d454b;border-radius:4px;background:radial-gradient(circle at 8% 0%,#1d415012,transparent 34%),radial-gradient(circle at 92% 100%,#ff4fd80b,transparent 30%),#080d0f;box-shadow:8px 8px 0 #020405}
+.inventory-heading{margin-bottom:14px;padding-bottom:13px;border-bottom:1px solid #26383d}
+.inventory-heading h2{margin:4px 0 5px;font-size:clamp(1.25rem,2vw,1.8rem);letter-spacing:-.025em}
+.inventory-heading p{max-width:720px;color:#8e9b99}
+.inventory-heading-meta{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:flex-start}
+.inventory-stat{display:grid;gap:3px;min-width:100px;padding:8px 10px;border:1px solid #30434a;background:#05090b;color:#a8b5b2;font:700 .53rem/1.2 var(--mono);text-transform:uppercase}
+.inventory-stat b{color:var(--cyan);font-size:.7rem}
+.inventory-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.inventory-card{display:grid;grid-template-columns:1fr;gap:0;min-height:270px;padding:0;border:1px solid #263b41;border-radius:3px;background:#0a1114;overflow:hidden;position:relative;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.inventory-card:hover{transform:translateY(-3px);border-color:#4c8b98;box-shadow:0 10px 24px #0008}
+.inventory-card.is-equipped{border-color:var(--acid);box-shadow:0 0 0 1px #d8ff3e33 inset,0 0 24px #d8ff3e12}
+.inventory-card:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(120deg,transparent 42%,#ffffff04 50%,transparent 58%)}
+.inventory-card.rarity-event{--rarity:#d8ff3e}.inventory-card.rarity-rare{--rarity:#4eeaff}.inventory-card.rarity-epic{--rarity:#c276ff}.inventory-card.rarity-legendary{--rarity:#ffb84e}.inventory-card.rarity-common{--rarity:#899795}
+.inventory-card .inventory-art{width:100%;height:156px;border:0;border-bottom:1px solid #24353a;background:radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--rarity) 10%,transparent),transparent 58%),#060a0c}
+.inventory-card .inventory-art img{width:100%;height:100%;object-fit:contain;padding:12px;image-rendering:auto}
+.inventory-card .inventory-copy{display:grid;gap:5px;padding:11px 11px 7px}.inventory-type{color:var(--rarity);opacity:.9;letter-spacing:.08em}.inventory-copy h3{font-size:1rem;margin:0}.inventory-copy p{min-height:36px;color:#889694;font-size:.7rem;line-height:1.4}.inventory-copy small{color:#667572}
+.inventory-action{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px 11px;border-top:1px solid #1e2d31}.inventory-state{color:var(--rarity);font:800 .5rem var(--mono);text-transform:uppercase}
+.inventory-equip{padding:6px 9px;border-radius:2px;color:var(--rarity);background:#080d0f}.inventory-equip.is-equipped{color:#081006;background:var(--acid);border-color:var(--acid);box-shadow:none}
+.inventory-loading,.inventory-empty{min-height:150px;display:grid;place-items:center}
+@media(max-width:980px){.inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.inventory-control{padding:12px;box-shadow:5px 5px 0 #020405}.inventory-heading{display:grid;grid-template-columns:1fr;gap:10px}.inventory-heading-meta{justify-content:flex-start}.inventory-grid{grid-template-columns:1fr}.inventory-card{min-height:240px}.inventory-card .inventory-art{height:170px}}
