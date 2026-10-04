@@ -6578,21 +6578,23 @@ async function loadInventory(){
     const isBadge=item.item_type==='badge';
     const isEquipped=isBadge&&item.badge_id===equipped;
     const glyph=item.metadata?.glyph||'✦';
-    const action=isBadge ? '<button type="button" class="inventory-equip '+(isEquipped?'is-equipped':'')+'" data-equip-badge="'+escapeAttr(item.badge_id||'')+'">'+(isEquipped?'equipado':'equipar')+'</button>' : '<span class="inventory-soon">item catalogado</span>';
+    const action=isBadge ? '<button type="button" class="inventory-equip '+(isEquipped?'is-equipped':'')+'" data-equip-badge="'+escapeAttr(item.badge_id||'')+'">'+(isEquipped?'remover':'equipar')+'</button>' : '<span class="inventory-soon">item catalogado</span>';
     return '<article class="inventory-card rarity-'+escapeAttr(item.rarity||'common')+'"><div class="inventory-art">'+(item.asset_path?'<img src="'+escapeAttr(item.asset_path)+'" alt="">':'<span>'+escapeHtml(glyph)+'</span>')+'</div><div class="inventory-copy"><span class="inventory-type">'+escapeHtml(item.item_type)+' · '+escapeHtml(item.rarity||'common')+'</span><h3>'+escapeHtml(item.name)+'</h3><p>'+escapeHtml(item.description||'')+'</p><small>'+(entry.quantity>1?'quantidade '+entry.quantity+' · ':'')+(item.soulbound?'não negociável':'negociável')+'</small></div><div class="inventory-action">'+action+'</div></article>';
   }).join('');
   host.querySelectorAll('[data-equip-badge]').forEach(btn=>btn.onclick=()=>equipPrimaryBadge(btn.dataset.equipBadge));
 }
 async function equipPrimaryBadge(badgeId){
   if(!state.profile?.id)return;
+  const current=state.userEquipment?.[state.profile.id]?.primary_badge_id||null;
+  const nextBadgeId=current===badgeId?null:badgeId;
   const button=document.querySelector('[data-equip-badge="'+CSS.escape(badgeId)+'"]');
   if(button)button.disabled=true;
-  const {error}=await supabase.from('avesso_user_equipment').upsert({user_id:state.profile.id,primary_badge_id:badgeId||null,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+  const {error}=await supabase.from('avesso_user_equipment').upsert({user_id:state.profile.id,primary_badge_id:nextBadgeId,updated_at:new Date().toISOString()},{onConflict:'user_id'});
   if(error){if(button)button.disabled=false;return toast('Esse emblema não pode ser equipado.');}
-  state.userEquipment[state.profile.id]={user_id:state.profile.id,primary_badge_id:badgeId||null,updated_at:new Date().toISOString()};
+  state.userEquipment[state.profile.id]={user_id:state.profile.id,primary_badge_id:nextBadgeId,updated_at:new Date().toISOString()};
   renderNavAvatar();
   renderProfile();
-  toast(badgeId?'Emblema equipado.':'Emblema removido.');
+  toast(nextBadgeId?'Emblema equipado.':'Emblema removido.');
 }
 async function renderProfile(){
   $('#feed-status').classList.add('hidden');
