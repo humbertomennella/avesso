@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+<title>Emblema Presença Real</title><desc>Medalhão AVESSO de presença, formado por um radar humano e pulsos de sinal em uma tela CRT.</desc>
+<defs>
+  <radialGradient id="bg"><stop stop-color="#14242a"/><stop offset=".55" stop-color="#080f13"/><stop offset="1" stop-color="#09080f"/></radialGradient>
+  <linearGradient id="c" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#62f8ff"/><stop offset="1" stop-color="#168dff"/></linearGradient>
+  <linearGradient id="v" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#b777ff"/><stop offset="1" stop-color="#ff4fd8"/></linearGradient>
+  <filter id="g"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <pattern id="scan" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 1H8" stroke="#74efff" stroke-opacity=".08" stroke-width="2"/></pattern>
+</defs>
+<circle cx="256" cy="256" r="236" fill="url(#bg)" stroke="#315b65" stroke-width="5"/>
+<circle cx="256" cy="256" r="205" fill="none" stroke="#2dd7e8" stroke-opacity=".22" stroke-width="2"/>
+<circle cx="256" cy="256" r="163" fill="none" stroke="#9b6bff" stroke-opacity=".28" stroke-width="3" stroke-dasharray="5 14"/>
+<circle cx="256" cy="256" r="118" fill="none" stroke="#63f8ff" stroke-opacity=".4" stroke-width="2" stroke-dasharray="2 10"/>
+<g stroke="#62f8ff" stroke-opacity=".28" stroke-width="3"><path d="M256 43V469M43 256H469M105 105L407 407M407 105L105 407"/></g>
+<path d="M256 256L407 105A213 213 0 0 0 256 43Z" fill="#5cf5ff" opacity=".08"/>
+<g filter="url(#g)">
+  <path d="M205 207Q256 166 307 207L333 252Q340 267 330 282L307 319Q289 344 256 344Q223 344 205 319L182 282Q172 267 179 252Z" fill="#0d171c" stroke="url(#c)" stroke-width="7"/>
+  <path d="M215 214Q256 184 297 214" fill="none" stroke="#ff55d7" stroke-width="7"/>
+  <path d="M219 254Q256 231 293 254Q256 283 219 254Z" fill="url(#v)" opacity=".82"/>
+  <circle cx="235" cy="254" r="7" fill="#d8ff3e"/><circle cx="277" cy="254" r="7" fill="#d8ff3e"/>
+  <path d="M236 292Q256 304 276 292" fill="none" stroke="#5cf5ff" stroke-width="5"/>
+</g>
+<g fill="#d8ff3e"><rect x="256" y="72" width="7" height="42"/><rect x="397" y="252" width="42" height="7"/><rect x="69" y="252" width="42" height="7"/></g>
+<path d="M112 388Q256 448 400 388" fill="none" stroke="#ff4fd8" stroke-width="4" stroke-dasharray="9 11" opacity=".75"/>
+<path d="M88 150L112 136M400 136L424 150" stroke="#62f8ff" stroke-width="5"/>
+<circle cx="256" cy="256" r="228" fill="url(#scan)" opacity=".7"/>
+</svg>
