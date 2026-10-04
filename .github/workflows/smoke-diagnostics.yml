@@ -13,86 +13,152 @@ jobs:
       - name: Instalar Playwright
         run: |
           npm install --no-save @playwright/test@1.55.0
-          npx playwright install --with-deps chromium firefox webkit
+          npx playwright install --with-deps chromium firefox
+      - name: Criar diagnóstico exato
+        run: |
+          cat > tests/diagnose-exact.spec.js <<'EOF'
+          import {test,expect} from '@playwright/test';
 
-      - id: story_dc
-        name: STORY PLAYBACK — desktop Chromium
-        continue-on-error: true
-        run: npx playwright test --grep "reprodução do Story" --project=desktop-chromium
-      - id: story_df
-        name: STORY PLAYBACK — desktop Firefox
-        if: always()
-        continue-on-error: true
-        run: npx playwright test --grep "reprodução do Story" --project=desktop-firefox
-      - id: story_dw
-        name: STORY PLAYBACK — desktop WebKit
-        if: always()
-        continue-on-error: true
-        run: npx playwright test --grep "reprodução do Story" --project=desktop-webkit
-      - id: story_mc
-        name: STORY PLAYBACK — mobile Chromium
-        if: always()
-        continue-on-error: true
-        run: npx playwright test --grep "reprodução do Story" --project=mobile-chromium
-      - id: story_mw
-        name: STORY PLAYBACK — mobile WebKit
-        if: always()
-        continue-on-error: true
-        run: npx playwright test --grep "reprodução do Story" --project=mobile-webkit
+          async function boot(page){
+            await page.goto('/',{waitUntil:'domcontentloaded'});
+            await page.waitForSelector('[data-open-auth]',{state:'visible'});
+          }
+          async function storyVideo(page){
+            await boot(page);
+            await page.waitForFunction(()=>globalThis.__avessoStoryPlaybackCompat===true);
+            await page.evaluate(()=>{
+              const el=document.createElement('video');
+              el.className='story-video';
+              document.body.appendChild(el);
+            });
+            await page.waitForTimeout(50);
+          }
+          async function collapseMetrics(page){
+            await boot(page);
+            await page.setViewportSize({width:1760,height:833});
+            await page.waitForFunction(()=>document.documentElement.dataset.avessoUi==='20261003-ui2');
+            await page.evaluate(()=>{
+              document.querySelector('#marketing-view')?.classList.add('hidden');
+              document.querySelector('.site-header')?.classList.add('hidden');
+              document.querySelector('#app-view')?.classList.remove('hidden');
+              document.body.classList.add('desktop-nav-collapsed');
+            });
+            return page.evaluate(()=>{
+              const nav=document.querySelector('.app-nav');
+              const button=document.querySelector('.app-nav nav button');
+              const icon=button?.querySelector('.desktop-nav-icon');
+              const label=button?.querySelector('.desktop-nav-label');
+              const online=document.querySelector('#online-friends-dock');
+              const logout=document.querySelector('.nav-logout');
+              return {
+                navWidth:parseFloat(getComputedStyle(nav).width),
+                buttonWidth:parseFloat(getComputedStyle(button).width),
+                buttonHeight:parseFloat(getComputedStyle(button).height),
+                justify:getComputedStyle(button).justifyItems,
+                iconSize:icon?parseFloat(getComputedStyle(icon).fontSize):0,
+                labelDisplay:label?getComputedStyle(label).display:'missing',
+                onlineDisplay:online?getComputedStyle(online).display:'missing',
+                logoutFont:logout?parseFloat(getComputedStyle(logout).fontSize):-1
+              };
+            });
+          }
 
-      - id: nav_dc
-        name: SIDEBAR — desktop Chromium
+          test('EXACT story controls',async({page})=>{await storyVideo(page);expect(await page.evaluate(()=>document.querySelector('.story-video').controls)).toBe(true)});
+          test('EXACT story playsinline',async({page})=>{await storyVideo(page);expect(await page.evaluate(()=>document.querySelector('.story-video').playsInline)).toBe(true)});
+          test('EXACT story preload',async({page})=>{await storyVideo(page);expect(await page.evaluate(()=>document.querySelector('.story-video').preload)).toBe('auto')});
+          test('EXACT nav width',async({page})=>{expect((await collapseMetrics(page)).navWidth).toBe(76)});
+          test('EXACT button width',async({page})=>{expect((await collapseMetrics(page)).buttonWidth).toBe(50)});
+          test('EXACT button height',async({page})=>{expect((await collapseMetrics(page)).buttonHeight).toBe(44)});
+          test('EXACT justify',async({page})=>{expect((await collapseMetrics(page)).justify).toBe('center')});
+          test('EXACT icon size',async({page})=>{expect((await collapseMetrics(page)).iconSize).toBeGreaterThanOrEqual(16)});
+          test('EXACT label display',async({page})=>{expect((await collapseMetrics(page)).labelDisplay).toBe('none')});
+          test('EXACT online display',async({page})=>{expect((await collapseMetrics(page)).onlineDisplay).toBe('none')});
+          test('EXACT logout font',async({page})=>{expect((await collapseMetrics(page)).logoutFont).toBe(0)});
+          EOF
+      - id: sc
+        name: CHECK — Story controls Firefox
+        continue-on-error: true
+        run: npx playwright test tests/diagnose-exact.spec.js --grep "EXACT story controls" --project=desktop-firefox
+      - id: sp
+        name: CHECK — Story playsinline Firefox
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "sidebar recolhida" --project=desktop-chromium
-      - id: nav_df
-        name: SIDEBAR — desktop Firefox
+        run: npx playwright test tests/diagnose-exact.spec.js --grep "EXACT story playsinline" --project=desktop-firefox
+      - id: sl
+        name: CHECK — Story preload Firefox
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "sidebar recolhida" --project=desktop-firefox
-      - id: nav_dw
-        name: SIDEBAR — desktop WebKit
+        run: npx playwright test tests/diagnose-exact.spec.js --grep "EXACT story preload" --project=desktop-firefox
+      - id: nw
+        name: CHECK — Sidebar nav width
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "sidebar recolhida" --project=desktop-webkit
-      - id: nav_mc
-        name: SIDEBAR — mobile Chromium
+        run: npx playwright test tests/diagnose-exact.spec.js --grep "EXACT nav width" --project=desktop-chromium
+      - id: bw
+        name: CHECK — Sidebar button width
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "sidebar recolhida" --project=mobile-chromium
-      - id: nav_mw
-        name: SIDEBAR — mobile WebKit
+        run: npx playwright test tests/diagnose-exact.spec.js --grep "EXACT button width" --project=desktop-chromium
+      - id: bh
+        name: CHECK — Sidebar button height
         if: always()
         continue-on-error: true
-        run: npx playwright test --grep "sidebar recolhida" --project=mobile-webkit
-
-      - name: FALHA — Story desktop Chromium
-        if: ${{ always() && steps.story_dc.outcome == 'failure' }}
+        run: npx playwright test tests/diagnose-exact.spec.js --grep "EXACT button height" --project=desktop-chromium
+      - id: ju
+        name: CHECK — Sidebar justify
+        if: always()
+        continue-on-error: true
+        run: npx playwright test tests/diagnose-exact.spec.js --grep "EXACT justify" --project=desktop-chromium
+      - id: ic
+        name: CHECK — Sidebar icon size
+        if: always()
+        continue-on-error: true
+        run: npx playwright test tests/diagnose-exact.spec.js --grep "EXACT icon size" --project=desktop-chromium
+      - id: ld
+        name: CHECK — Sidebar label display
+        if: always()
+        continue-on-error: true
+        run: npx playwright test tests/diagnose-exact.spec.js --grep "EXACT label display" --project=desktop-chromium
+      - id: od
+        name: CHECK — Sidebar online display
+        if: always()
+        continue-on-error: true
+        run: npx playwright test tests/diagnose-exact.spec.js --grep "EXACT online display" --project=desktop-chromium
+      - id: lf
+        name: CHECK — Sidebar logout font
+        if: always()
+        continue-on-error: true
+        run: npx playwright test tests/diagnose-exact.spec.js --grep "EXACT logout font" --project=desktop-chromium
+      - name: FALHA — Story controls
+        if: ${{ always() && steps.sc.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — Story desktop Firefox
-        if: ${{ always() && steps.story_df.outcome == 'failure' }}
+      - name: FALHA — Story playsinline
+        if: ${{ always() && steps.sp.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — Story desktop WebKit
-        if: ${{ always() && steps.story_dw.outcome == 'failure' }}
+      - name: FALHA — Story preload
+        if: ${{ always() && steps.sl.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — Story mobile Chromium
-        if: ${{ always() && steps.story_mc.outcome == 'failure' }}
+      - name: FALHA — Sidebar nav width
+        if: ${{ always() && steps.nw.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — Story mobile WebKit
-        if: ${{ always() && steps.story_mw.outcome == 'failure' }}
+      - name: FALHA — Sidebar button width
+        if: ${{ always() && steps.bw.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — Sidebar desktop Chromium
-        if: ${{ always() && steps.nav_dc.outcome == 'failure' }}
+      - name: FALHA — Sidebar button height
+        if: ${{ always() && steps.bh.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — Sidebar desktop Firefox
-        if: ${{ always() && steps.nav_df.outcome == 'failure' }}
+      - name: FALHA — Sidebar justify
+        if: ${{ always() && steps.ju.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — Sidebar desktop WebKit
-        if: ${{ always() && steps.nav_dw.outcome == 'failure' }}
+      - name: FALHA — Sidebar icon size
+        if: ${{ always() && steps.ic.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — Sidebar mobile Chromium
-        if: ${{ always() && steps.nav_mc.outcome == 'failure' }}
+      - name: FALHA — Sidebar label display
+        if: ${{ always() && steps.ld.outcome == 'failure' }}
         run: exit 1
-      - name: FALHA — Sidebar mobile WebKit
-        if: ${{ always() && steps.nav_mw.outcome == 'failure' }}
+      - name: FALHA — Sidebar online display
+        if: ${{ always() && steps.od.outcome == 'failure' }}
+        run: exit 1
+      - name: FALHA — Sidebar logout font
+        if: ${{ always() && steps.lf.outcome == 'failure' }}
         run: exit 1
