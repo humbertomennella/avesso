@@ -1,5 +1,6 @@
 const UI_VERSION='20261003-ui2';
 const POSTER_THEME_VERSION='20261003-rockstar1';
+const ECONOMY_SHADOW_VERSION='20261004-shadow1';
 
 function ensureUiStylesheet(key,file,version=UI_VERSION){
   let link=document.querySelector(`link[data-avesso-ui="${key}"]`);
@@ -29,5 +30,10 @@ if(document.readyState==='loading'){
 }else{
   activatePosterRockstarTheme();
 }
+
+// Economia v1 em modo sombra. Falha silenciosa por projeto: nenhum recurso
+// público da AVESSO depende deste módulo durante a fase de observação.
+const economyShadowUrl=new URL(`economy-shadow.js?v=${ECONOMY_SHADOW_VERSION}`,import.meta.url).href;
+import(economyShadowUrl).catch(error=>console.debug('AVESSO economy shadow não carregou',error?.message||error));
 
 document.documentElement.dataset.avessoUi=UI_VERSION;
