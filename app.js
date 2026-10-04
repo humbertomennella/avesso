@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const SITE_URL = new URL('./', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, staffSection:'overview', staffInternalChannel:null, staffDirectory:{}, staffByHandle:{}, userBadges:{}, badgeCatalog:{}, customAssets:[], customAssetBySlug:{}, customEmoticons:[], suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, feedLoadedPosts:[], feedCursor:null, feedHasMore:true, feedLoadingMore:false, directHistoryCursor:null, directHistoryHasMore:false, typingTimer:null, typingPeerId:null, replyingTo:null, editingMessage:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false}, userEquipment:{}, userInventory:[] };
+const state = { session:null, profile:null, isAdmin:false, adminRole:null, adminSnapshot:null, staffSection:'overview', staffInternalChannel:null, staffDirectory:{}, staffByHandle:{}, userBadges:{}, badgeCatalog:{}, customAssets:[], customAssetBySlug:{}, customEmoticons:[], suspended:false, suspension:null, siteSettings:null, recipient:null, mode:'signup', tab:'feed', viewVersion:0, postImageFile:null, postGifUrl:'', postMediaFile:null, publicProfileId:null, plazaChannel:null, directChannel:null, directChannelStatus:'CLOSED', directReconnectTimer:null, directPollTimer:null, directWatchStartedAt:null, directSeenIds:new Set(), directAttachmentUrlCache:{}, directPeerId:null, chatWindowOpen:false, chatWindowMinimized:false, chatGeometry:null, chatMaximized:false, chatRestoreGeometry:null, presenceTimer:null, presenceWatchTimer:null, lastPresenceActivityAt:0, friendPresence:{}, friendPresenceReady:false, mutedPeers:{}, blockedPeers:{}, pendingAttentionPeerId:null, notificationPermissionArmed:false, notificationRegistration:null, wallpaperTarget:'profile', socialNotificationQueue:[], socialNotificationBusy:false, audioCtx:null, voiceRecorder:null, voiceStream:null, voiceChunks:[], voiceStartedAt:0, voiceTimer:null, voicePeerId:null, voiceHoldActive:false, voicePendingStart:false, storyChannel:null, storyBusy:false, storyTimer:null, storySequence:[], storyCurrentId:null, storyCameraStream:null, storyCameraFacing:'user', storyCameraRecorder:null, storyCameraChunks:[], storyCameraRecording:false, storyCapturedFile:null, storyPreviewUrl:'', storyRecordStopTimer:null, cornerMusicProfileId:null, cornerMusicGestureHandler:null, cornerMusicLocallyPaused:false, publicCornerMusicProfile:null, nowPlayingPushTimer:null, lastNowPlayingSignature:'', presenceBridgeSeen:false, presenceBridgeVersion:'', presenceBridgeWarned:false, browserContextBridgeSeen:false, onlineDockCollapsed:false, incomingMessagePulseTimer:null, onlineNoticeAt:{}, dmLongPressTimer:null, feedLoadedPosts:[], feedCursor:null, feedHasMore:true, feedLoadingMore:false, directHistoryCursor:null, directHistoryHasMore:false, typingTimer:null, typingPeerId:null, replyingTo:null, editingMessage:null, albumPreloaded:{}, albumUrlCache:{}, albumDataCache:{}, world:{preferences:null,settings:null,characters:{},charactersById:{},dialogues:[],idleTimer:null,encounterTimer:null,towerTimer:null,lastInteractionId:null,lastReactiveAt:0,lastAqueleAt:0,lastAqueleKey:'',pendingAquele:null,lastNotificationAt:0,recentNotificationKeys:[],notificationQueue:[],notificationBusy:false}, userEquipment:{}, userInventory:[], inventoryCatalog:{} };
 
 function toast(message){
   const el=$('#toast');
@@ -3750,7 +3750,7 @@ async function handleAvessoDeepLink(){
   if(type==='profile'){
     if(id===state.profile.id)document.querySelector('[data-app-tab="profile"]')?.click();
     else await openPublicProfile(id);
-  }else if(type==='tab'&&['feed','quiet','sent','plaza','residents','tower','messages','profile','admin'].includes(id)){
+  }else if(type==='tab'&&['feed','quiet','sent','plaza','residents','tower','messages','profile','market','admin'].includes(id)){
     document.querySelector(`[data-app-tab="${CSS.escape(id)}"]`)?.click();
   }else if(type==='photo'){
     await openAlbumPhotoViewer(id);
@@ -3766,7 +3766,7 @@ async function handleAvessoDeepLink(){
 }
 
 function applyAppTabLayout(){
-  const worldOpen=['residents','plaza','tower','profile','public_profile','messages','admin'].includes(state.tab);
+  const worldOpen=['residents','plaza','tower','profile','public_profile','messages','market','admin'].includes(state.tab);
   document.body.classList.toggle('avesso-feed-home',state.tab==='feed');
   document.body.classList.toggle('avesso-own-corner',state.tab==='profile');
   document.body.classList.toggle('avesso-public-corner',state.tab==='public_profile');
@@ -3788,7 +3788,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   applyAppWallpaper();
   bumpView();
   document.querySelectorAll('[data-app-tab]').forEach(x=>x.classList.toggle('active',x===b));
-  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Amigos & cúmplices',admin:'Dashboard'};
+  const headings={feed:'Quem precisa ser visto?',quiet:'Quem ficou falando sozinho?',sent:'O que você entregou',profile:'Seu canto, sem palco',residents:'Mundo deles',plaza:'Praça Central',tower:'Torre do Engajamento',messages:'Amigos & cúmplices',market:'Mercado & trocas',admin:'Dashboard'};
   $('#feed-heading').textContent=headings[state.tab]||'AVESSO';
   applyAppTabLayout();
   trackAction('tab_view',state.tab,{tab:state.tab});
@@ -3798,6 +3798,7 @@ document.querySelectorAll('[data-app-tab]').forEach(b=>b.onclick=async()=>{
   else if(state.tab==='plaza')await renderPlaza();
   else if(state.tab==='tower')await renderTowerPage();
   else if(state.tab==='messages')await renderMessagesPage();
+  else if(state.tab==='market')await renderMarketPage();
   else if(state.tab==='admin')await renderAdminDashboard();
   else {if(state.tab==='feed')await loadStoriesStrip();loadFeed();}
 });
@@ -6563,20 +6564,24 @@ async function loadInventory(){
   host.innerHTML='<p class="inventory-loading">abrindo o armário...</p>';
   const [inventoryRes,catalogRes,equipmentRes]=await Promise.all([
     supabase.from('avesso_user_inventory').select('user_id,item_id,quantity,acquisition_source,acquired_at').eq('user_id',state.profile.id),
-    supabase.from('avesso_item_catalog').select('id,slug,item_type,name,description,asset_path,rarity,tradable,soulbound,badge_id,metadata,sort_order').eq('active',true).order('sort_order',{ascending:true}),
+    supabase.from('avesso_item_catalog').select('id,slug,item_type,name,description,asset_path,rarity,tradable,soulbound,badge_id,metadata,sort_order,active').eq('active',true).order('sort_order',{ascending:true}),
     supabase.from('avesso_user_equipment').select('user_id,primary_badge_id').eq('user_id',state.profile.id).maybeSingle()
   ]);
+  const catalog=Object.fromEntries((catalogRes.data||[]).map(x=>[x.id,x]));
+  state.inventoryCatalog=catalog;
+  state.userInventory=inventoryRes.data||[];
+  state.userEquipment[state.profile.id]=equipmentRes.data||{user_id:state.profile.id,primary_badge_id:null};
+  renderBadgeGallery();
   if(inventoryRes.error||catalogRes.error){
     host.innerHTML='<p class="inventory-empty">O armário não abriu. A burocracia venceu por enquanto.</p>';
     return;
   }
-  const catalog=Object.fromEntries((catalogRes.data||[]).map(x=>[x.id,x]));
-  state.userInventory=inventoryRes.data||[];
-  state.userEquipment[state.profile.id]=equipmentRes.data||{user_id:state.profile.id,primary_badge_id:null};
   const equipped=state.userEquipment[state.profile.id]?.primary_badge_id||null;
   const items=state.userInventory.map(row=>({...row,item:catalog[row.item_id]})).filter(x=>x.item&&x.item.active!==false);
   if(!items.length){
     host.innerHTML='<div class="inventory-empty"><strong>INVENTÁRIO VAZIO</strong><span>Você ainda não tem itens equipáveis.</span></div>';
+    const countNode=document.querySelector('[data-inventory-count]');if(countNode)countNode.textContent='0';
+    const badgeNode=document.querySelector('[data-inventory-badge-count]');if(badgeNode)badgeNode.textContent='0';
     return;
   }
   const badgeCount=items.filter(x=>x.item.item_type==='badge').length;
@@ -6593,10 +6598,8 @@ async function loadInventory(){
       : '<span aria-hidden="true">'+escapeHtml(item.metadata?.glyph||'✦')+'</span>';
     return '<article class="inventory-card rarity-'+escapeAttr(item.rarity||'common')+(isEquipped?' is-equipped':'')+'"><div class="inventory-art">'+art+'</div><div class="inventory-copy"><span class="inventory-type">'+escapeHtml(item.item_type)+' · '+escapeHtml(item.rarity||'common')+'</span><h3>'+escapeHtml(item.name)+'</h3><p>'+escapeHtml(item.description||'')+'</p><small>'+(entry.quantity>1?'quantidade '+entry.quantity+' · ':'')+(item.soulbound?'não negociável':'negociável')+'</small></div><div class="inventory-action"><span class="inventory-state">'+stateLabel+'</span>'+action+'</div></article>';
   }).join('')+'</div>';
-  const countNode=document.querySelector('[data-inventory-count]');
-  if(countNode)countNode.textContent=String(items.length);
-  const badgeNode=document.querySelector('[data-inventory-badge-count]');
-  if(badgeNode)badgeNode.textContent=String(badgeCount);
+  const countNode=document.querySelector('[data-inventory-count]');if(countNode)countNode.textContent=String(items.length);
+  const badgeNode=document.querySelector('[data-inventory-badge-count]');if(badgeNode)badgeNode.textContent=String(badgeCount);
   host.querySelectorAll('[data-equip-badge]').forEach(btn=>btn.onclick=()=>equipPrimaryBadge(btn.dataset.equipBadge));
 }
 async function equipPrimaryBadge(badgeId){
@@ -6623,30 +6626,221 @@ function renderBadgeGallery(){
   }
   const inventoryByBadge=new Map();
   for(const row of state.userInventory||[]){
-    const item=Object.values(state.badgeCatalog||{}).find(b=>b.id===row.item_id);
-    if(item?.id)inventoryByBadge.set(item.id,row);
+    const item=state.inventoryCatalog?.[row.item_id];
+    if(item?.badge_id)inventoryByBadge.set(item.badge_id,row);
   }
   const equipped=state.userEquipment?.[state.profile?.id]?.primary_badge_id||null;
-  const artByBadge=new Map();
-  for(const item of Object.values(state.badgeCatalog||{})){
-    if(item?.asset_path && item?.badge_id)artByBadge.set(item.badge_id,item);
-  }
   host.innerHTML='<div class="badge-gallery-grid">'+badges.map((badge,index)=>{
-    const item=artByBadge.get(badge.id)||{};
-    const owned=inventoryByBadge.has(item.id)||Boolean((state.userBadges?.[state.profile?.id]||[]).some(x=>x.badge_id===badge.id));
+    const owned=inventoryByBadge.has(badge.id)||Boolean((state.userBadges?.[state.profile?.id]||[]).some(x=>x.badge_id===badge.id));
     const isEquipped=equipped===badge.id;
     const art=badge.image_path
-      ? '<img src="'+escapeAttr(badge.image_path)+'" alt="'+escapeAttr(badge.name||'Emblema AVESSO')+'" loading="'+(index<4?'eager':'lazy')+'" decoding="async">'
+      ? '<img src="'+escapeAttr(badge.image_path)+'" alt="'+escapeAttr(badge.name||'Emblema AVESSO')+'" loading="eager" decoding="async">'
       : '<span aria-hidden="true">✦</span>';
     const stateLabel=isEquipped?'EQUIPADO':owned?'NO INVENTÁRIO':'AINDA NÃO CONQUISTADO';
-    return '<article class="badge-gallery-card '+(owned?'is-owned ':'')+(isEquipped?'is-equipped':'')+'">'+
-      '<div class="badge-gallery-art">'+art+'</div>'+
-      '<div class="badge-gallery-copy"><span class="badge-gallery-code">EMBLEMA // '+String(index+1).padStart(2,'0')+'</span>'+
-      '<h3>'+escapeHtml(badge.name||'Emblema')+'</h3>'+
-      '<p>'+escapeHtml(badge.description||'')+'</p>'+
-      '<span class="badge-gallery-state">'+stateLabel+'</span></div>'+
-      '</article>';
+    return '<article class="badge-gallery-card '+(owned?'is-owned ':'')+(isEquipped?'is-equipped':'')+'"><div class="badge-gallery-art">'+art+'</div><div class="badge-gallery-copy"><span class="badge-gallery-code">EMBLEMA // '+String(index+1).padStart(2,'0')+'</span><h3>'+escapeHtml(badge.name||'Emblema')+'</h3><p>'+escapeHtml(badge.description||'')+'</p><span class="badge-gallery-state">'+stateLabel+'</span></div></article>';
   }).join('')+'</div>';
+}
+
+function economyErrorMessage(error){
+  const code=String(error?.message||error?.code||'');
+  const map={
+    economy_not_live:'O Mercado está em SHADOW. Compra por SALDO ainda está bloqueada.',
+    item_not_tradable:'Este item é soulbound ou ainda não foi liberado para negociação.',
+    insufficient_inventory:'Você não tem essa quantidade disponível.',
+    insufficient_saldo:'Saldo insuficiente.',
+    listing_not_available:'Este anúncio não está mais disponível.',
+    active_listing_exists:'Você já tem um anúncio ativo desse item.',
+    cannot_buy_own_listing:'Você não pode comprar o próprio anúncio.',
+    counterparty_inventory_changed:'A outra pessoa já não possui o item solicitado nessa quantidade.',
+    offer_not_found:'Essa proposta não está mais disponível para você.',
+    invalid_counterparty:'Escolha outra pessoa para a troca.',
+    counterparty_not_found:'Não encontrei esse @ no AVESSO.'
+  };
+  return map[code]||map[code.replace(/^.*?:\s*/,'')]||'A operação não foi concluída. O banco recusou a negociação com motivo técnico.';
+}
+
+async function expireMarketListingIfNeeded(listing){
+  if(!listing?.expires_at||new Date(listing.expires_at)>new Date())return false;
+  const {data,error}=await supabase.rpc('avesso_market_expire_listing',{p_listing_id:listing.id});
+  return !error&&data===true;
+}
+
+async function expireTradeOfferIfNeeded(offer){
+  if(!offer?.expires_at||new Date(offer.expires_at)>new Date())return false;
+  const {data,error}=await supabase.rpc('avesso_trade_expire_offer',{p_offer_id:offer.id});
+  return !error&&data===true;
+}
+
+async function renderMarketPage(){
+  if(state.tab!=='market'||!state.profile?.id)return;
+  const host=$('#feed-list');
+  if(!host)return;
+  $('#feed-status')?.classList.add('hidden');
+  host.innerHTML='<section class="market-shell"><div class="market-loading">abrindo o pregão. sem leiloeiro de NFT, prometo.</div></section>';
+
+  const uid=state.profile.id;
+  const [settingsRes,listingsRes,catalogRes,inventoryRes,offersRes]=await Promise.all([
+    supabase.from('avesso_economy_settings').select('mode').eq('id','global').maybeSingle(),
+    supabase.from('avesso_market_listings').select('id,seller_id,item_id,quantity,price_saldo,status,buyer_id,expires_at,created_at,updated_at').or('status.eq.active,seller_id.eq.'+uid+',buyer_id.eq.'+uid).order('created_at',{ascending:false}).limit(80),
+    supabase.from('avesso_item_catalog').select('id,slug,item_type,name,description,asset_path,rarity,tradable,soulbound,active,sort_order').eq('active',true).order('sort_order',{ascending:true}),
+    supabase.from('avesso_user_inventory').select('user_id,item_id,quantity').eq('user_id',uid),
+    supabase.from('avesso_trade_offers').select('id,proposer_id,counterparty_id,status,note,expires_at,accepted_at,created_at,updated_at').or('proposer_id.eq.'+uid+',counterparty_id.eq.'+uid).order('created_at',{ascending:false}).limit(60)
+  ]);
+
+  const mode=settingsRes.data?.mode||'shadow';
+  let listings=listingsRes.data||[];
+  let offers=offersRes.data||[];
+  const catalog=Object.fromEntries((catalogRes.data||[]).map(x=>[x.id,x]));
+  const inventory=inventoryRes.data||[];
+  const expiredListings=listings.filter(x=>x.status==='active'&&x.expires_at&&new Date(x.expires_at)<=new Date());
+  const expiredOffers=offers.filter(x=>x.status==='pending'&&x.expires_at&&new Date(x.expires_at)<=new Date());
+  if(expiredListings.length||expiredOffers.length){
+    await Promise.allSettled([
+      ...expiredListings.map(expireMarketListingIfNeeded),
+      ...expiredOffers.map(expireTradeOfferIfNeeded)
+    ]);
+    listings=listings.filter(x=>!expiredListings.some(y=>y.id===x.id));
+    offers=offers.filter(x=>!expiredOffers.some(y=>y.id===x.id));
+  }
+
+  const offerIds=offers.map(x=>x.id);
+  const [linesRes,marketProfilesRes,tradeProfilesRes]=await Promise.all([
+    offerIds.length
+      ? supabase.from('avesso_trade_lines').select('offer_id,side,item_id,quantity').in('offer_id',offerIds)
+      : Promise.resolve({data:[],error:null}),
+    (()=>{const ids=[...new Set(listings.map(x=>x.seller_id))];return ids.length?supabase.from('profiles').select('id,handle,display_name').in('id',ids):Promise.resolve({data:[],error:null});})(),
+    (()=>{const ids=[...new Set(offers.map(x=>x.proposer_id===uid?x.counterparty_id:x.proposer_id))];return ids.length?supabase.from('profiles').select('id,handle,display_name').in('id',ids):Promise.resolve({data:[],error:null});})()
+  ]);
+  const marketProfiles=Object.fromEntries((marketProfilesRes.data||[]).map(x=>[x.id,x]));
+  const tradeProfiles=Object.fromEntries((tradeProfilesRes.data||[]).map(x=>[x.id,x]));
+  const linesByOffer={};
+  for(const row of linesRes.data||[])(linesByOffer[row.offer_id]??=[]).push(row);
+  const tradableInventory=inventory.map(row=>({...row,item:catalog[row.item_id]})).filter(x=>x.item?.tradable&&!x.item?.soulbound);
+  const tradableCatalog=Object.values(catalog).filter(x=>x.tradable&&!x.soulbound);
+  const activeListings=listings.filter(x=>x.status==='active');
+  const ownListings=listings.filter(x=>x.seller_id===uid&&x.status==='active');
+
+  const artForItem=item=>item?.asset_path
+    ? '<img src="'+escapeAttr(item.asset_path)+'" alt="'+escapeAttr(item.name||'Item AVESSO')+'" loading="lazy" decoding="async">'
+    : '<span class="market-art-fallback" aria-hidden="true">◇</span>';
+
+  const listingCards=activeListings.length
+    ? activeListings.map(listing=>{
+      const item=catalog[listing.item_id]||{};
+      const seller=marketProfiles[listing.seller_id]||{};
+      const own=listing.seller_id===uid;
+      return '<article class="market-card '+(own?'is-own':'')+'"><div class="market-art">'+artForItem(item)+'</div><div class="market-card-copy"><span class="market-code">'+escapeHtml(item.rarity||'common')+' · '+(own?'SEU ANÚNCIO':'OFERTA')+'</span><h3>'+escapeHtml(item.name||'item desconhecido')+'</h3><p>'+escapeHtml(item.description||'Item catalogado no AVESSO.')+'</p><small>@'+escapeHtml(seller.handle||'desconhecido')+' · quantidade '+listing.quantity+'</small></div><div class="market-card-side"><strong>'+Number(listing.price_saldo).toLocaleString('pt-BR')+' SALDO</strong><span>'+(listing.expires_at?'expira '+new Date(listing.expires_at).toLocaleDateString('pt-BR'):'sem expiração')+'</span>'+(own?'<button type="button" data-market-cancel="'+listing.id+'">cancelar anúncio</button>':mode==='live'?'<button type="button" class="btn btn-acid" data-market-buy="'+listing.id+'">comprar</button>':'<button type="button" disabled>SHADOW // compra bloqueada</button>')+'</div></article>';
+    }).join('')
+    : '<div class="market-empty"><strong>NENHUM ANÚNCIO ATIVO</strong><span>Não há itens negociáveis circulando agora. E os quatro emblemas atuais são soulbound, como deveriam ser.</span></div>';
+
+  const tradeCards=offers.length
+    ? offers.map(offer=>{
+      const incoming=offer.counterparty_id===uid;
+      const otherId=incoming?offer.proposer_id:offer.counterparty_id;
+      const other=tradeProfiles[otherId]||{};
+      const lines=linesByOffer[offer.id]||[];
+      const offerLines=lines.filter(x=>x.side==='offer');
+      const requestLines=lines.filter(x=>x.side==='request');
+      const sideHtml=(rows)=>rows.length?rows.map(row=>{const item=catalog[row.item_id]||{};return '<span class="trade-item-line">'+row.quantity+'× '+escapeHtml(item.name||'item')+'</span>';}).join(''):'<span class="trade-item-line">nenhum</span>';
+      let actions='';
+      if(offer.status==='pending'){
+        if(incoming)actions='<button type="button" class="btn btn-acid" data-trade-accept="'+offer.id+'">aceitar</button><button type="button" data-trade-reject="'+offer.id+'">recusar</button>';
+        else actions='<button type="button" data-trade-cancel="'+offer.id+'">cancelar</button>';
+      }
+      return '<article class="trade-card '+(incoming?'is-incoming':'is-outgoing')+'"><header><div><span class="market-code">'+(incoming?'TROCA RECEBIDA':'TROCA ENVIADA')+'</span><h3>@'+escapeHtml(other.handle||'desconhecido')+'</h3></div><span class="trade-status">'+escapeHtml(offer.status)+'</span></header><div class="trade-lanes"><div><small>VOCÊ ENTREGA</small>'+sideHtml(incoming?requestLines:offerLines)+'</div><div class="trade-arrow">⇄</div><div><small>VOCÊ RECEBE</small>'+sideHtml(incoming?offerLines:requestLines)+'</div></div>'+(offer.note?'<p class="trade-note">'+escapeHtml(offer.note)+'</p>':'')+'<footer><small>'+new Date(offer.created_at).toLocaleString('pt-BR')+(offer.expires_at?' · até '+new Date(offer.expires_at).toLocaleDateString('pt-BR'):'')+'</small><div class="trade-actions">'+actions+'</div></footer></article>';
+    }).join('')
+    : '<div class="market-empty"><strong>NENHUMA TROCA PENDENTE</strong><span>Propostas bilaterais aparecerão aqui. Nada de leilão misterioso nem item sumindo no vazio.</span></div>';
+
+  const marketCreateOptions=tradableInventory.length
+    ? tradableInventory.map(x=>'<option value="'+x.item_id+'">'+escapeHtml(x.item.name)+' · '+x.quantity+' disponível</option>').join('')
+    : '<option value="">nenhum item negociável no seu inventário</option>';
+  const tradeGiveOptions=tradableInventory.length
+    ? tradableInventory.map(x=>'<option value="'+x.item_id+'">'+escapeHtml(x.item.name)+' · até '+x.quantity+'</option>').join('')
+    : '<option value="">nenhum item negociável</option>';
+  const tradeReceiveOptions=tradableCatalog.length
+    ? tradableCatalog.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join('')
+    : '<option value="">nenhum item negociável no catálogo</option>';
+
+  host.innerHTML='<section class="market-shell">'+
+    '<header class="market-hero"><div><span class="section-code">ECONOMIA // MERCADO & TROCAS</span><h2>O que é seu pode circular. <em>Sem cassino.</em></h2><p>Mercado usa SALDO somente quando a economia estiver live. Trocas diretas funcionam separadas disso, com escrow e validação no banco.</p></div><div class="market-mode '+(mode==='live'?'is-live':'is-shadow')+'"><b>'+escapeHtml(String(mode).toUpperCase())+'</b><span>'+ (mode==='live'?'mercado operacional':'economia em shadow mode')+'</span></div></header>'+
+    '<section class="market-warning"><strong>REGRA DO AVESSO</strong><span>'+ (mode==='live'?'Compras e vendas estão liberadas para itens explicitamente negociáveis.':'Nenhum saldo será gasto ou criado nesta etapa. O botão de compra fica bloqueado até a economia sair de SHADOW.')+'</span></section>'+
+    '<div class="market-layout">'+
+      '<section class="market-panel"><div class="market-panel-head"><div><span class="section-code">FEIRA // ANÚNCIOS</span><h3>Itens à venda</h3></div><button type="button" data-market-refresh>↻ atualizar</button></div><div class="market-listings">'+listingCards+'</div></section>'+
+      '<aside class="market-side-panel"><span class="section-code">PUBLICAR // ANÚNCIO</span><h3>Colocar um item na feira</h3><p>O item sai do seu inventário e fica em escrow até vender, cancelar ou expirar.</p><form id="market-listing-form"><label>item<select name="item_id" '+(mode!=='live'||!tradableInventory.length?'disabled':'')+'>'+marketCreateOptions+'</select></label><label>quantidade<input name="quantity" type="number" min="1" step="1" value="1" '+(mode!=='live'||!tradableInventory.length?'disabled':'')+'></label><label>preço em SALDO<input name="price_saldo" type="number" min="1" max="2147483647" step="1" placeholder="ex.: 25" '+(mode!=='live'||!tradableInventory.length?'disabled':'')+'></label><label>expiração<select name="expiry" '+(mode!=='live'||!tradableInventory.length?'disabled':'')+'><option value="7">7 dias</option><option value="1">24 horas</option><option value="0">sem expiração</option></select></label><button type="submit" class="btn btn-acid" '+(mode!=='live'||!tradableInventory.length?'disabled':'')+'>publicar anúncio</button></form><small class="market-form-note">'+(mode==='live'?(tradableInventory.length?'Seu item será reservado no escrow.':'Você não tem itens negociáveis agora.'):'BLOQUEADO // SHADOW não movimenta SALDO.')+'</small></aside>'+
+    '</div>'+
+    '<section class="market-panel trade-panel"><div class="market-panel-head"><div><span class="section-code">TROCAS // BILATERAL</span><h3>Troque diretamente com alguém</h3></div></div><div class="trade-create-grid"><form id="trade-create-form" class="trade-create-form"><label>@ da pessoa<input name="handle" maxlength="24" autocomplete="off" placeholder="usuario_avesso" '+(!tradableInventory.length||!tradableCatalog.length?'disabled':'')+'></label><label>você entrega<select name="offer_item" '+(!tradableInventory.length?'disabled':'')+'>'+tradeGiveOptions+'</select></label><label>você recebe<select name="request_item" '+(!tradableCatalog.length?'disabled':'')+'>'+tradeReceiveOptions+'</select></label><label>quantidade<input name="quantity" type="number" min="1" step="1" value="1" '+(!tradableInventory.length?'disabled':'')+'></label><label>validade<select name="expiry" '+(!tradableInventory.length?'disabled':'')+'><option value="7">7 dias</option><option value="1">24 horas</option><option value="0">sem expiração</option></select></label><label>nota<input name="note" maxlength="280" placeholder="contexto opcional" '+(!tradableInventory.length?'disabled':'')+'></label><button type="submit" class="btn btn-acid" '+(!tradableInventory.length||!tradableCatalog.length?'disabled':'')+'>enviar proposta</button></form><div class="trade-rule-card"><span>ESCROW // ATIVO</span><strong>Os itens oferecidos ficam reservados.</strong><p>Aceite, recuse, cancele ou deixe expirar. O servidor devolve ou transfere tudo de forma atômica.</p><small>'+ (tradableInventory.length?'há itens negociáveis no seu inventário':'nenhum item negociável no seu inventário ainda')+'</small></div></div><div class="trade-list">'+tradeCards+'</div></section>'+
+    '<section class="market-panel market-footnote"><span class="section-code">AUDITORIA // TRANSAÇÕES</span><p>Cada criação, cancelamento, expiração, compra e troca gera um evento interno de auditoria. O log não fica exposto ao navegador.</p></section>'+
+  '</section>';
+
+  host.querySelector('[data-market-refresh]')?.addEventListener('click',()=>renderMarketPage());
+  host.querySelectorAll('[data-market-buy]').forEach(btn=>btn.onclick=async()=>{
+    btn.disabled=true;
+    const {data,error}=await supabase.rpc('avesso_market_buy',{p_listing_id:btn.dataset.marketBuy});
+    if(error)toast(economyErrorMessage(error));
+    else toast(data===false?'Anúncio expirado e item devolvido.':'Compra concluída.');
+    await renderMarketPage();
+  });
+  host.querySelectorAll('[data-market-cancel]').forEach(btn=>btn.onclick=async()=>{
+    btn.disabled=true;
+    const {error}=await supabase.rpc('avesso_market_cancel_listing',{p_listing_id:btn.dataset.marketCancel});
+    if(error)toast(economyErrorMessage(error));else toast('Anúncio cancelado. Item devolvido ao inventário.');
+    await renderMarketPage();
+  });
+  host.querySelector('#market-listing-form')?.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const f=new FormData(e.currentTarget);
+    const itemId=String(f.get('item_id')||'');
+    const qty=Math.max(1,Number.parseInt(String(f.get('quantity')||'1'),10));
+    const price=Math.max(1,Number.parseInt(String(f.get('price_saldo')||'0'),10));
+    const days=Number.parseInt(String(f.get('expiry')||'7'),10);
+    const expiresAt=days>0?new Date(Date.now()+days*86400000).toISOString():null;
+    const button=e.currentTarget.querySelector('button[type="submit"]');if(button)button.disabled=true;
+    const {data,error}=await supabase.rpc('avesso_market_create_listing',{p_item_id:itemId,p_quantity:qty,p_price_saldo:price,p_expires_at:expiresAt});
+    if(error)toast(economyErrorMessage(error));else toast('Anúncio publicado.');
+    if(button)button.disabled=false;
+    await renderMarketPage();
+    if(data)trackAction('market_listing_created','market',{listing_id:data});
+  });
+  host.querySelector('#trade-create-form')?.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const f=new FormData(e.currentTarget);
+    const handle=String(f.get('handle')||'').trim().replace(/^@/,'').toLowerCase();
+    const offerItem=String(f.get('offer_item')||'');
+    const requestItem=String(f.get('request_item')||'');
+    const qty=Math.max(1,Number.parseInt(String(f.get('quantity')||'1'),10));
+    const note=String(f.get('note')||'').trim().slice(0,280);
+    const days=Number.parseInt(String(f.get('expiry')||'7'),10);
+    if(!handle||!offerItem||!requestItem)return toast('Preencha pessoa e os dois lados da troca.');
+    if(offerItem===requestItem)return toast('Trocar o mesmo item por ele mesmo é um nível de burocracia que nem o AVESSO merece.');
+    const {data:person,error:personError}=await supabase.from('profiles').select('id,handle,display_name').eq('handle',handle).maybeSingle();
+    if(personError||!person)return toast('Não encontrei esse @ no AVESSO.');
+    if(person.id===uid)return toast('Você não pode abrir uma troca consigo mesmo.');
+    const expiresAt=days>0?new Date(Date.now()+days*86400000).toISOString():null;
+    const button=e.currentTarget.querySelector('button[type="submit"]');if(button)button.disabled=true;
+    const {data,error}=await supabase.rpc('avesso_trade_create_offer',{p_counterparty_id:person.id,p_offer:[{item_id:offerItem,quantity:qty}],p_request:[{item_id:requestItem,quantity:qty}],p_note:note,p_expires_at:expiresAt});
+    if(error)toast(economyErrorMessage(error));else toast('Proposta enviada para @'+person.handle+'.');
+    if(button)button.disabled=false;
+    await renderMarketPage();
+    if(data)trackAction('trade_offer_created','market',{offer_id:data});
+  });
+  host.querySelectorAll('[data-trade-accept]').forEach(btn=>btn.onclick=async()=>{
+    btn.disabled=true;
+    const {data,error}=await supabase.rpc('avesso_trade_accept_offer',{p_offer_id:btn.dataset.tradeAccept});
+    if(error)toast(economyErrorMessage(error));else toast(data===false?'A proposta expirou e os itens voltaram ao dono.':'Troca concluída.');
+    await renderMarketPage();
+  });
+  host.querySelectorAll('[data-trade-reject]').forEach(btn=>btn.onclick=async()=>{
+    btn.disabled=true;
+    const {error}=await supabase.rpc('avesso_trade_reject_offer',{p_offer_id:btn.dataset.tradeReject});
+    if(error)toast(economyErrorMessage(error));else toast('Proposta recusada. Itens devolvidos.');
+    await renderMarketPage();
+  });
+  host.querySelectorAll('[data-trade-cancel]').forEach(btn=>btn.onclick=async()=>{
+    btn.disabled=true;
+    const {error}=await supabase.rpc('avesso_trade_cancel_offer',{p_offer_id:btn.dataset.tradeCancel});
+    if(error)toast(economyErrorMessage(error));else toast('Proposta cancelada. Itens devolvidos.');
+    await renderMarketPage();
+  });
 }
 
 async function renderProfile(){
@@ -6720,7 +6914,6 @@ async function renderProfile(){
   </section>`;
   $('#open-avatar-picker').onclick=openAvatarDialog;
   loadInventory();
-  renderBadgeGallery();
   $('#profile-story-create').onclick=openStoryCreate;
   $('#save-profile-settings').onclick=saveProfileSettings;
   $('#save-listening-privacy').onclick=saveListeningPrivacy;
