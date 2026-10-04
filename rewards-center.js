@@ -53,7 +53,10 @@ function makeEquippedMark(item){
 function paintEquippedBadge(){
   removeEquippedMarks();
   const item=currentItem();
-  if(!item)return;
+  if(!item){
+    delete document.documentElement.dataset.avessoPrimaryBadge;
+    return;
+  }
 
   const navName=q('#nav-name');
   if(navName)navName.insertAdjacentElement('afterend',makeEquippedMark(item));
@@ -268,12 +271,11 @@ function watchProfile(){
   const observer=new MutationObserver(()=>{
     cancelAnimationFrame(observerFrame);
     observerFrame=requestAnimationFrame(()=>{
-      if(q('.profile-control')){
-        if(state.loaded)renderPanel();
-        else loadRewards();
-      }else if(state.loaded){
-        paintEquippedBadge();
-      }
+      const host=q('.profile-control');
+      if(!host)return;
+      if(q('#rewards-center',host))return;
+      if(state.loaded)renderPanel();
+      else loadRewards();
     });
   });
   observer.observe(document.body,{childList:true,subtree:true});
@@ -289,6 +291,7 @@ function boot(){
       state.loaded=false;
       state.primaryBadgeId=null;
       removeEquippedMarks();
+      delete document.documentElement.dataset.avessoPrimaryBadge;
       return;
     }
     if(event==='SIGNED_IN'||event==='TOKEN_REFRESHED')loadRewards({force:true});
