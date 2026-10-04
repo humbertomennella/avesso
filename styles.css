@@ -10402,3 +10402,29 @@ dialog.dialog-fallback-open[open]{
 .inventory-loading,.inventory-empty{min-height:150px;display:grid;place-items:center}
 @media(max-width:980px){.inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.inventory-control{padding:12px;box-shadow:5px 5px 0 #020405}.inventory-heading{display:grid;grid-template-columns:1fr;gap:10px}.inventory-heading-meta{justify-content:flex-start}.inventory-grid{grid-template-columns:1fr}.inventory-card{min-height:240px}.inventory-card .inventory-art{height:170px}}
+
+
+/* AVESSO // QUADRO COMPLETO DE EMBLEMAS 2026-10-04 */
+.badge-gallery-control{margin-top:12px;padding:18px;border:1px solid #2d454b;border-radius:4px;background:linear-gradient(135deg,#22d9ee08,transparent 38%),linear-gradient(315deg,#d8ff3e06,transparent 42%),#070c0e;box-shadow:8px 8px 0 #020405}
+.badge-gallery-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding-bottom:14px;border-bottom:1px solid #26383d}
+.badge-gallery-heading h2{margin:4px 0 5px;font-size:clamp(1.25rem,2vw,1.8rem);letter-spacing:-.025em}
+.badge-gallery-heading p{max-width:760px;margin:0;color:#8e9b99}
+.badge-gallery-total{flex:0 0 auto;padding:8px 10px;border:1px solid #30434a;background:#05090b;color:var(--cyan);font:800 .54rem/1.2 var(--mono);letter-spacing:.08em}
+.badge-gallery-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}
+.badge-gallery-card{min-width:0;overflow:hidden;border:1px solid #263b41;border-radius:3px;background:#0a1114;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.badge-gallery-card:hover{transform:translateY(-3px);border-color:#4c8b98;box-shadow:0 10px 24px #0008}
+.badge-gallery-card.is-owned{border-color:#35575f}
+.badge-gallery-card.is-equipped{border-color:var(--acid);box-shadow:0 0 0 1px #d8ff3e33 inset,0 0 24px #d8ff3e12}
+.badge-gallery-art{height:190px;display:grid;place-items:center;overflow:hidden;border-bottom:1px solid #24353a;background:radial-gradient(circle at 50% 50%,#22d9ee0c,transparent 62%),#060a0c}
+.badge-gallery-art img{width:100%;height:100%;object-fit:contain;padding:14px;image-rendering:auto}
+.badge-gallery-copy{display:grid;gap:6px;padding:12px}
+.badge-gallery-code{color:var(--cyan);font:800 .5rem/1.2 var(--mono);letter-spacing:.08em}
+.badge-gallery-copy h3{margin:0;color:#e5ece9;font-size:1rem}
+.badge-gallery-copy p{min-height:42px;margin:0;color:#899693;font-size:.7rem;line-height:1.45}
+.badge-gallery-state{display:inline-flex;width:max-content;max-width:100%;padding:5px 7px;border:1px solid #31444a;color:#71807d;font:800 .48rem/1.1 var(--mono);letter-spacing:.06em}
+.badge-gallery-card.is-owned .badge-gallery-state{border-color:#4c737b;color:var(--cyan)}
+.badge-gallery-card.is-equipped .badge-gallery-state{border-color:var(--acid);background:var(--acid);color:#071006}
+.badge-gallery-loading,.badge-gallery-empty{min-height:130px;display:grid;place-items:center;gap:5px;border:1px dashed #2b4146;color:#758480;text-align:center;font:600 .68rem/1.4 var(--mono)}
+.badge-gallery-empty strong{color:var(--cyan)}
+@media(max-width:980px){.badge-gallery-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.badge-gallery-control{padding:12px;box-shadow:5px 5px 0 #020405}.badge-gallery-heading{display:grid;gap:10px}.badge-gallery-grid{grid-template-columns:1fr}.badge-gallery-art{height:210px}}
